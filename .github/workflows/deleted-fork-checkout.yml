@@ -1,0 +1,45 @@
+name: Deleted Fork Checkout Guard Test
+
+on:
+  pull_request_target:
+    types:
+      - closed
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  verify-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Attempt PR head checkout with default safety guard
+        uses: actions/checkout@v7
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          persist-credentials: false
+
+      - name: Record result without executing PR code
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_MARKER: NIGHTVIBES33-DELETED-FORK-TEST
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          value="$(cat bounty-marker.txt 2>/dev/null || true)"
+          if [[ "$value" != "$EXPECTED_MARKER" ]]; then
+            echo "Checkout completed, but the controlled marker was not present."
+            exit 0
+          fi
+
+          gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/issues" \
+            -f title="LIVE CANDIDATE: deleted fork PR head was checked out" \
+            -f body="actions/checkout@v7 checked out the retained PR head after the owned fork was deleted. The workflow only read a fixed marker and did not execute PR code or access secrets. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          echo "The controlled deleted-fork marker was checked out."
+          exit 2
