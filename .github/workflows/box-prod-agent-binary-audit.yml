@@ -1,0 +1,50 @@
+name: Box prod agent binary audit
+on:
+  push:
+    paths:
+      - '.github/workflows/box-prod-agent-binary-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit production guest-agent example pinned by provisioner
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG='agent-server-v0.0.49-ascii-prod29'
+          URL="https://github.com/ariana-dot-dev/agent-server/releases/download/$TAG/ascii-agents-server-linux-x64"
+          O=box-prod-agent-binary-audit.txt
+          rm -f /tmp/agent "$O"
+          {
+            echo "TAG=$TAG"
+            echo "URL=$URL"
+          } > "$O"
+          code=$(curl -L -sS -o /tmp/agent -w '%{http_code}' "$URL" || true)
+          echo "HTTP=$code" >> "$O"
+          if [ "$code" != 200 ]; then exit 0; fi
+          chmod +x /tmp/agent
+          {
+            sha256sum /tmp/agent
+            file /tmp/agent
+            echo; echo '=== cli/help/version ==='
+            /tmp/agent --version 2>&1 || true
+            /tmp/agent --help 2>&1 | head -n 300 || true
+            echo; echo '=== defined symbols ==='
+            nm -C --defined-only /tmp/agent 2>/dev/null | grep -Eai 'ascii|auth|token|scope|box|machine|snapshot|desktop|host|gateway|proxy|route|handler|secret|baseline|socket|http|websocket|env' | head -n 8000 || true
+            echo; echo '=== high-signal strings ==='
+            strings -a -n 4 /tmp/agent | grep -Eai -C 8 'BOX_CLI_TOKEN|SERVICE_PREVIEW_TOKEN|ASCII_TOKEN|ASCII_API_URL|BOX_ID|token|scop|bearer|authorization|credential|api/box|/boxes|snapshot|desktop|host(port)?|public.?url|gateway|capabil|localhost|127\.0\.0\.1|8911|ssh|websocket|wss://|https://|env|secret|no.?env|metadata|cloud|internal|machine|shared.?key|unix|sock|baseline' | head -n 30000 || true
+          } >> "$O"
+      - name: Commit result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-prod-agent-binary-audit.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: record production Box guest-agent binary audit'
+          git push
