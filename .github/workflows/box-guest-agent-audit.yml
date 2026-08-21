@@ -11,43 +11,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Locate and inspect latest public agent-server release
+      - name: Resolve and inspect public agent-server artifacts
         shell: bash
         run: |
           set -euo pipefail
           rm -rf /tmp/ga && mkdir -p /tmp/ga/extract
-          curl -fsSL 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=100' -o /tmp/ga/releases.json
-          jq '[.[] | select(.tag_name|startswith("agent-server-v"))] | sort_by(.published_at) | last' /tmp/ga/releases.json > /tmp/ga/latest.json
+          curl -fsSL 'https://api.github.com/repos/ariana-dot-dev/agent-server/git/matching-refs/tags/agent-server-v' -o /tmp/ga/refs.json
+          mapfile -t tags < <(jq -r '.[].ref | sub("^refs/tags/"; "")' /tmp/ga/refs.json | sort -V | tail -n 12)
           {
-            echo '=== latest agent-server release ==='
-            jq -r '[.tag_name,.published_at,(.assets|length)] | @tsv' /tmp/ga/latest.json
-            echo '=== assets ==='
-            jq -r '.assets[]? | [.name,.size,.browser_download_url] | @tsv' /tmp/ga/latest.json
+            echo '=== newest matching agent-server tags ==='
+            printf '%s\n' "${tags[@]}"
           } > box-guest-agent-audit.txt
-          mapfile -t urls < <(jq -r '.assets[]?.browser_download_url' /tmp/ga/latest.json)
-          i=0
-          for url in "${urls[@]}"; do
-            i=$((i+1)); name=$(basename "${url%%\?*}"); out="/tmp/ga/$i-$name"
-            curl -fL --retry 2 "$url" -o "$out" || continue
-            mkdir -p "/tmp/ga/extract/$i"
-            case "$name" in
-              *.tar.gz|*.tgz) tar -xzf "$out" -C "/tmp/ga/extract/$i" || true ;;
-              *.zip) unzip -q "$out" -d "/tmp/ga/extract/$i" || true ;;
-              *) cp "$out" "/tmp/ga/extract/$i/$name" ;;
-            esac
+          chosen=''
+          for tag in "${tags[@]}"; do
+            url="https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-agents-server-linux-x64"
+            code=$(curl -L -sS -o /tmp/ga/agent -w '%{http_code}' "$url" || true)
+            if [ "$code" = 200 ]; then chosen="$tag"; break; fi
           done
+          if [ -z "$chosen" ]; then
+            chosen='agent-server-v0.0.49-ascii-prod29'
+            url="https://github.com/ariana-dot-dev/agent-server/releases/download/$chosen/ascii-agents-server-linux-x64"
+            curl -fL "$url" -o /tmp/ga/agent
+          fi
+          chmod +x /tmp/ga/agent || true
           {
-            echo; echo '=== extracted files ==='
-            find /tmp/ga/extract -type f -printf '%p\t%s bytes\n' | sort
+            echo; echo "CHOSEN_TAG=$chosen"
+            echo "SHA256=$(sha256sum /tmp/ga/agent | awk '{print $1}')"
+            file /tmp/ga/agent
+            echo; echo '=== relevant symbols ==='
+            nm -C /tmp/ga/agent 2>/dev/null | grep -Eai 'token|scope|auth|box|snapshot|desktop|host|proxy|gateway|secret|env|machine|route|handler|http|websocket|baseline' | head -n 4000 || true
+            echo; echo '=== high-signal strings ==='
+            strings -a -n 4 /tmp/ga/agent | grep -Eai -C 6 'BOX_CLI_TOKEN|SERVICE_PREVIEW_TOKEN|ASCII_TOKEN|ASCII_API_URL|BOX_ID|token|scop|bearer|authorization|credential|api/box|/boxes|snapshot|desktop|host(port)?|public.?url|gateway|capabil|localhost|127\.0\.0\.1|8911|ssh|websocket|wss://|https://|env|secret|no.?env|metadata|cloud|internal|machine|shared.?key' | head -n 20000 || true
           } >> box-guest-agent-audit.txt
-          n=0
-          while IFS= read -r f; do
-            n=$((n+1)); strings -a -n 4 "$f" > "/tmp/ga/s$n" || true
-            {
-              echo; echo "===== $(basename "$f") ====="
-              grep -Eai -C 5 'BOX_CLI_TOKEN|SERVICE_PREVIEW_TOKEN|ASCII_TOKEN|ASCII_API_URL|BOX_ID|token|scop|bearer|authorization|credential|api/box|/boxes|snapshot|desktop|host(port)?|public.?url|gateway|capabil|localhost|127\.0\.0\.1|8911|ssh|websocket|wss://|https://|env|secret|no.?env|metadata|cloud|agent|internal|machine' "/tmp/ga/s$n" | head -n 12000 || true
-            } >> box-guest-agent-audit.txt
-          done < <(find /tmp/ga/extract -type f -size +1k -print)
       - name: Commit audit
         shell: bash
         run: |
@@ -56,5 +51,5 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add box-guest-agent-audit.txt
           git diff --cached --quiet && exit 0
-          git commit -m 'research: record Box guest agent token audit'
+          git commit -m 'research: record Box guest-agent ref/token audit'
           git push
