@@ -1,0 +1,4 @@
+GENERATED_COMMAND="export X=1; printf INJECTED > /tmp/eve-box-env-key-canary; #='benign-value'; printf SAFE"
+CANARY_CONTENT="INJECTED"
+VALIDATED=YES
+IMPACT=Arbitrary shell syntax in an env variable NAME is executed before the intended sandbox command.
