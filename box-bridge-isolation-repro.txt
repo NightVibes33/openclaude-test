@@ -1,0 +1,25 @@
+=== environment ===
+Linux runnervm76f27 6.17.0-1022-azure #22-Ubuntu SMP Mon Jul 27 17:24:03 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+=== installed rule ===
+-A FORWARD -i bxbr0 -o bxbr0 -m comment --comment box-repro -j DROP
+=== test A: bridge netfilter disabled ===
+net.bridge.bridge-nf-call-ip6tables = 0
+PING 2001:db8:4242::2 (2001:db8:4242::2) 56 data bytes
+
+--- 2001:db8:4242::2 ping statistics ---
+2 packets transmitted, 0 received, 100% packet loss, time 1049ms
+
+RESULT_DISABLED=PEER_BLOCKED
+=== test B: bridge netfilter enabled ===
+net.bridge.bridge-nf-call-ip6tables = 1
+PING 2001:db8:4242::2 (2001:db8:4242::2) 56 data bytes
+From 2001:db8:4242::1 icmp_seq=1 Destination unreachable: Address unreachable
+
+--- 2001:db8:4242::2 ping statistics ---
+2 packets transmitted, 0 received, +1 errors, 100% packet loss, time 1031ms
+
+RESULT_ENABLED=PEER_BLOCKED_BY_FORWARD_DROP
+=== counter ===
+    3   240 DROP       0    --  bxbr0  bxbr0   ::/0                 ::/0                 /* box-repro */
