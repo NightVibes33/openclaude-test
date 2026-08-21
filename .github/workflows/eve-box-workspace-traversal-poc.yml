@@ -20,6 +20,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo 'rerun=2026-08-21T16:45-05:00'
           rm -rf /tmp/eve-box
           git clone --depth=1 https://github.com/ariana-dot-dev/eve-box.git /tmp/eve-box
           cd /tmp/eve-box
@@ -52,12 +53,7 @@ jobs:
           };
 
           const backend = asciiBox({ client, noEnv: true, networkPolicy: 'allow-all' });
-          const handle = await backend.create({
-            templateKey: null,
-            sessionKey: 'workspace-traversal-poc',
-            runtimeContext: { appRoot: process.cwd() },
-            tags: { test: 'workspace-traversal-poc' },
-          });
+          const handle = await backend.create({ templateKey: null, sessionKey: 'workspace-traversal-poc', runtimeContext: { appRoot: process.cwd() }, tags: { test: 'workspace-traversal-poc' } });
           const session = await handle.useSessionFn({ networkPolicy: 'allow-all' });
           operations.length = 0;
 
