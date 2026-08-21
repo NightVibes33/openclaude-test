@@ -1,0 +1,421 @@
+Fri Aug 21 21:35:27 UTC 2026
+========== ascii.dev ==========
+normal       /api/box/me                          HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/me                          HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/me                          HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/me                          HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/boxes                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/boxes                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/boxes                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/boxes                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/snapshots                   HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/snapshots                   HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/snapshots                   HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/snapshots                   HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/named-snapshots             HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/named-snapshots             HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/named-snapshots             HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/named-snapshots             HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/environments                HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/environments                HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/environments                HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/environments                HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/limits                      HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/limits                      HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/limits                      HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/limits                      HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/teams                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/teams                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/teams                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/teams                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/orgs                        HTTP=404 BYTES=44 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/orgs"}
+fakebearer   /api/box/orgs                        HTTP=404 BYTES=44 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/orgs"}
+orgpersonal  /api/box/orgs                        HTTP=404 BYTES=44 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/orgs"}
+orgcanary    /api/box/orgs                        HTTP=404 BYTES=44 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/orgs"}
+normal       /api/box/api-keys                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/api-keys                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/api-keys                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/api-keys                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/webhooks                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/webhooks                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/webhooks                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/webhooks                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/data-retention              HTTP=404 BYTES=54 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/data-retention"}
+fakebearer   /api/box/data-retention              HTTP=404 BYTES=54 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/data-retention"}
+orgpersonal  /api/box/data-retention              HTTP=404 BYTES=54 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/data-retention"}
+orgcanary    /api/box/data-retention              HTTP=404 BYTES=54 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/data-retention"}
+normal       /api/box/providers                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/providers"}
+fakebearer   /api/box/providers                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/providers"}
+orgpersonal  /api/box/providers                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/providers"}
+orgcanary    /api/box/providers                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/providers"}
+normal       /api/box/deletions                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/deletions"}
+fakebearer   /api/box/deletions                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/deletions"}
+orgpersonal  /api/box/deletions                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/deletions"}
+orgcanary    /api/box/deletions                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/deletions"}
+=== harmless method-dispatch fingerprints ===
+HEAD     /api/box/boxes                       curl: (18) transfer closed with 45 bytes remaining to read
+HTTP=404 BYTES=0 TYPE=application/json;charset=utf-8
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+OPTIONS  /api/box/boxes                       HTTP=204 BYTES=0 TYPE=
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+HEAD     /api/box/api-keys                    curl: (18) transfer closed with 48 bytes remaining to read
+HTTP=404 BYTES=0 TYPE=application/json;charset=utf-8
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+OPTIONS  /api/box/api-keys                    HTTP=204 BYTES=0 TYPE=
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+HEAD     /api/box/webhooks                    curl: (18) transfer closed with 48 bytes remaining to read
+HTTP=404 BYTES=0 TYPE=application/json;charset=utf-8
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+OPTIONS  /api/box/webhooks                    HTTP=204 BYTES=0 TYPE=
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+========== staging.ascii.dev ==========
+normal       /api/box/me                          HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/me                          HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/me                          HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/me                          HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/boxes                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/boxes                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/boxes                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/boxes                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/snapshots                   HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/snapshots                   HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/snapshots                   HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/snapshots                   HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/named-snapshots             HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/named-snapshots             HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/named-snapshots             HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/named-snapshots             HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/environments                HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/environments                HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/environments                HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/environments                HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/limits                      HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/limits                      HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/limits                      HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/limits                      HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/teams                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/teams                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/teams                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/teams                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/orgs                        HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/orgs                        HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/orgs                        HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/orgs                        HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/api-keys                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/api-keys                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/api-keys                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/api-keys                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/webhooks                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/webhooks                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/webhooks                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/webhooks                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/data-retention              HTTP=404 BYTES=54 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/data-retention"}
+fakebearer   /api/box/data-retention              HTTP=404 BYTES=54 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/data-retention"}
+orgpersonal  /api/box/data-retention              HTTP=404 BYTES=54 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/data-retention"}
+orgcanary    /api/box/data-retention              HTTP=404 BYTES=54 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/data-retention"}
+normal       /api/box/providers                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/providers"}
+fakebearer   /api/box/providers                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/providers"}
+orgpersonal  /api/box/providers                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/providers"}
+orgcanary    /api/box/providers                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/providers"}
+normal       /api/box/deletions                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/deletions"}
+fakebearer   /api/box/deletions                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/deletions"}
+orgpersonal  /api/box/deletions                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/deletions"}
+orgcanary    /api/box/deletions                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/deletions"}
+=== harmless method-dispatch fingerprints ===
+HEAD     /api/box/boxes                       curl: (18) transfer closed with 45 bytes remaining to read
+HTTP=404 BYTES=0 TYPE=application/json;charset=utf-8
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete, X-Box-Org access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+OPTIONS  /api/box/boxes                       HTTP=204 BYTES=0 TYPE=
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete, X-Box-Org access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+HEAD     /api/box/api-keys                    curl: (18) transfer closed with 48 bytes remaining to read
+HTTP=404 BYTES=0 TYPE=application/json;charset=utf-8
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete, X-Box-Org access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+OPTIONS  /api/box/api-keys                    HTTP=204 BYTES=0 TYPE=
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete, X-Box-Org access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+HEAD     /api/box/webhooks                    curl: (18) transfer closed with 48 bytes remaining to read
+HTTP=404 BYTES=0 TYPE=application/json;charset=utf-8
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete, X-Box-Org access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+OPTIONS  /api/box/webhooks                    HTTP=204 BYTES=0 TYPE=
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete, X-Box-Org access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+========== amsterdam.ascii.dev ==========
+normal       /api/box/me                          HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/me                          HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/me                          HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/me                          HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/boxes                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/boxes                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/boxes                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/boxes                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/snapshots                   HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/snapshots                   HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/snapshots                   HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/snapshots                   HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/named-snapshots             HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/named-snapshots             HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/named-snapshots             HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/named-snapshots             HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/environments                HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/environments                HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/environments                HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/environments                HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/limits                      HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/limits                      HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/limits                      HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/limits                      HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/teams                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/teams                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/teams                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/teams                       HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/orgs                        HTTP=404 BYTES=44 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/orgs"}
+fakebearer   /api/box/orgs                        HTTP=404 BYTES=44 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/orgs"}
+orgpersonal  /api/box/orgs                        HTTP=404 BYTES=44 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/orgs"}
+orgcanary    /api/box/orgs                        HTTP=404 BYTES=44 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/orgs"}
+normal       /api/box/api-keys                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/api-keys                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/api-keys                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/api-keys                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/webhooks                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+fakebearer   /api/box/webhooks                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgpersonal  /api/box/webhooks                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+orgcanary    /api/box/webhooks                    HTTP=401 BYTES=24 TYPE=application/json;charset=utf-8
+BODY={"error":"unauthorized"}
+normal       /api/box/data-retention              HTTP=404 BYTES=54 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/data-retention"}
+fakebearer   /api/box/data-retention              HTTP=404 BYTES=54 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/data-retention"}
+orgpersonal  /api/box/data-retention              HTTP=404 BYTES=54 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/data-retention"}
+orgcanary    /api/box/data-retention              HTTP=404 BYTES=54 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/data-retention"}
+normal       /api/box/providers                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/providers"}
+fakebearer   /api/box/providers                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/providers"}
+orgpersonal  /api/box/providers                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/providers"}
+orgcanary    /api/box/providers                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/providers"}
+normal       /api/box/deletions                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/deletions"}
+fakebearer   /api/box/deletions                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/deletions"}
+orgpersonal  /api/box/deletions                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/deletions"}
+orgcanary    /api/box/deletions                   HTTP=404 BYTES=49 TYPE=application/json;charset=utf-8
+BODY={"error":"Not Found","path":"/api/box/deletions"}
+=== harmless method-dispatch fingerprints ===
+HEAD     /api/box/boxes                       curl: (18) transfer closed with 45 bytes remaining to read
+HTTP=404 BYTES=0 TYPE=application/json;charset=utf-8
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+OPTIONS  /api/box/boxes                       HTTP=204 BYTES=0 TYPE=
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+HEAD     /api/box/api-keys                    curl: (18) transfer closed with 48 bytes remaining to read
+HTTP=404 BYTES=0 TYPE=application/json;charset=utf-8
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+OPTIONS  /api/box/api-keys                    HTTP=204 BYTES=0 TYPE=
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+HEAD     /api/box/webhooks                    curl: (18) transfer closed with 48 bytes remaining to read
+HTTP=404 BYTES=0 TYPE=application/json;charset=utf-8
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+OPTIONS  /api/box/webhooks                    HTTP=204 BYTES=0 TYPE=
+access-control-allow-credentials: false access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS access-control-allow-origin: http://localhost:1420 
+=== exact legacy paths extracted from production/staging binaries ===
+ascii-prod /api/box/account/data-retentionenable
+ascii-prod /api/box/api-keys/
+ascii-prod /api/box/auth/logoutnot
+ascii-prod /api/box/billing/checkoutcheckout
+ascii-prod /api/box/boxes/
+ascii-prod /api/box/boxes?limit=
+ascii-prod /api/box/boxes?limit=200current
+ascii-prod /api/box/boxesbilling:
+ascii-prod /api/box/cli/login/poll/
+ascii-prod /api/box/cli/login/start
+ascii-prod /api/box/cli/version?platform=
+ascii-prod /api/box/dashboard/bootstrap
+ascii-prod /api/box/deletion-operations/
+ascii-prod /api/box/environments/
+ascii-prod /api/box/environmentsenvironments
+ascii-prod /api/box/limitslimitsyou
+ascii-prod /api/box/meactivesigned
+ascii-prod /api/box/named-snapshots/
+ascii-prod /api/box/named-snapshotsunknown
+ascii-prod /api/box/reposdeletion
+ascii-prod /api/box/snapshots/
+ascii-prod /api/box/snapshots?limit=200
+ascii-prod /api/box/snapshotssnapshotsMore
+ascii-prod /api/box/teamsteams/api/box/api-keysapiKeysNo
+ascii-prod /api/box/webhooks/
+ascii-prod /api/box/webhooksNo
+staging /api/box/account/data-retentionenable
+staging /api/box/api-keys/
+staging /api/box/api-keysapiKeysNo
+staging /api/box/auth/logoutnot
+staging /api/box/billing/checkoutcheckout
+staging /api/box/boxes/
+staging /api/box/boxes?limit=
+staging /api/box/boxes?limit=200current
+staging /api/box/boxesbilling:
+staging /api/box/cli/login/poll/
+staging /api/box/cli/login/start
+staging /api/box/cli/version?platform=
+staging /api/box/dashboard/bootstrap
+staging /api/box/deletion-operations/
+staging /api/box/environments/
+staging /api/box/environmentsenvironments
+staging /api/box/limits?teamId=
+staging /api/box/limitslimitsyou
+staging /api/box/meactivesigned
+staging /api/box/named-snapshots/
+staging /api/box/named-snapshotsunknown
+staging /api/box/orgsunknownboxes
+staging /api/box/reposdeletion
+staging /api/box/snapshots/
+staging /api/box/snapshots?limit=200
+staging /api/box/snapshotssnapshotsMore
+staging /api/box/teams/
+staging /api/box/teamsteamIddelete?Active
+staging /api/box/webhooks/
+staging /api/box/webhooksNo
