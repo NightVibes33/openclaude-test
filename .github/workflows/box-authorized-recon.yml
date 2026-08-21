@@ -17,149 +17,94 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run non-destructive Box recon
+      - name: Diff production and staging CLI plus public wallet route
         shell: bash
-        env:
-          BOX_API_KEY: ${{ secrets.BOX_API_KEY }}
         run: |
           set -uo pipefail
           mkdir -p box-research-results
-          OUT=box-research-results/recon.txt
+          OUT=box-research-results/deep-recon-2.txt
           exec > >(tee "$OUT") 2>&1
-          echo '=== time ==='; date -u
-          echo '=== auth availability (boolean only) ==='
-          if [ -n "${BOX_API_KEY:-}" ]; then echo BOX_API_KEY_PRESENT=1; else echo BOX_API_KEY_PRESENT=0; fi
+          date -u
 
-          echo '=== install endpoints ==='
-          for u in \
-            'https://ascii.dev/api/box/install' \
-            'https://ascii.dev/api/box/install.ps1'; do
-            echo "--- $u"
-            curl -sS --max-time 20 -D /tmp/h -o /tmp/b "$u" || true
-            grep -iE '^(HTTP/|content-type:|content-length:|location:|cache-control:|etag:|access-control)' /tmp/h || true
-            echo "bytes=$(wc -c </tmp/b 2>/dev/null || echo 0)"
-            head -c 6000 /tmp/b || true; echo
-          done
-
-          echo '=== CLI download baseline + channel matrix ==='
           base='https://ascii.dev/api/box/cli/download'
-          for channel in ascii-prod ascii-staging ascii-dev staging dev invalid-canary; do
-            url="$base?platform=linux-x64&channel=$channel"
-            echo "--- channel=$channel"
-            curl -sS -L --max-time 30 -D /tmp/h -o "/tmp/box-$channel" -w 'FINAL_HTTP=%{http_code} FINAL_URL=%{url_effective} BYTES=%{size_download}\n' "$url" || true
-            grep -iE '^(HTTP/|content-type:|content-length:|location:|etag:|cache-control:|x-|server:)' /tmp/h | head -n 60 || true
-            file "/tmp/box-$channel" 2>/dev/null || true
-            if ! file "/tmp/box-$channel" 2>/dev/null | grep -qE 'ELF|executable'; then
-              echo '[non-executable body prefix]'; head -c 1200 "/tmp/box-$channel" 2>/dev/null || true; echo
-            fi
+          for channel in ascii-prod staging; do
+            echo "=== download $channel ==="
+            curl -fsSL --max-time 45 "$base?platform=linux-x64&channel=$channel" -o "/tmp/box-$channel" || true
+            file "/tmp/box-$channel" || true
+            sha256sum "/tmp/box-$channel" || true
+            chmod +x "/tmp/box-$channel" || true
+            "/tmp/box-$channel" --version || true
+            "/tmp/box-$channel" --help | head -n 180 || true
           done
 
-          echo '=== CLI download input-boundary probes ==='
-          # Harmless canary traversal-shaped values: stop at response fingerprint; never follow a discovered local path further.
-          for q in \
-            'platform=invalid-canary&channel=ascii-prod' \
-            'platform=..%2F..%2F..%2F..%2Fetc%2Fhostname&channel=ascii-prod' \
-            'platform=linux-x64&channel=..%2F..%2F..%2F..%2Fetc%2Fhostname' \
-            'platform=linux-x64&channel=%2e%2e%252f%2e%2e%252fcanary'; do
-            echo "--- $q"
-            curl -sS --max-time 15 -D /tmp/h -o /tmp/b -w 'HTTP=%{http_code} BYTES=%{size_download} TYPE=%{content_type}\n' "$base?$q" || true
-            grep -iE '^(HTTP/|content-type:|content-length:|location:|x-|server:)' /tmp/h | head -n 40 || true
-            echo '[body fingerprint]'; head -c 600 /tmp/b 2>/dev/null | od -An -tx1 -v | head -n 15 || true
+          echo '=== security-relevant strings unique to staging ==='
+          strings -a /tmp/box-ascii-prod | sort -u > /tmp/prod.str || true
+          strings -a /tmp/box-staging | sort -u > /tmp/staging.str || true
+          comm -13 /tmp/prod.str /tmp/staging.str > /tmp/staging-only.str || true
+          grep -Ei 'https?://|wss?://|\.ascii\.dev|\.on\.ascii\.dev|/api/|token|secret|auth|credential|internal|staging|dev|debug|snapshot|desktop|websock|host|environment|wallet|admin|r2|s3|cloudflare|tunnel' /tmp/staging-only.str | head -n 5000 || true
+
+          echo '=== all distinct URLs/domains in staging ==='
+          strings -a /tmp/box-staging | grep -Eo 'https?://[^[:space:]"<>]+' | sort -u | head -n 1000 || true
+          strings -a /tmp/box-staging | grep -Eo '[A-Za-z0-9._-]+\.(ascii\.dev|on\.ascii\.dev)' | sort -u | head -n 1000 || true
+
+          echo '=== command help diff ==='
+          for c in new get list fork snapshot desktop env ssh scp stop resume host onboard auth prompt; do
+            echo "--- $c"
+            /tmp/box-ascii-prod "$c" --help > "/tmp/p-$c" 2>&1 || true
+            /tmp/box-staging "$c" --help > "/tmp/s-$c" 2>&1 || true
+            diff -u "/tmp/p-$c" "/tmp/s-$c" | head -n 500 || true
           done
 
-          echo '=== current prod CLI ==='
-          cp /tmp/box-ascii-prod box-research-results/box-cli 2>/dev/null || true
-          chmod +x box-research-results/box-cli 2>/dev/null || true
-          if file box-research-results/box-cli 2>/dev/null | grep -qE 'ELF|executable'; then
-            box-research-results/box-cli --version || true
-            box-research-results/box-cli --help || true
-            for c in onboard auth new get list fork snapshot desktop env ssh scp stop resume host; do
-              echo "--- box $c --help"; box-research-results/box-cli "$c" --help || true
-            done
-            echo '=== CLI endpoint/security strings ==='
-            strings -a box-research-results/box-cli | grep -Eio \
-              'https?://[^[:space:]"<>]+|wss?://[^[:space:]"<>]+|[A-Za-z0-9._-]+\.on\.ascii\.dev|/api/box/[A-Za-z0-9_?&=./{}:-]+|_token|websockify|desktop|snapshot|BOX_CLI_TOKEN|SERVICE_PREVIEW_TOKEN|authorization|bearer|staging|internal' \
-              | sort -u | head -n 4000 || true
+          echo '=== public Apple Wallet route ==='
+          curl -sS -L --max-time 30 -D /tmp/wallet.h -o /tmp/wallet.pkpass 'https://box.ascii.dev/wallet/hello-world' || true
+          grep -iE '^(HTTP/|content-type:|content-length:|cache-control:|etag:|set-cookie:|location:|x-|server:)' /tmp/wallet.h | head -n 120 || true
+          file /tmp/wallet.pkpass || true
+          sha256sum /tmp/wallet.pkpass || true
+          unzip -l /tmp/wallet.pkpass || true
+          rm -rf /tmp/wallet && mkdir /tmp/wallet
+          unzip -oq /tmp/wallet.pkpass -d /tmp/wallet || true
+          for f in pass.json manifest.json; do
+            echo "--- $f"; cat "/tmp/wallet/$f" 2>/dev/null || true; echo
+          done
+          echo '=== pass token/url fields ==='
+          grep -RniE 'authenticationToken|webServiceURL|token|secret|api|url|serialNumber|passTypeIdentifier|teamIdentifier|barcode|nfc|associatedStoreIdentifiers' /tmp/wallet --exclude=signature --exclude='*.png' --exclude='*.jpg' --exclude='*.webp' | head -n 500 || true
+          if [ -f /tmp/wallet/signature ]; then
+            echo '=== pass signing certs ==='
+            openssl pkcs7 -inform DER -in /tmp/wallet/signature -print_certs -noout 2>&1 | head -n 200 || true
           fi
 
-          echo '=== public web hidden-route fingerprints ==='
-          for u in \
-            'https://box.ascii.dev/wallet/hello-world' \
-            'https://box.ascii.dev/dashboard' \
-            'https://box.ascii.dev/box/dashboard'; do
-            echo "--- $u"
-            curl -sS -L --max-time 15 -D /tmp/h -o /tmp/b -w 'HTTP=%{http_code} FINAL=%{url_effective} BYTES=%{size_download}\n' "$u" || true
-            grep -iE '^(HTTP/|location:|content-type:|set-cookie:|cache-control:|x-|server:)' /tmp/h | head -n 80 || true
-            grep -Eio '(/api/[A-Za-z0-9_?&=./{}:-]+|wallet|token|authorization|dashboard|error)[^<" ]{0,160}' /tmp/b 2>/dev/null | head -n 100 || true
+          echo '=== wallet related public route probes ==='
+          for p in \
+            '/wallet/hello-world' \
+            '/wallet/hello-world/' \
+            '/api/wallet/hello-world' \
+            '/api/box/wallet/hello-world' \
+            '/wallet' \
+            '/wallet/register' \
+            '/wallet/v1/devices/canary/registrations/canary/canary'; do
+            echo "--- $p"
+            curl -sS --max-time 12 -o /tmp/b -D /tmp/h -w 'HTTP=%{http_code} BYTES=%{size_download} TYPE=%{content_type} REDIR=%{redirect_url}\n' "https://box.ascii.dev$p" || true
+            grep -iE '^(HTTP/|allow:|location:|www-authenticate:|content-type:|set-cookie:|x-|server:)' /tmp/h | head -n 50 || true
+            head -c 500 /tmp/b | strings | head -n 20 || true
           done
 
-          echo '=== urlscan discovery of ascii hosted/desktop names ==='
-          curl -sS --max-time 20 'https://urlscan.io/api/v1/search/?q=domain:on.ascii.dev&size=100' -o /tmp/urlscan.json || true
-          python3 - <<'PY' > /tmp/ascii-hosts
-          import json,re
-          try: data=json.load(open('/tmp/urlscan.json'))
-          except Exception: data={}
-          blob=json.dumps(data)
-          hosts=sorted(set(re.findall(r'([a-z0-9-]+(?:-desktop)?\.on\.ascii\.dev)', blob, re.I)))
-          for h in hosts[:30]: print(h.lower())
-          PY
-          cat /tmp/ascii-hosts
-
-          echo '=== desktop auth handshake probes (no application data) ==='
+          echo '=== staging release metadata via public GitHub ==='
+          curl -sS --max-time 20 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases/tags/box-cli-v0.1.178-staging1' -o /tmp/release.json || true
           python3 - <<'PY'
-          import re
-          hosts=[]
-          try:
-              for x in open('/tmp/ascii-hosts'):
-                  x=x.strip()
-                  if x.endswith('-desktop.on.ascii.dev'): hosts.append(x)
-          except: pass
-          # Known stale host from public indexing as control only.
-          if 'ragtop-iodous-dato-desktop.on.ascii.dev' not in hosts:
-              hosts.append('ragtop-iodous-dato-desktop.on.ascii.dev')
-          print('\n'.join(hosts[:10]))
-          open('/tmp/desktop-hosts','w').write('\n'.join(hosts[:10]))
+          import json
+          try: d=json.load(open('/tmp/release.json'))
+          except Exception as e: print(e); raise SystemExit
+          for k in ('tag_name','name','draft','prerelease','published_at','html_url','body'):
+              print(f'{k}={d.get(k)!r}')
+          print('assets=', [(a.get('name'),a.get('size'),a.get('browser_download_url')) for a in d.get('assets',[])])
           PY
-          wsprobe() {
-            host="$1"; path="$2"
-            echo "--- WSS $host$path"
-            curl -skS --http1.1 --max-time 5 -o /dev/null -D - \
-              -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
-              -H 'Sec-WebSocket-Version: 13' \
-              -H 'Sec-WebSocket-Key: SGVsbG9Xb3JsZDEyMzQ1Ng==' \
-              -w 'STATUS=%{http_code} REDIRECT=%{redirect_url}\n' \
-              "https://$host$path" || true
-          }
-          while IFS= read -r host; do
-            [ -n "$host" ] || continue
-            echo "### $host"
-            for p in '/' '/vnc.html' '/vnc.html?_token=invalid-canary'; do
-              curl -skS --max-time 7 -o /tmp/b -D /tmp/h -w "GET $p HTTP=%{http_code} REDIRECT=%{redirect_url} BYTES=%{size_download}\n" "https://$host$p" || true
-              grep -iE '^(HTTP/|location:|www-authenticate:|set-cookie:|server:|x-)' /tmp/h | head -n 30 || true
-            done
-            wsprobe "$host" '/websockify'
-            wsprobe "$host" '/websockify?_token=invalid-canary'
-          done < /tmp/desktop-hosts
-
-          echo '=== authenticated self-account boundary tests, only if repo secret exists ==='
-          if [ -n "${BOX_API_KEY:-}" ]; then
-            auth=(-H "Authorization: Bearer $BOX_API_KEY")
-            for p in me boxes snapshots named-snapshots environments; do
-              echo "--- GET /$p"
-              curl -sS --max-time 15 "${auth[@]}" -o /tmp/b -D /tmp/h -w 'HTTP=%{http_code} BYTES=%{size_download}\n' "https://ascii.dev/api/box/v1/$p" || true
-              grep -iE '^(HTTP/|content-type:|x-|server:)' /tmp/h | head -n 30 || true
-              # Only metadata-safe prefixes, redact token-ish values.
-              head -c 3000 /tmp/b | sed -E 's/(token|secret|key)"?:"[^" ]+"/\1":"[REDACTED]"/Ig' || true; echo
-            done
-          fi
 
       - name: Persist text result
         shell: bash
         run: |
-          rm -f box-research-results/box-cli
           git config user.name 'box-recon-bot'
           git config user.email 'box-recon-bot@users.noreply.github.com'
-          git add -f box-research-results/recon.txt
+          git add -f box-research-results/deep-recon-2.txt
           git diff --cached --quiet && exit 0
-          git commit -m 'Record authorized Box recon result [skip ci]'
+          git commit -m 'Record Box staging and wallet recon [skip ci]'
           git push origin HEAD:main
