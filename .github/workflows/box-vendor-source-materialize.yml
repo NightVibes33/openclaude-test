@@ -1,0 +1,41 @@
+name: Box vendor source materialize
+on:
+  push:
+    paths:
+      - '.github/workflows/box-vendor-source-materialize.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nm box-public-node-manager-src
+          mkdir -p /tmp/nm box-public-node-manager-src/lib
+          curl -fsSL 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=30' -o /tmp/nm/r.json
+          tag=$(jq -r 'sort_by(.published_at)|last|.tag_name' /tmp/nm/r.json)
+          url=$(jq -r 'sort_by(.published_at)|last|.assets[]|select(.name=="ascii-node-manager-linux-x64.tar.gz")|.browser_download_url' /tmp/nm/r.json)
+          curl -fL "$url" -o /tmp/nm/a.tgz
+          tar -xzf /tmp/nm/a.tgz -C /tmp/nm
+          R=/tmp/nm/bare-metal-node
+          for f in bootstrap-node.sh provision-vm.sh delete-vm.sh guest-runtime-setup.sh ensure-tenant-isolation.sh reconcile-node.sh sweep-operator-keys.sh update-node-manager.sh; do
+            [ -f "$R/$f" ] && cp "$R/$f" "box-public-node-manager-src/$f"
+          done
+          for f in isolate_domain_network.py ssh-identity.sh vm-cpu.sh vm-io.sh; do
+            [ -f "$R/lib/$f" ] && cp "$R/lib/$f" "box-public-node-manager-src/lib/$f"
+          done
+          printf '%s\n' "$tag" > box-public-node-manager-src/RELEASE_TAG.txt
+          find box-public-node-manager-src -type f -maxdepth 2 -print -exec sha256sum {} \;
+      - shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-public-node-manager-src
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: materialize public Box node-manager scripts'
+          git push
