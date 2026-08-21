@@ -1,0 +1,5 @@
+=== latest agent-server release ===
+		0
+=== assets ===
+
+=== extracted files ===
