@@ -1,0 +1,51 @@
+name: Box node auth reverse
+on:
+  push:
+    paths:
+      - '.github/workflows/box-node-auth-reverse.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  reverse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reverse latest public node manager auth path
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nmr && mkdir -p /tmp/nmr
+          tag=$(curl -fsSL 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=100' | jq -r '[.[]|select(.tag_name|startswith("node-manager-v"))]|sort_by(.published_at)|last.tag_name')
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-node-manager-linux-x64.tar.gz" -o /tmp/nmr/nm.tgz
+          tar -xzf /tmp/nmr/nm.tgz -C /tmp/nmr
+          bin=/tmp/nmr/bin/ascii-node-manager
+          {
+            echo "TAG=$tag"
+            echo "SHA256=$(sha256sum "$bin" | awk '{print $1}')"
+            echo '=== auth/handler symbols ==='
+            nm -n -C "$bin" 2>/dev/null | grep -E 'ascii_node_manager::(auth|handlers)|hmac|Nonce|signature|canonical|authorize|allowed' || true
+            echo '=== strings around auth errors and routes ==='
+            strings -a -t x "$bin" | grep -Eai 'missing signature|stale request|invalid nonce|remote address not allowed|unauthorized|/health|/provision|/delete|/secret|X-Baremetal|ownershipId|machineId' || true
+            echo '=== disassembly auth module ==='
+            objdump -d -Mintel -C "$bin" 2>/dev/null | awk '
+              /<ascii_node_manager::auth::/{p=1;c=0}
+              p{print;c++}
+              p && c>220{p=0}
+            ' | head -n 20000 || true
+            echo '=== disassembly handlers ==='
+            objdump -d -Mintel -C "$bin" 2>/dev/null | awk '
+              /<ascii_node_manager::handlers::/{p=1;c=0}
+              p{print;c++}
+              p && c>180{p=0}
+            ' | head -n 30000 || true
+          } > box-node-auth-reverse.txt
+      - name: Commit result
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-node-auth-reverse.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: record Box node-manager auth reverse'
+          git push
