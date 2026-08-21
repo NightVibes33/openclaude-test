@@ -1,0 +1,55 @@
+name: Box node0 host fingerprint
+on:
+  push:
+    paths:
+      - '.github/workflows/box-node0-host-fingerprint.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fingerprint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Banner-only checks against public-source node0 address
+        shell: bash
+        run: |
+          set -u
+          IP='2001:41d0:1004:38a5:100::1'
+          O=box-node0-host-fingerprint.txt
+          {
+            echo "TARGET=$IP"
+            echo '=== runner IPv6 route ==='
+            ip -6 route || true
+            echo
+            echo '=== ICMPv6 ==='
+            ping -6 -c 1 -W 3 "$IP" 2>&1 || true
+            echo
+            echo '=== SSH banner / host key only ==='
+            timeout 8 ssh-keyscan -6 -T 5 "$IP" 2>&1 || true
+            echo
+            echo '=== raw TCP/22 banner ==='
+            timeout 8 bash -c "exec 3<>/dev/tcp/$IP/22; head -c 300 <&3" 2>&1 || true
+            echo
+            echo '=== node-manager TLS handshake only ==='
+            timeout 8 openssl s_client -connect "[$IP]:8787" -servername ascii-node -brief </dev/null 2>&1 || true
+            echo
+            echo '=== unauthenticated health status only ==='
+            timeout 8 curl -6 -k -sS -o /tmp/health.body -D /tmp/health.headers -w 'HTTP=%{http_code}\n' "https://[$IP]:8787/health" 2>&1 || true
+            sed -n '1,30p' /tmp/health.headers 2>/dev/null || true
+            head -c 500 /tmp/health.body 2>/dev/null || true
+            echo
+          } > "$O"
+          cat "$O"
+      - name: Commit result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -f box-node0-host-fingerprint.txt ] || exit 0
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-node0-host-fingerprint.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: record node0 banner fingerprint'
+          git push
