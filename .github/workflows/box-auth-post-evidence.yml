@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch public post representations
+      - name: Fetch public challenge post representations
         shell: bash
         run: |
           set -uo pipefail
@@ -24,13 +24,14 @@ jobs:
           : > "$OUT"
           for u in \
             'https://publish.twitter.com/oembed?url=https://twitter.com/anic_dev/status/2089806388134371339' \
-            'https://cdn.syndication.twimg.com/tweet-result?id=2089806388134371339&lang=en' \
             'https://x.com/anic_dev/status/2089806388134371339' \
-            'https://t.co/Z870CLjXm0'; do
+            'https://t.co/Z870CLjXm0' \
+            'https://publish.twitter.com/oembed?url=https://twitter.com/vercel/status/2089744789982069006' \
+            'https://x.com/vercel/status/2089744789982069006'; do
             echo "===== $u =====" >> "$OUT"
             curl -L --max-time 20 -sS -A 'Mozilla/5.0' -D /tmp/h -w '\nFINAL_URL=%{url_effective}\nHTTP_CODE=%{http_code}\n' "$u" -o /tmp/b >> "$OUT" 2>&1 || true
             grep -iE '^(HTTP/|content-type:|location:|date:|etag:|last-modified:)' /tmp/h >> "$OUT" || true
-            head -c 20000 /tmp/b >> "$OUT" || true
+            head -c 30000 /tmp/b >> "$OUT" || true
             echo >> "$OUT"
           done
       - name: Persist
@@ -40,5 +41,5 @@ jobs:
           git config user.email 'box-recon-bot@users.noreply.github.com'
           git add -f box-authorization-post.txt
           git diff --cached --quiet && exit 0
-          git commit -m 'Update public Box pentest authorization evidence [skip ci]'
+          git commit -m 'Update Box and Vercel challenge evidence [skip ci]'
           git push origin HEAD:main
