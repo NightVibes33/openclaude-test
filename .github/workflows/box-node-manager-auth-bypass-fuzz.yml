@@ -1,0 +1,179 @@
+name: Box node-manager auth bypass fuzz
+on:
+  push:
+    paths:
+      - '.github/workflows/box-node-manager-auth-bypass-fuzz.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run local auth-boundary fuzz against public node-manager binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          O=box-node-manager-auth-bypass-fuzz.txt
+          : > "$O"
+          rm -rf /tmp/nmf && mkdir -p /tmp/nmf/state /tmp/nmf/vms /tmp/nmf/tls
+          tag=$(curl -fsSL 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=100' | jq -r '[.[]|select(.tag_name|startswith("node-manager-v"))]|sort_by(.published_at)|last.tag_name')
+          url="https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-node-manager-linux-x64.tar.gz"
+          curl -fL "$url" -o /tmp/nmf/nm.tgz
+          tar -xzf /tmp/nmf/nm.tgz -C /tmp/nmf
+          bin=/tmp/nmf/bin/ascii-node-manager
+          chmod +x "$bin"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=127.0.0.1' \
+            -keyout /tmp/nmf/tls/key.pem -out /tmp/nmf/tls/cert.pem >/dev/null 2>&1
+          export BAREMETAL_NODE_ID=node-test
+          export BAREMETAL_NODE_AGENT_BIND=127.0.0.1
+          export BAREMETAL_NODE_AGENT_PORT=18787
+          export BAREMETAL_NODE_AGENT_HMAC_SECRET='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+          export BAREMETAL_NODE_AGENT_ALLOWED_IPS='127.0.0.1/32,::1/128'
+          export BAREMETAL_NODE_AGENT_TLS_CERT=/tmp/nmf/tls/cert.pem
+          export BAREMETAL_NODE_AGENT_TLS_KEY=/tmp/nmf/tls/key.pem
+          export BAREMETAL_NODE_AGENT_REPO=/tmp/nmf
+          export BAREMETAL_OWNERSHIP_ROOT=/tmp/nmf/state
+          export VM_ROOT=/tmp/nmf/vms
+          export BAREMETAL_ABUSE_MONITOR=0
+          export IPV6_PREFIX='2001:db8:abcd:1'
+          export IPV6_PREFIX_LENGTH=80
+          "$bin" >/tmp/nmf/server.log 2>&1 &
+          pid=$!
+          cleanup(){ kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; }
+          trap cleanup EXIT
+          ready=0
+          for i in $(seq 1 50); do
+            if curl -sk --max-time 1 https://127.0.0.1:18787/health -o /dev/null 2>/dev/null; then ready=1; break; fi
+            kill -0 "$pid" 2>/dev/null || break
+            sleep .2
+          done
+          {
+            echo "TAG=$tag"
+            echo "SHA256=$(sha256sum "$bin" | awk '{print $1}')"
+            echo "READY=$ready"
+            echo '=== server startup ==='
+            head -n 100 /tmp/nmf/server.log || true
+          } >> "$O"
+          if [ "$ready" != 1 ]; then
+            echo 'HARNESS_START_FAILED=YES' >> "$O"
+            cat "$O"
+            exit 0
+          fi
+
+          status(){
+            local method="$1" path="$2" data="${3-}"
+            curl -sk --path-as-is --max-time 3 -o /tmp/nmf/body -w '%{http_code}' \
+              -X "$method" "https://127.0.0.1:18787$path" \
+              ${data:+--data-binary "$data"} 2>/dev/null || printf '000'
+          }
+          probe(){
+            local name="$1" method="$2" path="$3" data="${4-}"
+            local code body
+            code=$(status "$method" "$path" "$data")
+            body=$(tr '\n\r' '  ' </tmp/nmf/body 2>/dev/null | head -c 300 || true)
+            printf '%-42s method=%-7s path=%-42s status=%s body=%s\n' "$name" "$method" "$path" "$code" "$body" >> "$O"
+          }
+
+          echo '=== unsigned baseline and path-canonicalization probes ===' >> "$O"
+          probe baseline_health GET /health
+          probe health_query GET '/health?x=1'
+          probe health_dot GET '/./health'
+          probe health_double_slash GET '//health'
+          probe health_pct_h GET '/%68ealth'
+          probe health_pct_a GET '/he%61lth'
+          probe health_pct_slash GET '/%2fhealth'
+          probe health_semicolon GET '/health;foo'
+          probe health_trailing GET '/health/'
+
+          # Invalid bodies are deliberate: any 400/422-style application response
+          # instead of 401/403 would prove routing reached a privileged handler
+          # without a valid HMAC, while avoiding real state changes.
+          echo '=== unsigned privileged-route probes ===' >> "$O"
+          probe secret_plain POST /secret '{'
+          probe secret_pct POST '/%73ecret' '{'
+          probe secret_dot POST '/./secret' '{'
+          probe secret_double POST '//secret' '{'
+          probe secret_query POST '/secret?x=1' '{'
+          probe vms_post POST /vms '{'
+          probe vms_pct POST '/%76ms' '{'
+          probe vms_get GET /vms
+          probe maintenance POST /maintenance '{'
+          probe delete_guess DELETE '/vms/box-node0-deadbeef?ownershipId=AAAAAAAA' ''
+
+          echo '=== duplicate/malformed auth-header probes ===' >> "$O"
+          for variant in dup empty junk stale future nonceonly sigonly; do
+            case "$variant" in
+              dup)
+                code=$(curl -sk --path-as-is --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health \
+                  -H 'X-Baremetal-Signature:' -H 'X-Baremetal-Signature: deadbeef' \
+                  -H "X-Baremetal-Timestamp: $(date +%s)" -H 'X-Baremetal-Nonce: dupnonce' || true) ;;
+              empty)
+                code=$(curl -sk --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health \
+                  -H 'X-Baremetal-Signature:' -H 'X-Baremetal-Timestamp:' -H 'X-Baremetal-Nonce:' || true) ;;
+              junk)
+                code=$(curl -sk --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health \
+                  -H 'X-Baremetal-Signature: zz' -H 'X-Baremetal-Timestamp: nope' -H 'X-Baremetal-Nonce: junk' || true) ;;
+              stale)
+                code=$(curl -sk --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health \
+                  -H 'X-Baremetal-Signature: 00' -H 'X-Baremetal-Timestamp: 1' -H 'X-Baremetal-Nonce: stale' || true) ;;
+              future)
+                code=$(curl -sk --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health \
+                  -H 'X-Baremetal-Signature: 00' -H 'X-Baremetal-Timestamp: 9999999999' -H 'X-Baremetal-Nonce: future' || true) ;;
+              nonceonly)
+                code=$(curl -sk --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health -H 'X-Baremetal-Nonce: only' || true) ;;
+              sigonly)
+                code=$(curl -sk --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health -H 'X-Baremetal-Signature: 00' || true) ;;
+            esac
+            body=$(tr '\n\r' '  ' </tmp/nmf/body 2>/dev/null | head -c 300 || true)
+            echo "AUTH_HEADER_VARIANT=$variant status=$code body=$body" >> "$O"
+          done
+
+          echo '=== signed-control probes ===' >> "$O"
+          sign_and_call(){
+            local method="$1" path="$2" body="${3-}" nonce="n$(openssl rand -hex 8)" ts hash canon sig code
+            ts=$(date +%s)
+            hash=$(printf '%s' "$body" | sha256sum | awk '{print $1}')
+            canon=$(printf '%s\n%s\n%s\n%s\n%s' "$method" "$path" "$ts" "$nonce" "$hash")
+            sig=$(printf '%s' "$canon" | openssl dgst -sha256 -hmac "$BAREMETAL_NODE_AGENT_HMAC_SECRET" -hex | awk '{print $2}')
+            code=$(curl -sk --path-as-is --max-time 3 -o /tmp/nmf/body -w '%{http_code}' -X "$method" \
+              "https://127.0.0.1:18787$path" \
+              -H "X-Baremetal-Timestamp: $ts" -H "X-Baremetal-Nonce: $nonce" -H "X-Baremetal-Signature: $sig" \
+              ${body:+--data-binary "$body"} || true)
+            printf 'SIGNED method=%s path=%s status=%s body=%s\n' "$method" "$path" "$code" "$(tr '\n\r' '  ' </tmp/nmf/body | head -c 300)" >> "$O"
+          }
+          sign_and_call GET /health ''
+          sign_and_call GET '/%68ealth' ''
+          sign_and_call GET '/health?x=1' ''
+          sign_and_call POST /secret '{'
+
+          python3 - "$O" <<'PY'
+import re,sys
+p=sys.argv[1]
+s=open(p,encoding='utf-8').read()
+# On privileged unsigned probes, 400/409/422/5xx is more interesting than
+# 401/403/404 because it can indicate handler reachability past auth.
+interesting=[]
+for line in s.splitlines():
+    if re.search(r'^(secret_|vms_|maintenance|delete_guess)', line):
+        m=re.search(r'status=(\d+)',line)
+        if m and m.group(1) not in {'401','403','404','405'}:
+            interesting.append(line)
+print('AUTH_BYPASS_SIGNAL=' + ('YES' if interesting else 'NO'))
+for x in interesting: print('INTERESTING=' + x)
+PY
+          cat "$O"
+      - name: Commit fuzz result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -f box-node-manager-auth-bypass-fuzz.txt ] || exit 0
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-node-manager-auth-bypass-fuzz.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: record Box node-manager auth bypass fuzz'
+          git push
