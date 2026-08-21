@@ -1,0 +1,826 @@
+Fri Aug 21 21:31:52 UTC 2026
+=== download ascii-prod ===
+/tmp/box-ascii-prod: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), static-pie linked, BuildID[sha1]=544e2a6272b7b20a765bc60ca242c6825e981ebd, not stripped
+853dd5c3a82a824e554b9b17a9ab89b62925088af375977355b6f42540e5d5d8  /tmp/box-ascii-prod
+box 0.1.176-ascii-prod1
+Ascii Box CLI
+
+Usage: box-ascii-prod [OPTIONS] [COMMAND]
+
+Commands:
+  onboard         Sign in, choose repositories, and start the Box plan
+  login           Sign in with a Box token, GitHub, Google, or email
+  logout          Revoke this device's session and clear the stored token
+  api-key         Manage API keys for SDKs and programmatic use
+  webhook         Manage Box lifecycle webhooks
+  env             Manage named box environments: repos, env vars, secret files, safety toggles
+  new             Create a new Box sandbox
+  team            Show or switch your team billing scope (sticky: applies to every `box new`)
+  info            Show details for one Box
+  list            List your Boxes
+  extend          Extend or set how long a Box stays on
+  delete          Permanently delete a Box and all of its data
+  deletion        Inspect an asynchronous data deletion operation
+  stop            Stop a running Box and snapshot it for resume/fork
+  resume          Resume a stopped Box from its latest snapshot
+  prompt          Send a prompt to Codex or Claude inside a Box
+  interrupt       Stop the agent running in a Box
+  events          Stream a Box's agent chat events (prompts, responses, git checkpoints). A Box that was never prompted returns nothing; use `box info` for state
+  limits          Show your plan and usage limits
+  fork            Fork a Box from its latest snapshot
+  ssh             Open an SSH session into a Box, or run a command non-interactively
+  exec            Run a command in a Box over the Box API (no SSH), optionally in the background
+  host            Expose a Box port on a stable HTTPS URL
+  desktop         Open the Box desktop or browser preview URL
+  scp             Copy files to or from a Box over scp
+  forward         Forward a TCP port from a Box to your machine
+  dashboard       Open the Box dashboard in a browser
+  status          Show API health, account, plan, and CLI configuration
+  data-retention  Show or enable delete-on-stop data retention
+  snapshots       List filesystem snapshots taken of your Boxes
+  snapshot        Save a Box's state under a name, or inspect/download snapshots
+  self-update     Check for and install the latest CLI release for this channel
+  completions     Print a shell completion script (box IDs included) for bash, zsh, fish, or powershell
+  help            Print this message or the help of the given subcommand(s)
+
+Options:
+      --api-url <API_URL>  [env: BOX_API_URL=]
+      --json               Force machine-readable JSON/JSONL output
+      --no-update          Skip the automatic CLI update check
+  -h, --help               Print help
+  -V, --version            Print version
+
+Docs: https://docs.ascii.dev/box/cli-reference
+Programmatic use: https://docs.ascii.dev/box/use-in-code
+Secrets: https://box.ascii.dev/box/dashboard?tab=secrets
+=== download staging ===
+/tmp/box-staging: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), static-pie linked, BuildID[sha1]=325eb9ef50416b1b7a795abb6220499c1bf03b89, not stripped
+dd026f6db11409ee8ad004b2c2f5459eea5ab5afa8751ecb35e0b91c1c5580a5  /tmp/box-staging
+box 0.1.178-staging1
+Ascii Box CLI
+
+Usage: box-staging [OPTIONS] [COMMAND]
+
+Commands:
+  onboard         Sign in, choose repositories, and start the Box plan
+  login           Sign in with a Box token, GitHub, Google, or email
+  logout          Revoke this device's session and clear the stored token
+  api-key         Manage API keys for SDKs and programmatic use
+  webhook         Manage Box lifecycle webhooks
+  env             Manage named box environments: repos, env vars, secret files, safety toggles
+  new             Create a new Box sandbox
+  team            Show or switch your team billing scope (sticky: applies to every `box new`). Teams are shared orgs; see also `box org`
+  org             Show or switch your organization scope (sticky: applies to every command)
+  info            Show details for one Box
+  list            List your Boxes
+  extend          Extend or set how long a Box stays on
+  delete          Permanently delete a Box and all of its data
+  deletion        Inspect an asynchronous data deletion operation
+  stop            Stop a running Box and snapshot it for resume/fork
+  resume          Resume a stopped Box from its latest snapshot
+  prompt          Send a prompt to Codex or Claude inside a Box
+  interrupt       Stop the agent running in a Box
+  events          Stream a Box's agent chat events (prompts, responses, git checkpoints). A Box that was never prompted returns nothing; use `box info` for state
+  limits          Show your plan and usage limits
+  fork            Fork a Box from its latest snapshot
+  ssh             Open an SSH session into a Box, or run a command non-interactively
+  exec            Run a command in a Box over the Box API (no SSH), optionally in the background
+  host            Expose a Box port on a stable HTTPS URL
+  desktop         Open the Box desktop or browser preview URL
+  scp             Copy files to or from a Box over scp
+  forward         Forward a TCP port from a Box to your machine
+  dashboard       Open the Box dashboard in a browser
+  status          Show API health, account, plan, and CLI configuration
+  data-retention  Show or enable delete-on-stop data retention
+  snapshots       List filesystem snapshots taken of your Boxes
+  snapshot        Save a Box's state under a name, or inspect/download snapshots
+  self-update     Check for and install the latest CLI release for this channel
+  completions     Print a shell completion script (box IDs included) for bash, zsh, fish, or powershell
+  help            Print this message or the help of the given subcommand(s)
+
+Options:
+      --api-url <API_URL>  [env: BOX_API_URL=]
+      --org <ID_OR_NAME>   Run this command in an organization's scope. See `box org list`. [env: BOX_ORG=]
+      --json               Force machine-readable JSON/JSONL output
+      --no-update          Skip the automatic CLI update check
+  -h, --help               Print help
+  -V, --version            Print version
+
+Docs: https://docs.ascii.dev/box/cli-reference
+Programmatic use: https://docs.ascii.dev/box/use-in-code
+Secrets: https://box.ascii.dev/box/dashboard?tab=secrets
+=== security-relevant strings unique to staging ===
+                ding_login_emailpending_login_emogin_auth_methodpending_login_aull_token
+        trap - EXIT HUP INT TERMtarcould not read tar outputBOX_SSH_TRACEControlMaster=autoControlPersist=15sstdoutstderrBOX_CURRENT_IDBOX_AMSTERDAM_CURRENT_IDBOX_STAGING_CURRENT_IDBOX_DEV_CURRENT_IDBOX_CURRENT_ID_FILElatestVersionNumberprovisioningminhrdayinvalid SSH host-key pathcreating...setupScript/api/box/boxesbilling: personalcreatedBackend is still returning legacy IDs. Restart the backend with the latest migration/code before relying on this ID.box provisioning failed
+  <- active scopeBillingSetupDashboard:streaming:finalcould not encode the SSH transport for rsynctest ! -x /usr/bin/tar || printf 'tar\n'; rsync_help=$(rsync --help 2>/dev/null) || true; case "$rsync_help" in *' -s'*'args'*) printf 'rsync\n' ;; esacNo teams. Create one on the dashboard's Team tab.membermemberCountnativelegacycalled `Result::unwrap()` on an `Err` value
+ pass --all to fetch every page.namedhttps://ascii.devBOX_AMSTERDAM_API_URLBOX_STAGING_API_URLBOX_DEV_API_URLamsterdamstagingdevforwardDocs:
+"InvalidCrlNumbersignature_alg_idverification_algRevocationReasonRevokedCertEntryInvalidComponentInvalidAuthorityAuthorityMissingcontent-encodingcontent-languagecontent-locationwww-authenticatex-xss-protectionread interrupted{invalid syntax}0123456789abcdefreqwest::blocking::waitwait timeout exceededfalsepolled after completeTooManyBitsnum_requested_bitslimitNotEnoughRemainingBitsrequestedremainingNotEnoughBytesInDictionarygotOffsetTooBigoffsetbuf_lenUtf8Errorvalid_up_toerror_len`len` greater than remainingOut of bounds access
+%4s3
+%R2G
+%S3*
+&current=0.1.178-staging1
+-dev3y
+-stagingH3y
+. New boxes bill the team; `box new --personal` overrides once. For the full org scope (shared boxes + snapshots), use `box org switch 
+/api/box/api-keysapiKeysNo API keys.KEYCREATEDLAST USED
+/api/box/limits?teamId=
+/api/box/teams/
+/api/boxH
+5Xr2
+?org_nameboxCountprovidersnapshotpageInfopersonalpromptIdresumingenv.infowebhooksfinishedmemoryGBresponseplanNamestandardarchivedstopping__SUBS__versionsdisabledcanStartSNAPSHOTcomplete
+BOX_SCP_LEGACYBOX_SCP_ARCHIVEscpfor i in $(seq 1 60); do  if [ -x "$HOME/.ascii/host" ] && grep -q 'ASCII_TOKEN=' "$HOME/.bashrc" 2>/dev/null && grep -q 'ASCII CLI PATH START' "$HOME/.bashrc" 2>/dev/null; then    break  sleep 0.5cd ~ && exec bashcopying directly between two boxes is not supported yetcommandcwdtimeoutSecondsprocessIdpublictitleprivatehost failed: no URL returned--private and --public cannot be used togetherNo organizations.
+EL2NSYNCENOTUNIQELIBEXECERESTARTESTRPIPEENOTSOCKEMSGSIZEENETDOWNENOTCONNEALREADYWSTOPPED__WCLONENo anodeNulErrorTarErrorexo-openkde-openwsl-openxdg-opencinnamonTerminal-Commandhttp/1.1tls_infousernamepasswordfragmentResponseRedirecttrailersUnixTimeContinueif-matchif-rangelocationOverflowIdentityrequiredcontentsoverflowUpgradedno_proxyNO_PROXYgot_typeUnscopedBorrowedidentityDisabledAcceptedRejectedDTLSv1_0DTLSv1_2DTLSv1_3FinishedHostNameMLKEM512MLKEM768HpkeAeadKeySharefinishedexporterNoKeyLogmin_bits+
+Fatal internal error. Please consider filing a bug report at https://github.com/clap-rs/clap/issuesfalseTryFromIntErrora Display implementation returned an error unexpectedlyErrorParseIntErrordescription() is deprecated; use Displayd
+Secrets: https://box.ascii.dev/box/dashboard?tab=secretslogoutapi-keyttlno_auto_stopno_envmachine_typebeta_bare_metalsetup_filefilterallhoursresumefollowtimeoutdetachdesktoprecursivesourcedestinationremotelocaldata-retentionself-updatecompletionsshellidssnapshot-idsa subcommand is required but one was not providedOnboardGOOGLEUse Google sign-in during onboarding.EMAILUse email code sign-in during onboarding.Sign in, choose repositories, and start the Box planLoginStart Google sign-in.Start email code sign-in.Existing Box API token. Omit to start GitHub sign-in.Sign in with a Box token, GitHub, Google, or emailRevoke this device's session and clear the stored tokenApiKeyManage API keys for SDKs and programmatic useWebhookManage Box lifecycle webhooksEnvManage named box environments: repos, env vars, secret files, safety togglesNewTTLLifetime in seconds before the Box is eligible for cleanup.NO_AUTO_STOPno-auto-stopDisable automatic stop. The Box runs until you stop it.ENVKEY=VALUEPer-box environment variable. Repeat for multiple values. Overrides dashboard variables with the same name.NO_ENVno-envCreate a box with none of your account's stored secrets, for boxes you give to your own users. SSH, desktop, snapshots, and public URLs still work.ENVIRONMENTNamed environment to start from (repos, secrets, credentials). Defaults to your default environment ('base').MACHINE_TYPEMachine size: small (2 vCPU, 4GB, half rate), default (4 vCPU, 8GB), or large (8 vCPU, 16GB, 2x rate). Default: default.BETA_BARE_METALbeta-bare-metalDeprecated alias for --type bare-metal.SETUP_FILEsetup-fileShell script file to run on the Box after it is ready (max 64KB). Runs in the background; watch `setupStatus` in box info for the result.Admins only: pin the Box to an exact machine provider: hetzner, cloudstack, or baremetal.Create the Box from a named snapshot (saved with `box snapshot <id> <name>`).TEAM_IDCreate the Box in a team's context: it runs on the team's shared balance instead of yours. See `box team list` or `box org list`.Bill this Box to your personal account even when a team or org scope is active (`box team switch`, `box org switch`).Create a new Box sandboxShow or switch your team billing scope (sticky: applies to every `box new`). Teams are shared orgs; see also `box org`Show or switch your organization scope (sticky: applies to every command)Box ID.Show details for one BoxFILTERGROUPSState groups to include: r=up/running, s=stopped, p=pending, t=stopping, e=error. Combine letters, e.g. sr. Default: r.ALLInclude every state (same as --filter rspte).List your BoxesExtendHOURSSet the remaining lifetime in hours.Set the remaining lifetime in seconds.Extend or set how long a Box stays onDeleteBox ID, or "current"/"self".YESSkip the interactive destructive confirmation.Permanently delete a Box and all of its dataInspect an asynchronous data deletion operationFORCEStop even if the Box cannot be snapshotted. Everything written since the last successful snapshot is LOST. Only use this after a stop has already failed.Stop a running Box and snapshot it for resume/forkRmSkip the confirmation prompt. Required when stdout is not a terminal or --json is set.Deprecated alias for `delete`. Hidden from help; use `box delete` insteadResumePer-box environment variable. Repeat for multiple values. Overrides dashboard variables with the same name. Replaces the box's current per-box variables.Resume into a no-env box: drop all of your account's stored secrets and scrub any inherited from the snapshot. One-way; the box stays no-env after.Re-pin the box to a named environment's latest version before resuming.Resume onto a different machine size: small, default or large. Omit to keep the box's current size. Shrinking is refused if the box's data does not fit.Set the resumed Box's lifetime in seconds. Omit to keep the Box's current setting.Admins only: resume the Box onto an exact machine provider: hetzner, cloudstack, or baremetal. Sticky until changed on a later resume.Resume a stopped Box from its latest snapshotPromptAgent provider to use: codex or claude.MODELProvider model id. Omit to use the Agents dashboard default.Reasoning/thinking level. Omit to use the model default.PROMPTPrompt text.Send a prompt to Codex or Claude inside a BoxRun `box prompt --help` to fetch the current provider/model list from the Box API.InterruptStop the agent running in a BoxEventsFOLLOWStream a Box's agent chat events (prompts, responses, git checkpoints). A Box that was never prompted returns nothing; use `box info` for stateShow your plan and usage limitsPer-box environment variable for the fork. Repeat for multiple values. Overrides dashboard variables with the same name. Replaces the per-box variables the fork would inherit from the source box.Fork into a no-env box: drop all of your account's stored secrets and scrub any inherited from the source snapshot. The fork stays no-env.Re-pin the fork to a named environment's latest version. Omit to inherit the source box's environment.Fork onto a different machine size: small, default or large. Omit to inherit the source box's size. Shrinking is refused if the box's data does not fit.Lifetime in seconds for the fork. Omit for 1 hour; the fork does not inherit the source Box's setting.Disable automatic stop. The fork runs until you stop it.Admins only: fork onto an exact machine provider: hetzner, cloudstack, or baremetal. Omit to inherit the source box's provider.Fork a Box from its latest snapshotSshCOMMANDCommand to run. Omit for an interactive shell.Open an SSH session into a Box, or run a command non-interactivelyCWDDIRWorking directory, relative to the Box work directory.TIMEOUTTimeout in seconds (max 600). Default: 30.DETACHRun in the background and print the process id. Output goes to a log file on the Box.PIDShow status and logs of a background process started with --detach.Command to run.Run a command in a Box over the Box API (no SSH), optionally in the backgroundPort inside the Box to expose.PUBLICReturn an ungated public URL.PRIVATEReturn a token-gated URL. This is the default.TITLEDisplay title for the hosted port.Expose a Box port on a stable HTTPS URLDesktopVNCUse VNC streaming (more stable on poor/locked-down networks).With --vnc, return a URL that does not require an access token.Open the Box desktop or browser preview URLScpRECURSIVECopy directories recursively.Source path. Use <box-id>:<path> for remote paths.DESTINATIONDestination path. Use <box-id>:<path> for remote paths.Copy files to or from a Box over scpForwardREMOTERemote port inside the Box.LOCALLocal port to bind. Defaults to the remote port.Local bind address. Defaults to 127.0.0.1.Forward a TCP port from a Box to your machineOpen the Box dashboard in a browserShow API health, account, plan, and CLI configurationDataRetentionShow or enable delete-on-stop data retentionSnapshotsBox ID. Omit to list snapshots across all your Boxes.LIMITMaximum number of snapshots to fetch per page.Fetch every page instead of stopping at the first.List filesystem snapshots taken of your BoxesBox ID, or "current"/"self", to save a named snapshot from.Name to save the snapshot under. Reuse a name to replace it.Save a Box's state under a name, or inspect/download snapshotsCheck for and install the latest CLI release for this channelCompletionsShell to generate the script for.Print a shell completion script (box IDs included) for bash, zsh, fish, or powershellPrint box ID candidates for shell completion. Used by the completion scriptsPrint ordinary snapshot ID candidates for shell completionoutLatestShow the most recent snapshot for a BoxSnapshot ID, or a Box ID / "current"/"self" for its latest snapshot.Print the file tree captured in a snapshotOUTOutput directory. Defaults to ./<snapshot-id>.Download a snapshot and reassemble it into a local directorySnapshot ID. Named snapshots still use `box snapshot rm <name>`.Permanently delete one ordinary filesystem snapshot by snapshot IDName of the named snapshot to remove.Remove a named snapshotStatusDeletion operation ID returned by a delete command.Show the current status of a deletion operationShow whether delete-on-stop data retention is enabledEnableEnable deletion of Box data after each Box stopsrenamesetsafe_for_third_partiessecretsbox_credentialsagents_credentialsset-varrm-varrm-filebranchrm-repoupgradeList your environments: default marker, latest version, live boxes per versionEnvironment name.Show one environment in full: toggles, variables, secret files, repos, versionsEnvironment name (letters, numbers, dot, dash, underscore).Create a new named environment. It starts empty with everything injected by defaultRenameCurrent environment name.New environment name.Rename an environment. Boxes stay pinned to their versionsDefaultMake an environment the default for new boxesDelete an environment. Boxes pinned to its versions keep running; new boxes can no longer use itSetSAFE_FOR_THIRD_PARTIEStrue|falseMaster switch: true = inject NOTHING of yours (like --no-env). Overrides the granular toggles.GITHUBInject your GitHub access (token, repo clones).SECRETSInject your env variables and secret files.BOX_CREDENTIALSbox-credentialsInject the in-box Box CLI credentials (account-scoped).AGENTS_CREDENTIALSagents-credentialsInject your agent credentials (Claude/Codex logins).Change what the environment injects into boxes. Mints a new version; running boxes are NOT touched until you `env upgrade`SetVarSet one environment variable. Mints a new versionRmVarVariable name.Remove one environment variable. Mints a new versionSetFileIn-box path, relative to the workspace (e.g. .env or repo/.env).LOCAL_FILERead contents from this local file instead of stdin.Write one secret file (contents from --from or stdin). Mints a new versionRmFileIn-box path of the secret file.Remove one secret file. Mints a new versionAddRepoRepository full name, e.g. owner/repo.BRANCHBase branch to clone. Default: main.Add (or re-branch) a repo in the environment. Mints a new versionRmRepoRemove a repo from the environment. Mints a new versionUpgradeRe-pin this environment's boxes to its latest version: live boxes get the new config pushed now (withheld secrets scrubbed first), stopped ones pick it up at resumecreaterotaterevokeCreateDisplay name for the key, e.g. the project that will use it.Create a new API key. The secret is shown once; store it nowInclude per-box machine keys the platform manages automatically. Default: only keys you created.List your API keys. Secrets are never shown, only prefix and last fourRotateAPI key ID. See `api-key list`.Replace an API key's secret. The old secret stops working; the new one is shown onceRevokePermanently revoke an API keythe following required argument was not provided: urlremoveURLPublic HTTPS endpoint that accepts POST requests on port 443.Optional display name.EVENTSEVENTEvent to receive: ready, error, or archived. Repeat or comma-separate. Default: all.Register an HTTPS endpoint. Its signing secret is shown onceList registered webhooks. Signing secrets are never shownWebhook ID. See `webhook list`.Replace a webhook's signing secret. The old secret stops workingRemovePermanently remove a webhook and cancel pending deliveriesswitchtargetthe following required argument was not provided: targetList the teams you belong toSwitchTARGETTeam ID or name (see `box team list`), or 'personal'.Bill new boxes to a team, or 'personal' to go back to your own accountthe following required argument was not provided: memberShow the current org scopeList the organizations you belong to (your personal org first)Org ID or name (see `box org list`), or 'personal'.Scope the CLI to an org, or 'personal' to go back to your own accountDisplay name for the new organization.MEMBERMember id, login, or name.Make another member the owner. You become an AdminSkip the confirmation prompt.Delete the current organization. Only the sole owner can do this
+X-Ascii-Confirm-DeleteDELETErmnoEnvenvenvironmentmachineProvidermodelreasoningEffortinterrupt/api/box/limitslimitsyou can refer to it also as "current" instead of IDas long as you stay in this shell and it remains thelast created box in thereeventdashboardurl
+[0margsinfoPOSTstoptypeforkorgslistdata'\''Teamidleplan.sshvcpuprodexitbashfishself-chfnonehighinitfromSIZEPATHuserbox.hostCodeminsdays  fidonelostportNameTypeRolerolejsonJSONexecbindNAMETYPEFROMTEAMInfoListStopForkExecSECSHostPORTBINDtreepullTreePullpairrepoPAIRREPONoneSomeneedhaveusedstep
+[9m    for< -> shim as mut dyn  is boolchar__ZNteam_nameorgpending_login_urlpending_login_poll_tokenpending_login_auth_methodpending_login_emaillast_update_checkemailstatus
+[?25hdatabaseIdstruct LoginStartResponsestruct LoginPollResponsestruct Configno_updatea Display implementation returned an error unexpectedlyErrorCliAPI_URLapi-urlORGBOX_ORGID_OR_NAMERun this command in an organization's scope. See `box org list`.Force machine-readable JSON/JSONL outputNO_UPDATEno-updateSkip the automatic CLI update checkAscii Box CLIDocs: https://docs.ascii.dev/box/cli-reference
+_RINvMNtNtNtCskSjJLSRHk7U_5alloc11collections5btree6appendINtNtB5_4node7NodeRefNtNtBW_6marker5OwnedNtNtB9_6string6StringNtNtCsaD2Fbg807h4_10serde_json5value5ValueNtB1g_14LeafOrInternalE9bulk_pushINtNtB5_17dedup_sorted_iter15DedupSortedIterB1y_B1T_INtNtNtB9_3vec9into_iter8IntoIterTB1y_B1T_EEENtNtB9_5alloc6GlobalECsbIMhwAyTfOq_3box
+_RINvMNtNtNtCskSjJLSRHk7U_5alloc11collections5btree6removeINtNtB5_4node6HandleINtBW_7NodeRefNtNtBW_6marker3MutNtNtB9_6string6StringNtNtCsaD2Fbg807h4_10serde_json5value5ValueNtB1t_14LeafOrInternalENtB1t_2KVE18remove_kv_trackingNCNvMs5_NtNtB5_3map5entryINtB3J_13OccupiedEntryB1J_B24_E9remove_kv0NtNtB9_5alloc6GlobalECsbIMhwAyTfOq_3box
+_RINvMs0_NtCsaD2Fbg807h4_10serde_json5errorNtB6_5Error12fix_positionNCNvMs3_NtB8_2deINtB1b_12DeserializerNtNtB8_4read7StrReadE12fix_position0ECsbIMhwAyTfOq_3box
+_RINvMs0_NtCsaD2Fbg807h4_10serde_json5errorNtB6_5Error12fix_positionNCNvMs3_NtB8_2deINtB1b_12DeserializerNtNtB8_4read9SliceReadE12fix_position0ECsbIMhwAyTfOq_3box
+_RINvMs0_NtNtNtNtCsl1RqEF7rHWY_3std3sys12thread_local6native4lazyINtB6_7StorageINtNtCs806nzKq9KaB_4core4cell4CellTyyEEzE16get_or_init_slowNvNvNvMNtNtBe_4hash6randomNtB2i_11RandomState3new4KEYS27___rust_std_internal_init_fnECsbIMhwAyTfOq_3box
+_RINvMs3_CsbIMhwAyTfOq_3boxNtB6_7Spinner11set_messageNtNtCskSjJLSRHk7U_5alloc6string6StringEB6_
+_RINvMs3_CsbIMhwAyTfOq_3boxNtB6_7Spinner8start_ifNtNtCskSjJLSRHk7U_5alloc6string6StringEB6_
+_RINvMs3_CsbIMhwAyTfOq_3boxNtB6_7Spinner8start_ifReEB6_
+_RINvMs3_NtCskSjJLSRHk7U_5alloc3stre7replaceReECsbIMhwAyTfOq_3box
+_RINvMs3_NtCskSjJLSRHk7U_5alloc3stre7replacecECsbIMhwAyTfOq_3box.llvm.6035755730394737711
+_RINvMs3_NtNtCsjMYODDEHvr6_7reqwest8blocking6clientNtB6_6Client7requestNtNtCskSjJLSRHk7U_5alloc6string6StringECsbIMhwAyTfOq_3box
+_RINvMs3_NtNtCsjMYODDEHvr6_7reqwest8blocking6clientNtB6_6Client7requestRNtNtCskSjJLSRHk7U_5alloc6string6StringECsbIMhwAyTfOq_3box
+_RINvMs3_NtNtCsjMYODDEHvr6_7reqwest8blocking6clientNtB6_6Client7requestReECsbIMhwAyTfOq_3box
+_RINvMs_NtNtCsjMYODDEHvr6_7reqwest8blocking7requestNtB5_14RequestBuilder11bearer_authRNtNtCskSjJLSRHk7U_5alloc6string6StringECsbIMhwAyTfOq_3box
+_RINvMs_NtNtCskRvyO5X0rrO_12clap_builder7builder3argNtB5_3Arg12value_parserINtNtB7_12value_parser20RangedI64ValueParsertEECsbIMhwAyTfOq_3box
+_RINvMs_NtNtCskRvyO5X0rrO_12clap_builder7builder3argNtB5_3Arg12value_parserNtNtB7_12value_parser20RangedU64ValueParserECsbIMhwAyTfOq_3box
+_RINvMsi_NtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoderNtB6_12BlockDecoder20decode_block_contentQQINtNtNtCs806nzKq9KaB_4core2io6cursor6CursorRShEECsbIMhwAyTfOq_3box
+_RINvMsi_NtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoderNtB6_12BlockDecoder20decode_block_contentQQINtNtNtNtCsl1RqEF7rHWY_3std2io8buffered9bufreader9BufReaderNtNtB1J_2fs4FileEECsbIMhwAyTfOq_3box
+_RINvMsj_NtCskSjJLSRHk7U_5alloc3vecINtB6_3VecNtNtB8_6string6StringE14extend_trustedINtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtNtB1r_5slice4iter4IterReENCNvCsbIMhwAyTfOq_3box20remote_shell_command0EEB2E_
+_RINvMsj_NtCskSjJLSRHk7U_5alloc3vecINtB6_3VecNtNtNtCsl1RqEF7rHWY_3std3ffi6os_str8OsStringE14extend_trustedINtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtB6_9into_iter8IntoIterNtNtB8_6string6StringENvYBG_INtNtB1O_7convert4FromB2U_E4fromEECsbIMhwAyTfOq_3box
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtB4_6option6OptionNtCsbIMhwAyTfOq_3box15SnapshotCommandEEBZ_
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtCskSjJLSRHk7U_5alloc3vec3VecNtNvCsbIMhwAyTfOq_3box20print_snapshot_table3RowEEB1c_
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtCskSjJLSRHk7U_5alloc3vec3VecNtNvCsbIMhwAyTfOq_3box20print_snapshot_table3RowEEB1c_.llvm.11162964999050869610
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtCskSjJLSRHk7U_5alloc3vec3VecNtNvCsbIMhwAyTfOq_3box26print_named_snapshot_table3RowEEB1c_
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtCskSjJLSRHk7U_5alloc3vec3VecNtNvCsbIMhwAyTfOq_3box26print_named_snapshot_table3RowEEB1c_.llvm.11162964999050869610
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueNCINvMs3_CsbIMhwAyTfOq_3boxNtBK_7Spinner8start_ifNtNtCskSjJLSRHk7U_5alloc6string6StringE0EBK_
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueNCINvNtNtCsl1RqEF7rHWY_3std6thread9lifecycle15spawn_uncheckedNCINvMs3_CsbIMhwAyTfOq_3boxNtB1J_7Spinner8start_ifNtNtCskSjJLSRHk7U_5alloc6string6StringE0uEs_0EB1J_
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder20BlockHeaderReadErrorECsbIMhwAyTfOq_3box
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder20DecompressBlockErrorECsbIMhwAyTfOq_3box
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder23DecodeBlockContentErrorECsbIMhwAyTfOq_3box
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding24literals_section_decoder23DecompressLiteralsErrorECsbIMhwAyTfOq_3box
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueNtNtNtCskRvyO5X0rrO_12clap_builder7builder12value_parser20PossibleValuesParserECsbIMhwAyTfOq_3box.llvm.7386299615861801286
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueNtNvCsbIMhwAyTfOq_3box20print_snapshot_table3RowEBF_.llvm.11162964999050869610
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueNtNvCsbIMhwAyTfOq_3box26print_named_snapshot_table3RowEBF_
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueNtNvCsbIMhwAyTfOq_3box26print_named_snapshot_table3RowEBF_.llvm.11162964999050869610
+_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueNtNvCsbIMhwAyTfOq_3box26print_named_snapshot_table3RowEBF_.llvm.7958357839963844599
+_RINvNtCscRcuEFgk1fc_6anyhow5error22context_chain_downcastNtNtCskSjJLSRHk7U_5alloc6string6StringECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error22context_chain_downcastReECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23context_chain_drop_restNtNtCskSjJLSRHk7U_5alloc6string6StringECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23context_chain_drop_restReECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedINtB2_12ContextErrorNtNtCskSjJLSRHk7U_5alloc6string6StringNtB4_5ErrorEECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedINtB2_12ContextErrorNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtCsaD2Fbg807h4_10serde_json5error5ErrorEECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedINtB2_12ContextErrorNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtCsjMYODDEHvr6_7reqwest5error5ErrorEECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedINtB2_12ContextErrorNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtNtCs806nzKq9KaB_4core2io5error5ErrorEECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedINtB2_12ContextErrorReNtB4_5ErrorEECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedINtB2_12ContextErrorReNtNtCsaD2Fbg807h4_10serde_json5error5ErrorEECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedINtB2_12ContextErrorReNtNtCsjMYODDEHvr6_7reqwest5error5ErrorEECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedINtB2_12ContextErrorReNtNtCskSjJLSRHk7U_5alloc6string13FromUtf8ErrorEECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedINtB2_12ContextErrorReNtNtNtCs806nzKq9KaB_4core2io5error5ErrorEECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedINtNtB4_7wrapper12MessageErrorNtNtCskSjJLSRHk7U_5alloc6string6StringEECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedINtNtB4_7wrapper12MessageErrorReEECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedNtCsbIMhwAyTfOq_3box8ApiErrorEBW_
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedNtNtCsaD2Fbg807h4_10serde_json5error5ErrorECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedNtNtCsjMYODDEHvr6_7reqwest5error5ErrorECsbIMhwAyTfOq_3box
+_RINvNtCscRcuEFgk1fc_6anyhow5error23object_reallocate_boxedNtNtNtCs806nzKq9KaB_4core2io5error5ErrorECsbIMhwAyTfOq_3box
+_RINvNtNtCskSjJLSRHk7U_5alloc3vec16in_place_collect18from_iter_in_placeINtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtB4_9into_iter8IntoIterNtNtB6_6string6StringENCNvCsbIMhwAyTfOq_3box18print_effort_liness2_0EB2l_EB2L_
+_RINvNtNtCskSjJLSRHk7U_5alloc3vec16in_place_collect18from_iter_in_placeINtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtB4_9into_iter8IntoIterNtNtB6_6string6StringENvYNtNtNtCsl1RqEF7rHWY_3std3ffi6os_str8OsStringINtNtB1f_7convert4FromB2l_E4fromEB2K_ECsbIMhwAyTfOq_3box
+_RINvNtNtCsl1RqEF7rHWY_3std3sys9backtrace28___rust_begin_short_backtraceNCINvMs3_CsbIMhwAyTfOq_3boxNtB1g_7Spinner8start_ifNtNtCskSjJLSRHk7U_5alloc6string6StringE0uEB1g_
+_RINvNtNtCsl1RqEF7rHWY_3std6thread9lifecycle15spawn_uncheckedNCINvMs3_CsbIMhwAyTfOq_3boxNtB15_7Spinner8start_ifNtNtCskSjJLSRHk7U_5alloc6string6StringE0uEB15_
+_RINvNtNtCsl1RqEF7rHWY_3std6thread9lifecycle15spawn_uncheckedNCINvMs3_CsbIMhwAyTfOq_3boxNtB15_7Spinner8start_ifReE0uEB15_
+_RINvNtNtNtCs806nzKq9KaB_4core5slice4sort6stable14driftsort_mainNtNtCsaD2Fbg807h4_10serde_json5value5ValueNCINvMNtCskSjJLSRHk7U_5alloc5sliceSBZ_7sort_byNCNvCsbIMhwAyTfOq_3box13snapshot_pulls0_0E0INtNtB1N_3vec3VecBZ_EEB2t_
+_RINvNtNtNtCs806nzKq9KaB_4core5slice4sort6stable14driftsort_mainTNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCINvMNtB14_5sliceSBZ_7sort_byNCINvXs1o_NtNtNtB14_11collections5btree3mapINtB2X_8BTreeMapB10_B1C_EINtNtNtNtB8_4iter6traits7collect12FromIteratorBZ_E9from_iterINtNtNtB40_8adapters3map3MapNtNtB1G_3map8IntoIterNCNvCsbIMhwAyTfOq_3box18present_box_states0EE0E0INtNtB14_3vec3VecBZ_EEB5I_
+_RINvNtNtNtCs806nzKq9KaB_4core5slice4sort6stable14driftsort_mainTNtNtCskSjJLSRHk7U_5alloc6string6StringbINtNtB8_6option6OptionyEENCINvMNtB14_5sliceSBZ_7sort_byNCNvCsbIMhwAyTfOq_3box20render_snapshot_trees_0E0INtNtB14_3vec3VecBZ_EEB2A_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6shared5pivot11median3_recNtNtCsaD2Fbg807h4_10serde_json5value5ValueNCINvMNtCskSjJLSRHk7U_5alloc5sliceSB14_7sort_byNCNvCsbIMhwAyTfOq_3box13snapshot_pulls0_0E0EB2z_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6shared5pivot11median3_recTNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCINvMNtB19_5sliceSB14_7sort_byNCINvXs1o_NtNtNtB19_11collections5btree3mapINtB33_8BTreeMapB15_B1H_EINtNtNtNtBa_4iter6traits7collect12FromIteratorB14_E9from_iterINtNtNtB46_8adapters3map3MapNtNtB1L_3map8IntoIterNCNvCsbIMhwAyTfOq_3box18present_box_states0EE0E0EB5P_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6shared5pivot11median3_recTNtNtCskSjJLSRHk7U_5alloc6string6StringbINtNtBa_6option6OptionyEENCINvMNtB19_5sliceSB14_7sort_byNCNvCsbIMhwAyTfOq_3box20render_snapshot_trees_0E0EB2G_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6shared9smallsort12sort4_stableTNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCINvMNtB1e_5sliceSB19_7sort_byNCINvXs1o_NtNtNtB1e_11collections5btree3mapINtB38_8BTreeMapB1a_B1M_EINtNtNtNtBa_4iter6traits7collect12FromIteratorB19_E9from_iterINtNtNtB4b_8adapters3map3MapNtNtB1Q_3map8IntoIterNCNvCsbIMhwAyTfOq_3box18present_box_states0EE0E0EB5U_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6shared9smallsort12sort4_stableTNtNtCskSjJLSRHk7U_5alloc6string6StringbINtNtBa_6option6OptionyEENCINvMNtB1e_5sliceSB19_7sort_byNCNvCsbIMhwAyTfOq_3box20render_snapshot_trees_0E0EB2L_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6shared9smallsort25insertion_sort_shift_leftNtNtCsaD2Fbg807h4_10serde_json5value5ValueNCINvMNtCskSjJLSRHk7U_5alloc5sliceSB1m_7sort_byNCNvCsbIMhwAyTfOq_3box13snapshot_pulls0_0E0EB2R_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6shared9smallsort25insertion_sort_shift_leftTNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCINvMNtB1r_5sliceSB1m_7sort_byNCINvXs1o_NtNtNtB1r_11collections5btree3mapINtB3l_8BTreeMapB1n_B1Z_EINtNtNtNtBa_4iter6traits7collect12FromIteratorB1m_E9from_iterINtNtNtB4o_8adapters3map3MapNtNtB23_3map8IntoIterNCNvCsbIMhwAyTfOq_3box18present_box_states0EE0E0EB67_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6shared9smallsort25insertion_sort_shift_leftTNtNtCskSjJLSRHk7U_5alloc6string6StringbINtNtBa_6option6OptionyEENCINvMNtB1r_5sliceSB1m_7sort_byNCNvCsbIMhwAyTfOq_3box20render_snapshot_trees_0E0EB2Y_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6shared9smallsort31small_sort_general_with_scratchNtNtCsaD2Fbg807h4_10serde_json5value5ValueNCINvMNtCskSjJLSRHk7U_5alloc5sliceSB1s_7sort_byNCNvCsbIMhwAyTfOq_3box13snapshot_pulls0_0E0EB2X_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6shared9smallsort31small_sort_general_with_scratchTNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCINvMNtB1x_5sliceSB1s_7sort_byNCINvXs1o_NtNtNtB1x_11collections5btree3mapINtB3r_8BTreeMapB1t_B25_EINtNtNtNtBa_4iter6traits7collect12FromIteratorB1s_E9from_iterINtNtNtB4u_8adapters3map3MapNtNtB29_3map8IntoIterNCNvCsbIMhwAyTfOq_3box18present_box_states0EE0E0EB6d_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6shared9smallsort31small_sort_general_with_scratchTNtNtCskSjJLSRHk7U_5alloc6string6StringbINtNtBa_6option6OptionyEENCINvMNtB1x_5sliceSB1s_7sort_byNCNvCsbIMhwAyTfOq_3box20render_snapshot_trees_0E0EB34_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6stable5drift4sortNtNtCsaD2Fbg807h4_10serde_json5value5ValueNCINvMNtCskSjJLSRHk7U_5alloc5sliceSBW_7sort_byNCNvCsbIMhwAyTfOq_3box13snapshot_pulls0_0E0EB2q_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6stable5drift4sortTNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCINvMNtB11_5sliceSBW_7sort_byNCINvXs1o_NtNtNtB11_11collections5btree3mapINtB2U_8BTreeMapBX_B1z_EINtNtNtNtBa_4iter6traits7collect12FromIteratorBW_E9from_iterINtNtNtB3W_8adapters3map3MapNtNtB1D_3map8IntoIterNCNvCsbIMhwAyTfOq_3box18present_box_states0EE0E0EB5E_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6stable5drift4sortTNtNtCskSjJLSRHk7U_5alloc6string6StringbINtNtBa_6option6OptionyEENCINvMNtB11_5sliceSBW_7sort_byNCNvCsbIMhwAyTfOq_3box20render_snapshot_trees_0E0EB2x_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6stable9quicksort9quicksortNtNtCsaD2Fbg807h4_10serde_json5value5ValueNCINvMNtCskSjJLSRHk7U_5alloc5sliceSB15_7sort_byNCNvCsbIMhwAyTfOq_3box13snapshot_pulls0_0E0EB2A_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6stable9quicksort9quicksortTNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCINvMNtB1a_5sliceSB15_7sort_byNCINvXs1o_NtNtNtB1a_11collections5btree3mapINtB34_8BTreeMapB16_B1I_EINtNtNtNtBa_4iter6traits7collect12FromIteratorB15_E9from_iterINtNtNtB47_8adapters3map3MapNtNtB1M_3map8IntoIterNCNvCsbIMhwAyTfOq_3box18present_box_states0EE0E0EB5Q_
+_RINvNtNtNtNtCs806nzKq9KaB_4core5slice4sort6stable9quicksort9quicksortTNtNtCskSjJLSRHk7U_5alloc6string6StringbINtNtBa_6option6OptionyEENCINvMNtB1a_5sliceSB15_7sort_byNCNvCsbIMhwAyTfOq_3box20render_snapshot_trees_0E0EB2H_
+_RINvXNtCscRcuEFgk1fc_6anyhow7contextINtNtCs806nzKq9KaB_4core6result6ResultINtNtCsgGXrR8MCtpT_3tar7archive7EntriesINtNtCs9sAn8J9bsW2_6ruzstd17streaming_decoder16StreamingDecoderINtNtNtNtCsl1RqEF7rHWY_3std2io8buffered9bufreader9BufReaderNtNtB2X_2fs4FileENtNtB1S_13frame_decoder12FrameDecoderEENtNtNtBD_2io5error5ErrorEINtB5_7ContextB1a_B4F_E12with_contextNtNtCskSjJLSRHk7U_5alloc6string6StringNCNvCsbIMhwAyTfOq_3box13snapshot_pulls2_0EB6l_
+_RINvXNtCscRcuEFgk1fc_6anyhow7contextINtNtCs806nzKq9KaB_4core6result6ResultNtNtCsgGXrR8MCtpT_3tar5entry8UnpackedNtNtNtBD_2io5error5ErrorEINtB5_7ContextB1a_B1L_E12with_contextNtNtCskSjJLSRHk7U_5alloc6string6StringNCNvCsbIMhwAyTfOq_3box13snapshot_pulls3_0EB3r_
+_RINvXs0_NtNtNtCs806nzKq9KaB_4core4iter6traits8iteratorQINtNtNtBa_8adapters3map3MapINtNtNtBc_5array4iter8IntoIterRNtNtCskSjJLSRHk7U_5alloc6string6StringKj1_ENvYB1M_INtNtBc_7convert4IntoNtNtNtCsl1RqEF7rHWY_3std3ffi6os_str8OsStringE4intoENtB6_8Iterator4folduNCINvNvB3L_8for_each4callB2W_NCINvMsj_NtB1R_3vecINtB4H_3VecB2W_E14extend_trustedBQ_E0E0ECsbIMhwAyTfOq_3box
+_RINvXs0_NtNtNtCs806nzKq9KaB_4core4iter8adapters3mapINtB6_3MapINtNtB8_4take4TakeINtNtNtBc_5slice4iter4IterhEENCNvCsbIMhwAyTfOq_3box17ssh_host_identitys_0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB2r_8for_each4callNtNtCskSjJLSRHk7U_5alloc6string6StringNCINvXsk_B3w_B3u_INtNtB2v_7collect6ExtendB3u_E6extendBN_E0E0EB1M_
+_RINvXs0_NtNtNtCs806nzKq9KaB_4core4iter8adapters3mapINtB6_3MapINtNtB8_4take4TakeINtNtNtBc_5slice4iter4IterhEENCNvCsbIMhwAyTfOq_3box17transfer_temp_dir0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB2p_8for_each4callNtNtCskSjJLSRHk7U_5alloc6string6StringNCINvXsk_B3u_B3s_INtNtB2t_7collect6ExtendB3s_E6extendBN_E0E0EB1M_
+_RINvXs0_NtNtNtCs806nzKq9KaB_4core4iter8adapters3mapINtB6_3MapINtNtNtBc_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCNvCsbIMhwAyTfOq_3box11print_values_0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB2H_8for_each4callTNtNtCskSjJLSRHk7U_5alloc6string6StringB3L_B3L_B3L_B3L_B3L_ENCINvMsj_NtB3P_3vecINtB4R_3VecB3K_E14extend_trustedBN_E0E0EB28_
+_RINvXs0_NtNtNtCs806nzKq9KaB_4core4iter8adapters3mapINtB6_3MapINtNtNtBc_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCNvCsbIMhwAyTfOq_3box12api_key_lists_0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB2I_8for_each4callNtB26_3RowNCINvMsj_NtCskSjJLSRHk7U_5alloc3vecINtB44_3VecB3L_E14extend_trustedBN_E0E0EB28_
+_RINvXs0_NtNtNtCs806nzKq9KaB_4core4iter8adapters3mapINtB6_3MapINtNtNtBc_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCNvCsbIMhwAyTfOq_3box20print_snapshot_table0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB2O_8for_each4callNtB26_3RowNCINvMsj_NtCskSjJLSRHk7U_5alloc3vecINtB4a_3VecB3R_E14extend_trustedBN_E0E0EB28_
+_RINvXs0_NtNtNtCs806nzKq9KaB_4core4iter8adapters3mapINtB6_3MapINtNtNtBc_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCNvCsbIMhwAyTfOq_3box26print_named_snapshot_table0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB2U_8for_each4callNtB26_3RowNCINvMsj_NtCskSjJLSRHk7U_5alloc3vecINtB4g_3VecB3X_E14extend_trustedBN_E0E0EB28_
+_RINvXs0_NtNtNtCs806nzKq9KaB_4core4iter8adapters3mapINtB6_3MapINtNtNtBc_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCNvCsbIMhwAyTfOq_3box8org_list0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB2B_8for_each4callTNtNtCskSjJLSRHk7U_5alloc6string6StringB3F_B3F_B3F_B3F_bENCINvMsj_NtB3J_3vecINtB4I_3VecB3E_E14extend_trustedBN_E0E0EB28_
+_RINvXs0_NtNtNtCs806nzKq9KaB_4core4iter8adapters3mapINtB6_3MapINtNtNtBc_5slice4iter4IterReENCINvMs0_NtNtCslvolWzJtyrq_9dialoguer7prompts6selectNtB1z_6Select5itemsRB1n_RSB1n_E0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB2N_8for_each4callNtNtCskSjJLSRHk7U_5alloc6string6StringNCINvMsj_NtB3U_3vecINtB4B_3VecB3Q_E14extend_trustedBN_E0E0ECsbIMhwAyTfOq_3box
+_RINvXs0_NtNtNtCs806nzKq9KaB_4core4iter8adapters3mapINtB6_3MapINtNtNtBc_5slice4iter4IterReENCNvCsbIMhwAyTfOq_3box13print_cli_art0ENtNtNtBa_6traits8iterator8Iterator4foldjNCINvNvB23_6max_by4foldjNvYjNtNtBc_3cmp3Ord3cmpE0EB1u_
+_RINvXs0_NtNtNtCs806nzKq9KaB_4core4iter8adapters3mapINtB6_3MapNtNtNtBc_3str4iter5BytesNCNvCsbIMhwAyTfOq_3box11env_commands0_0ENtNtNtBa_6traits8iterator8Iterator4folduNCINvNvB1Z_8for_each4callNtNtCskSjJLSRHk7U_5alloc6string6StringNCINvXsk_B34_B32_INtNtB23_7collect6ExtendB32_E6extendBN_E0E0EB1p_
+_RINvXs1o_NtNtNtCskSjJLSRHk7U_5alloc11collections5btree3mapINtB7_8BTreeMapNtNtBd_6string6StringNtNtCsaD2Fbg807h4_10serde_json5value5ValueEINtNtNtNtCs806nzKq9KaB_4core4iter6traits7collect12FromIteratorTB19_B1u_EE9from_iterINtNtNtB2i_8adapters3map3MapNtNtB1y_3map8IntoIterNCNvCsbIMhwAyTfOq_3box18present_box_states0EEB4n_
+_RINvXs4_NtNtCskSjJLSRHk7U_5alloc3vec9into_iterINtB6_8IntoIterNtNtBa_6string6StringENtNtNtNtCs806nzKq9KaB_4core4iter6traits8iterator8Iterator8try_foldINtNtB8_13in_place_drop11InPlaceDropBX_ENCINvNtNtB1p_8adapters3map12map_try_foldBX_BX_B2n_INtNtB1r_6result6ResultB2n_zENCNvCsbIMhwAyTfOq_3box18print_effort_liness2_0NCINvNtB8_16in_place_collect24write_in_place_with_dropBX_E0E0B3P_EB4m_
+_RINvXs8_NtCskSjJLSRHk7U_5alloc6stringNtB6_6StringINtNtNtNtCs806nzKq9KaB_4core4iter6traits7collect12FromIteratorBz_E9from_iterINtNtNtBS_8adapters3map3MapINtNtB24_4take4TakeINtNtNtBU_5slice4iter4IterhEENCNvCsbIMhwAyTfOq_3box17transfer_temp_dir0EEB3g_
+_RINvYINtNtNtNtCs806nzKq9KaB_4core4iter8adapters3rev3RevNtNtCsl1RqEF7rHWY_3std4path10ComponentsENtNtNtBa_6traits8iterator8Iterator5eq_byB3_NCINvYB3_B1v_2eqB3_E0ECsbIMhwAyTfOq_3box
+_RNCINvMNtCskSjJLSRHk7U_5alloc5sliceSNtNtCsaD2Fbg807h4_10serde_json5value5Value7sort_byNCNvCsbIMhwAyTfOq_3box13snapshot_pulls0_0E0B1q_
+_RNCINvMNtCskSjJLSRHk7U_5alloc5sliceSNtNtCsaD2Fbg807h4_10serde_json5value5Value7sort_byNCNvCsbIMhwAyTfOq_3box13snapshot_pulls0_0E0B1q_.llvm.10762743008204057374
+_RNCINvMNtCskSjJLSRHk7U_5alloc5sliceSNtNtCsaD2Fbg807h4_10serde_json5value5Value7sort_byNCNvCsbIMhwAyTfOq_3box13snapshot_pulls0_0E0B1q_.llvm.17716129411150464974
+_RNCNvCsbIMhwAyTfOq_3box13snapshot_pulls1_0B3_
+_RNCNvCsbIMhwAyTfOq_3box13snapshot_save0B3_
+_RNCNvCsbIMhwAyTfOq_3box13snapshot_trees_0B3_
+_RNCNvCsbIMhwAyTfOq_3box4mains3_0B3_
+_RNSNvYNCINvNtNtCsl1RqEF7rHWY_3std6thread9lifecycle15spawn_uncheckedNCINvMs3_CsbIMhwAyTfOq_3boxNtB1c_7Spinner8start_ifNtNtCskSjJLSRHk7U_5alloc6string6StringE0uEs_0INtNtNtCs806nzKq9KaB_4core3ops8function6FnOnceuE9call_once6vtableB1c_
+_RNvCsbIMhwAyTfOq_3box11desktop_box
+_RNvCsbIMhwAyTfOq_3box11snapshot_rm
+_RNvCsbIMhwAyTfOq_3box13snapshot_pull
+_RNvCsbIMhwAyTfOq_3box13snapshot_save
+_RNvCsbIMhwAyTfOq_3box13snapshot_tree
+_RNvCsbIMhwAyTfOq_3box14snapshots_list
+_RNvCsbIMhwAyTfOq_3box15snapshot_latest
+_RNvCsbIMhwAyTfOq_3box17auth_method_label
+_RNvCsbIMhwAyTfOq_3box18choose_auth_method
+_RNvCsbIMhwAyTfOq_3box19pending_auth_method
+_RNvCsbIMhwAyTfOq_3box19snapshot_size_bytes
+_RNvCsbIMhwAyTfOq_3box20install_ssh_host_key
+_RNvCsbIMhwAyTfOq_3box20print_api_key_secret
+_RNvCsbIMhwAyTfOq_3box20print_webhook_secret
+_RNvCsbIMhwAyTfOq_3box22login_with_auth_choice
+_RNvCsbIMhwAyTfOq_3box23resolve_snapshot_id_arg
+_RNvCsbIMhwAyTfOq_3box26ssh_host_verification_args
+_RNvCsbIMhwAyTfOq_3box8host_box
+_RNvMs3_CsbIMhwAyTfOq_3boxNtB5_7Spinner14stop_and_clear
+_RNvMs3_CsbIMhwAyTfOq_3boxNtB5_7Spinner8disabled
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read7StrReadE10peek_errorCsbIMhwAyTfOq_3box.llvm.3935554170724025962
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read7StrReadE12parse_numberCsbIMhwAyTfOq_3box
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read7StrReadE13parse_integerCsbIMhwAyTfOq_3box
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read7StrReadE14ignore_integerCsbIMhwAyTfOq_3box
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read7StrReadE14parse_exponentCsbIMhwAyTfOq_3box
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read7StrReadE17peek_invalid_typeCsbIMhwAyTfOq_3box.llvm.3935554170724025962
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read7StrReadE5errorCsbIMhwAyTfOq_3box
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read7StrReadE7end_mapCsbIMhwAyTfOq_3box
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read7StrReadE7end_seqCsbIMhwAyTfOq_3box
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read9SliceReadE10peek_errorCsbIMhwAyTfOq_3box.llvm.3935554170724025962
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read9SliceReadE13parse_decimalCsbIMhwAyTfOq_3box
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read9SliceReadE13parse_integerCsbIMhwAyTfOq_3box
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read9SliceReadE14parse_exponentCsbIMhwAyTfOq_3box
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read9SliceReadE18parse_long_integerCsbIMhwAyTfOq_3box
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read9SliceReadE22parse_decimal_overflowCsbIMhwAyTfOq_3box
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read9SliceReadE23parse_exponent_overflowCsbIMhwAyTfOq_3box
+_RNvMs3_NtCsaD2Fbg807h4_10serde_json2deINtB5_12DeserializerNtNtB7_4read9SliceReadE5errorCsbIMhwAyTfOq_3box
+_RNvMsT_NtNtNtCskSjJLSRHk7U_5alloc11collections5btree4nodeINtB5_6HandleINtB5_7NodeRefNtNtB5_6marker5DyingmNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding10dictionary10DictionaryNtB1m_14LeafOrInternalENtB1m_2KVE12drop_key_valCsbIMhwAyTfOq_3box.llvm.8545578284451993577
+_RNvMsf_NtNtCs806nzKq9KaB_4core3str4iterINtB5_13SplitInternalcE4nextCsbIMhwAyTfOq_3box
+_RNvMsf_NtNtCs806nzKq9KaB_4core3str4iterINtB5_13SplitInternalcE9next_backCsbIMhwAyTfOq_3box
+_RNvXNtCscRcuEFgk1fc_6anyhow7wrapperINtB2_12MessageErrorNtNtCskSjJLSRHk7U_5alloc6string6StringENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXNtCscRcuEFgk1fc_6anyhow7wrapperINtB2_12MessageErrorReENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXNtNtCskSjJLSRHk7U_5alloc3vec14spec_from_iterINtB4_3VecNtNtNtCskRvyO5X0rrO_12clap_builder7builder14possible_value13PossibleValueEINtB2_12SpecFromIterBU_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtNtB2C_5array4iter8IntoIterReKj4_ENCNvXss_NtBY_12value_parserNtB41_20PossibleValuesParserINtNtB2C_7convert4FromAB3M_B3P_E4from0EE9from_iterCsbIMhwAyTfOq_3box
+_RNvXNtNtCskSjJLSRHk7U_5alloc3vec14spec_from_iterINtB4_3VecNtNtNtCsl1RqEF7rHWY_3std3ffi6os_str8OsStringEINtB2_12SpecFromIterBU_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapNtNtB10_3env6ArgsOsNCNvXs_Cs8EWWTp8jVYD_8clap_lexNtB3e_7RawArgsINtNtB29_7convert4FromB2O_E4from0EE9from_iterCsbIMhwAyTfOq_3box
+_RNvXNtNtCskSjJLSRHk7U_5alloc3vec14spec_from_iterINtB4_3VecNtNtNtCsl1RqEF7rHWY_3std3ffi6os_str8OsStringEINtB2_12SpecFromIterBU_QINtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtNtB2a_5array4iter8IntoIterRNtNtB6_6string6StringKj1_ENvYB3k_INtNtB2a_7convert4IntoBU_E4intoEE9from_iterCsbIMhwAyTfOq_3box
+_RNvXNtNtCskSjJLSRHk7U_5alloc3vec14spec_from_iterINtB4_3VecTNtNtB6_6string6StringNtNtCsaD2Fbg807h4_10serde_json5value5ValueEEINtB2_12SpecFromIterBU_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapNtNtB1k_3map8IntoIterNCNvCsbIMhwAyTfOq_3box18present_box_states0EE9from_iterB3y_
+_RNvXNtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB4_3VecNtNtB6_6string6StringEINtB2_18SpecFromIterNestedB11_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtB1W_10filter_map9FilterMapINtNtNtB20_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCNCNvCsbIMhwAyTfOq_3box16print_model_lines0_00ENCB4k_s_0EE9from_iterB4o_
+_RNvXNtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB4_3VecNtNtB6_6string6StringEINtB2_18SpecFromIterNestedB11_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtB1W_10filter_map9FilterMapINtNtNtB20_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENvMs0_B3D_B3B_6as_strENvCsbIMhwAyTfOq_3box19format_effort_levelEE9from_iterB4G_
+_RNvXNtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB4_3VecNtNtB6_6string6StringEINtB2_18SpecFromIterNestedB11_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapNtNtCsl1RqEF7rHWY_3std4path10ComponentsNCNvCsbIMhwAyTfOq_3box15to_archive_path0EE9from_iterB3m_
+_RNvXNtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB4_3VecNtNtB6_6string6StringEINtB2_18SpecFromIterNestedB11_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapNtNtNtB20_3str4iter5LinesNvYeNtB13_8ToString9to_stringEE9from_iterCsbIMhwAyTfOq_3box
+_RNvXNtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB4_3VecReEINtB2_18SpecFromIterNestedB11_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtB1D_10filter_map9FilterMapINtNtNtB1H_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENvMs0_B3k_B3i_6as_strENCNCNvCsbIMhwAyTfOq_3box12webhook_list00EE9from_iterB4r_
+_RNvXNtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB4_3VecTNtNtB6_6string6StringbINtNtCs806nzKq9KaB_4core6option6OptionyEEEINtB2_18SpecFromIterNestedB11_INtNtNtNtB1t_4iter8adapters10filter_map9FilterMapINtNtNtB1t_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCNvCsbIMhwAyTfOq_3box20render_snapshot_tree0EE9from_iterB4x_
+_RNvXs0_NtCscRcuEFgk1fc_6anyhow7contextINtNtB7_5error12ContextErrorNtNtCskSjJLSRHk7U_5alloc6string6StringNtB7_5ErrorENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs0_NtCscRcuEFgk1fc_6anyhow7contextINtNtB7_5error12ContextErrorNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtCsaD2Fbg807h4_10serde_json5error5ErrorENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs0_NtCscRcuEFgk1fc_6anyhow7contextINtNtB7_5error12ContextErrorNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtCsjMYODDEHvr6_7reqwest5error5ErrorENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs0_NtCscRcuEFgk1fc_6anyhow7contextINtNtB7_5error12ContextErrorNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtNtCs806nzKq9KaB_4core2io5error5ErrorENtNtB1K_3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs0_NtCscRcuEFgk1fc_6anyhow7contextINtNtB7_5error12ContextErrorReNtB7_5ErrorENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs0_NtCscRcuEFgk1fc_6anyhow7contextINtNtB7_5error12ContextErrorReNtNtCsaD2Fbg807h4_10serde_json5error5ErrorENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs0_NtCscRcuEFgk1fc_6anyhow7contextINtNtB7_5error12ContextErrorReNtNtCsjMYODDEHvr6_7reqwest5error5ErrorENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs0_NtCscRcuEFgk1fc_6anyhow7contextINtNtB7_5error12ContextErrorReNtNtCskSjJLSRHk7U_5alloc6string13FromUtf8ErrorENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs0_NtCscRcuEFgk1fc_6anyhow7contextINtNtB7_5error12ContextErrorReNtNtNtCs806nzKq9KaB_4core2io5error5ErrorENtNtB1a_3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs0_NtNtNtCs806nzKq9KaB_4core4iter8adapters3mapINtB5_3MapINtNtB7_10filter_map9FilterMapINtNtNtBb_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCNCNvCsbIMhwAyTfOq_3box16print_model_lines0_00ENCB2z_s_0ENtNtNtB9_6traits8iterator8Iterator4nextB2D_.llvm.11162964999050869610
+_RNvXs0_NtNtNtCs806nzKq9KaB_4core4iter8adapters3mapINtB5_3MapNtNtCsaD2Fbg807h4_10serde_json3map8IntoIterNCNvCsbIMhwAyTfOq_3box18present_box_states0ENtNtNtB9_6traits8iterator8Iterator4nextB1H_
+_RNvXs0_NtNtNtCs806nzKq9KaB_4core4iter8adapters3mapINtB5_3MapNtNtCsl1RqEF7rHWY_3std4path10ComponentsNCNvCsbIMhwAyTfOq_3box15to_archive_path0ENtNtNtB9_6traits8iterator8Iterator4nextB1D_.llvm.11162964999050869610
+_RNvXs1_NtNtCskSjJLSRHk7U_5alloc3vec6spliceINtB5_6SpliceINtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtNtB10_5array4iter8IntoIterRNtNtB9_6string6StringKj1_ENvYB2a_INtNtB10_7convert4IntoNtNtNtCsl1RqEF7rHWY_3std3ffi6os_str8OsStringE4intoEENtNtNtB10_3ops4drop4Drop4dropCsbIMhwAyTfOq_3box
+_RNvXs1_NtNtNtCs806nzKq9KaB_4core3ops8function5implsQNCNvCsbIMhwAyTfOq_3box20render_snapshot_tree0INtB7_5FnMutTRNtNtCsaD2Fbg807h4_10serde_json5value5ValueEE8call_mutBS_
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRAhj4_NtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRINtNtB8_6option6OptionhENtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRINtNtCskSjJLSRHk7U_5alloc3vec3VeclENtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRINtNtNtB8_3num7nonzero7NonZeroyENtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtCs9sAn8J9bsW2_6ruzstd5frame16FrameHeaderErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtCs9sAn8J9bsW2_6ruzstd5frame20FrameDescriptorErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtCs9sAn8J9bsW2_6ruzstd5frame20ReadFrameHeaderErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtCskSjJLSRHk7U_5alloc6string6StringNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtB8_2io5error5ErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtB8_3num5error12IntErrorKindNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtB8_3str5error9Utf8ErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd3fse11fse_decoder13FSETableErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd3fse11fse_decoder15FSEDecoderErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd5huff013huff0_decoder17HuffmanTableErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd5huff013huff0_decoder19HuffmanDecoderErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd6blocks16literals_section25LiteralsSectionParseErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd6blocks16sequence_section25SequencesHeaderParseErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding10bit_reader12GetBitsErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding10dictionary21DictionaryDecodeErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding12decodebuffer17DecodeBufferErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder14BlockSizeErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder14BlockTypeErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder20BlockHeaderReadErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder20DecompressBlockErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder23DecodeBlockContentErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding18sequence_execution21ExecuteSequencesErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding24literals_section_decoder23DecompressLiteralsErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding24sequence_section_decoder19DecodeSequenceErrorNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRhNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRiNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRjNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRlNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRmNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRuNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs1g_NtCs806nzKq9KaB_4core3fmtRyNtB6_5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs2a_NtCsl1RqEF7rHWY_3std4pathNtB6_16StripPrefixErrorNtNtCs806nzKq9KaB_4core3fmt5Debug3fmt.llvm.5162978350418929984
+_RNvXs3_NtCscRcuEFgk1fc_6anyhow7contextINtNtB7_5error12ContextErrorNtNtCskSjJLSRHk7U_5alloc6string6StringNtB7_5ErrorENtNtCs806nzKq9KaB_4core5error5Error6sourceCsbIMhwAyTfOq_3box
+_RNvXs3_NtCscRcuEFgk1fc_6anyhow7contextINtNtB7_5error12ContextErrorReNtB7_5ErrorENtNtCs806nzKq9KaB_4core5error5Error6sourceCsbIMhwAyTfOq_3box
+_RNvXs3_NtCsgGXrR8MCtpT_3tar7archiveINtB5_7EntriesINtNtCs9sAn8J9bsW2_6ruzstd17streaming_decoder16StreamingDecoderINtNtNtNtCsl1RqEF7rHWY_3std2io8buffered9bufreader9BufReaderNtNtB1V_2fs4FileENtNtBQ_13frame_decoder12FrameDecoderEENtNtNtNtCs806nzKq9KaB_4core4iter6traits8iterator8Iterator4nextCsbIMhwAyTfOq_3box
+_RNvXs3_NtCsgGXrR8MCtpT_3tar7archiveINtB5_7EntriesNtNtCsl1RqEF7rHWY_3std7process11ChildStdoutENtNtNtNtCs806nzKq9KaB_4core4iter6traits8iterator8Iterator4nextCsbIMhwAyTfOq_3box
+_RNvXs3_NtNtCs806nzKq9KaB_4core4hash3sipINtB5_6HasherNtB5_11Sip13RoundsENtB7_6Hasher5writeCsbIMhwAyTfOq_3box.llvm.9551548631166903595
+_RNvXs4_NtCscRcuEFgk1fc_6anyhow7contextINtB5_6QuotedRNtNtCskSjJLSRHk7U_5alloc6string6StringENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs4_NtCscRcuEFgk1fc_6anyhow7contextINtB5_6QuotedRReENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs7_NtCsjMYODDEHvr6_7reqwest5errorNtB5_8TimedOutNtNtCs806nzKq9KaB_4core3fmt5Debug3fmt.llvm.5162978350418929984
+_RNvXs8_NtCs9sAn8J9bsW2_6ruzstd13frame_decoderNtB5_17FrameDecoderErrorNtNtCs806nzKq9KaB_4core3fmt5Debug3fmt.llvm.5162978350418929984
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplINtB5_12ContextErrorNtNtCskSjJLSRHk7U_5alloc6string6StringNtB7_5ErrorEENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplINtB5_12ContextErrorNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtCsaD2Fbg807h4_10serde_json5error5ErrorEENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplINtB5_12ContextErrorNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtCsjMYODDEHvr6_7reqwest5error5ErrorEENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplINtB5_12ContextErrorNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtNtCs806nzKq9KaB_4core2io5error5ErrorEENtNtB1Q_3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplINtB5_12ContextErrorReNtB7_5ErrorEENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplINtB5_12ContextErrorReNtNtCsaD2Fbg807h4_10serde_json5error5ErrorEENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplINtB5_12ContextErrorReNtNtCsjMYODDEHvr6_7reqwest5error5ErrorEENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplINtB5_12ContextErrorReNtNtCskSjJLSRHk7U_5alloc6string13FromUtf8ErrorEENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplINtB5_12ContextErrorReNtNtNtCs806nzKq9KaB_4core2io5error5ErrorEENtNtB1g_3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplINtNtB7_7wrapper12MessageErrorNtNtCskSjJLSRHk7U_5alloc6string6StringEENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplINtNtB7_7wrapper12MessageErrorReEENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplNtCsbIMhwAyTfOq_3box8ApiErrorENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtBQ_
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplNtNtCsaD2Fbg807h4_10serde_json5error5ErrorENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplNtNtCsjMYODDEHvr6_7reqwest5error5ErrorENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs8_NtCscRcuEFgk1fc_6anyhow5errorINtB5_9ErrorImplNtNtNtCs806nzKq9KaB_4core2io5error5ErrorENtNtBU_3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXsD_CsbIMhwAyTfOq_3boxNtB5_8ApiErrorNtNtCs806nzKq9KaB_4core3fmt5Debug3fmt
+_RNvXsR_NtCs806nzKq9KaB_4core6optionINtB5_6OptionNtNtCskSjJLSRHk7U_5alloc6string6StringENtNtB7_3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXs_NtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB6_3VecNtNtB8_6string6StringEINtB4_18SpecFromIterNestedB13_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtNtB22_5slice4iter4IterB13_ENCNvCsbIMhwAyTfOq_3box21format_remote_commands_0EE9from_iterB3h_
+_RNvXs_NtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB6_3VecNtNtB8_6string6StringEINtB4_18SpecFromIterNestedB13_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtNtB22_5slice4iter4IterReENCNvCsbIMhwAyTfOq_3box24normalize_webhook_events0EE9from_iterB3f_
+_RNvXs_NtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB6_3VecNtNtNtCsl1RqEF7rHWY_3std3ffi6os_str8OsStringEINtB4_18SpecFromIterNestedB13_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtNtB2p_5array4iter8IntoIterReKj4_ENvYB13_INtNtB2p_7convert4FromB3z_E4fromEE9from_iterCsbIMhwAyTfOq_3box
+_RNvXs_NtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB6_3VecNtNvCsbIMhwAyTfOq_3box12api_key_list3RowEINtB4_18SpecFromIterNestedB13_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtNtB2l_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCB15_s_0EE9from_iterB17_
+_RNvXs_NtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB6_3VecNtNvCsbIMhwAyTfOq_3box20print_snapshot_table3RowEINtB4_18SpecFromIterNestedB13_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtNtB2t_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCB15_0EE9from_iterB17_
+_RNvXs_NtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB6_3VecNtNvCsbIMhwAyTfOq_3box26print_named_snapshot_table3RowEINtB4_18SpecFromIterNestedB13_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtNtB2z_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCB15_0EE9from_iterB17_
+_RNvXs_NtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB6_3VecTNtNtB8_6string6StringB14_B14_B14_B14_B14_EEINtB4_18SpecFromIterNestedB13_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtNtB2o_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCNvCsbIMhwAyTfOq_3box11print_values_0EE9from_iterB4f_
+_RNvXs_NtNtCskSjJLSRHk7U_5alloc3vec21spec_from_iter_nestedINtB6_3VecTNtNtB8_6string6StringB14_B14_B14_B14_bEEINtB4_18SpecFromIterNestedB13_INtNtNtNtCs806nzKq9KaB_4core4iter8adapters3map3MapINtNtNtB2l_5slice4iter4IterNtNtCsaD2Fbg807h4_10serde_json5value5ValueENCNvCsbIMhwAyTfOq_3box8org_list0EE9from_iterB4c_
+_RNvXs_NtNtCsl1RqEF7rHWY_3std4sync6poisonINtB4_11PoisonErrorINtNtB4_5mutex10MutexGuarduEENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvXse_NtNtCskSjJLSRHk7U_5alloc3vec9into_iterINtB5_8IntoIterNtNvCsbIMhwAyTfOq_3box26print_named_snapshot_table3RowENtNtNtCs806nzKq9KaB_4core3ops4drop4Drop4dropB10_
+_RNvXsg_CsbIMhwAyTfOq_3boxNtB5_15SnapshotCommandNtNtCskRvyO5X0rrO_12clap_builder6derive14FromArgMatches20from_arg_matches_mut
+_RNvXsh_CsbIMhwAyTfOq_3boxNtB5_15SnapshotCommandNtNtCskRvyO5X0rrO_12clap_builder6derive10Subcommand14has_subcommand
+_RNvXso_NtCskSjJLSRHk7U_5alloc3vecINtB5_3VecNtNvCsbIMhwAyTfOq_3box20print_snapshot_table3RowENtNtNtCs806nzKq9KaB_4core3ops4drop4Drop4dropBJ_
+_RNvXsq_NtCskSjJLSRHk7U_5alloc3vecINtB5_3VechENtNtCs806nzKq9KaB_4core3fmt5Debug3fmtCsbIMhwAyTfOq_3box
+_RNvYNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder20BlockHeaderReadErrorNtNtCs806nzKq9KaB_4core5error5Error5causeCsbIMhwAyTfOq_3box
+_RNvYNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder20BlockHeaderReadErrorNtNtCs806nzKq9KaB_4core5error5Error7type_idCsbIMhwAyTfOq_3box
+_RNvYNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder20DecompressBlockErrorNtNtCs806nzKq9KaB_4core5error5Error5causeCsbIMhwAyTfOq_3box
+_RNvYNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder20DecompressBlockErrorNtNtCs806nzKq9KaB_4core5error5Error7type_idCsbIMhwAyTfOq_3box
+_RNvYNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder23DecodeBlockContentErrorNtNtCs806nzKq9KaB_4core5error5Error5causeCsbIMhwAyTfOq_3box
+_RNvYNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding13block_decoder23DecodeBlockContentErrorNtNtCs806nzKq9KaB_4core5error5Error7type_idCsbIMhwAyTfOq_3box
+_RNvYNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding24literals_section_decoder23DecompressLiteralsErrorNtNtCs806nzKq9KaB_4core5error5Error5causeCsbIMhwAyTfOq_3box
+_RNvYNtNtNtCs9sAn8J9bsW2_6ruzstd8decoding24literals_section_decoder23DecompressLiteralsErrorNtNtCs806nzKq9KaB_4core5error5Error7type_idCsbIMhwAyTfOq_3box
+`EnterGuard` values dropped out of order. Guards returned by `tokio::runtime::Handle::enter()` must be dropped in the reverse order as they were acquired.assertion failed: c.runtime.get().is_entered()called `Result::unwrap()` on an `Err` valueassertion failed: !handle.is_shutdown()reached max `enter` depthPoisonErrorcore missingOh no! We never placed the Core back, this is a bug!driver missingassertion failed: handle.shared.owned.is_empty()internal error: entered unreachable code:f
+ascii_box_ed25519/api/box/webhooksNo webhooks.archiveAfterunknown time leftno shutdown scheduledX-Box-Org&operationData deletion is asynchronous; check the dashboard for status.waiting for agent response...prompt failedtaskIduse --no-auto-stop by itself     %%%%%#
+attempt to join into collection with len > usize::MAX"false}[{,:]mid > lenFatal internal error. Please consider filing a bug report at https://github.com/clap-rs/clap/issues
+byte arrayunit valueOption valuenewtype structmapunit variantnewtype varianttuple variantstruct variantu64a boolean.0a Display implementation returned an error unexpectedlyErroroverflow in Duration::newassertion failed: ttl >= Duration::from_secs(1)assertion failed: ttl <= Duration::from_secs(60)assertion failed: retry_percent >= 0.0assertion failed: retry_percent <= 1000.0assertion failed: min_per_sec < i32::MAX as u32generation lockoverflow when subtracting durationsrequest timed outPoisonErroroverflow in Duration::newassertion failed: (*tail).value.is_none()assertion failed: (*next).value.is_some()Writer must be presentinvalid URL, scheme is not httpinvalid URL, host is missinginvalid URL, scheme is missingtcp bind interface errortcp bind local errortcp set_nonblocking errortcp open errorevent /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/client/legacy/connect/http.rs:561hyper_util::client::legacy::connect::httpmessage/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/client/legacy/connect/http.rsevent /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/client/legacy/connect/http.rs:767event /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/client/legacy/connect/http.rs:774event /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/client/legacy/connect/http.rs:770event /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/client/legacy/connect/http.rs:481event /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/client/legacy/connect/http.rs:844event /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/client/legacy/connect/http.rs:921event /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/client/legacy/connect/http.rs:927event /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/client/legacy/connect/http.rs:933event /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/hyper-util-0.1.20/src/client/legacy/connect/http.rs:904Cannot write more after calling finish()hyper_util::client::legacy::connect::http::HttpInfoConnectErrorfailed to write whole bufferdescription() is deprecated; use Display
+empty supported tls versionsUnknown TLS backend passed to `use_preconfigured_tls`internal error: entered unreachable code: hickory-dns shouldn't be enabled unless the feature isvalid request partsrootsrevocation_check_depthunknown_revocation_policyrevocation_expiration_policysupportedWebPkiServerVerifierstream did not contain valid UTF-8a Display implementation returned an error unexpectedlyErrorEndEntityChainPending error polled more than onceAllowEnforceIgnoreNoVerifierIgnoreHostnamesignature_algorithms 
+envelope not droppedinternal error: entered unreachable codeassertion failed: (*tail).value.is_none()assertion failed: (*next).value.is_some()connection closedcalled after completeOut of bounds access
+fullNamedeletionPROVIDERPERSONALDeletionSnapshotnew_nameset-fileadd-repoNEW_NAMEtransferTransfer
+github0one scp path must use <box-id>:<path>the following required argument was not provided: jsonthe following required argument was not provided: no_updatethe following required argument was not provided: googlethe following required argument was not provided: no_auto_stopthe following required argument was not provided: no_envthe following required argument was not provided: beta_bare_metalthe following required argument was not provided: personalthe following required argument was not provided: idthe following required argument was not provided: allthe following required argument was not provided: publicthe following required argument was not provided: privatethe following required argument was not provided: vncthe following required argument was not provided: recursivethe following required argument was not provided: sourcethe following required argument was not provided: destinationthe following required argument was not provided: remotethe following required argument was not provided: shellthe following required argument was not provided: yesthe following required argument was not provided: forcethe following required argument was not provided: providerthe following required argument was not provided: followthe following required argument was not provided: detachthe following required argument was not provided: portthe following required argument was not provided: namethe following required argument was not provided: new_namethe following required argument was not provided: pairthe following required argument was not provided: keythe following required argument was not provided: paththe following required argument was not provided: repoevents/api/box/orgsunknownboxes
+hasMorenextCursorlimit/api/box/teamsteamIddelete?Active scope: personal. `box org list` to see organizations, `box org switch <org>` to use one.OrgScope set to personal. Commands and new boxes use your own account.runningresume request still in flightbox resume failed--
+info extend delete stop resume prompt interrupt events fork ssh desktop forward snapshots__IDSUBS_CASE____IDSUBS__onboard login logout new info list extend delete deletion stop resume prompt interrupt events limits team org fork ssh desktop scp forward dashboard status data-retention snapshots snapshot webhook self-update completions help__BIN__enableddata-retention response did not include enabledascii_box_known_hostssuspendedReasonAccount suspendedsupport@ascii.devcould not create a temporary transfer directory
+info|extend|delete|stop|resume|prompt|interrupt|events|fork|ssh|desktop|forward|
+innerFatal internal error. Please consider filing a bug report at https://github.com/clap-rs/clap/issuesa Display implementation returned an error unexpectedlyError
+internal error: entered unreachable code"
+internal error: entered unreachable codelogin_urlpoll_tokenauth_methodemaildebug_codestatustokenstruct LoginStartResponse with 5 elementsstruct LoginPollResponse with 2 elementsapi_urlbrowser_sessionchannelteam_nameorgpending_login_urlpending_login_poll_tokenpending_login_auth_methodpending_login_emaillast_update_checkstruct Config with 13 elementsassertion failed: match track_edge_idx {
+ipprovisionedreadymembersorg.transfer/api/box/meactivesigned out
+source ~/.bashrcbilling requiredstart a Box planOpenAI Codex CLIonboarding_startonboarding_links<empty response>ConnectTimeout=50.1.178-staging1machine_providerreasoning_effortMACHINE_PROVIDERmachine-providerREASONING_EFFORTreasoning-effortVariable to set.	O4
+stream did not contain valid UTF-8assertion failed: n <= init_unfilleda formatting trait implementation returned an error when the underlying stream did notfailed to fill whole bufferchunkIndexgenerationtar--versionrsync--helpssh-G-oChannelTimeout=session=5mbox-scp-capability-checkinternal error: entered unreachable code: invalid Once statefailed to write whole buffer
+}{falseidisDefaultprompt response did not include promptIddesktop response did not include desktopUrlcreatedBybox info response did not include box@%_+=:,./-machineIpv4machineUrlmember is missing an idreasonsupportEmail,-boxhttp://localhost:3000https://amsterdam.ascii.devhttps://staging.ascii.devpending ssh-keygen-l-fBox API returned an invalid SSH host keybox create response did not include box.id
+=== all distinct URLs/domains in staging ===
+http://localhost:3000https://amsterdam.ascii.devhttps://staging.ascii.devpending
+https://ascii.dev
+https://ascii.devBOX_AMSTERDAM_API_URLBOX_STAGING_API_URLBOX_DEV_API_URLamsterdamstagingdevforwardDocs:
+https://box.ascii.dev/box/dashboard?tab=secretslogoutapi-keyttlno_auto_stopno_envmachine_typebeta_bare_metalsetup_filefilterallhoursresumefollowtimeoutdetachdesktoprecursivesourcedestinationremotelocaldata-retentionself-updatecompletionsshellidssnapshot-idsa
+https://box.ascii.dev/box/dashboarddeletion
+https://docs.ascii.dev/box/cli-reference
+https://docs.ascii.dev/box/cli-referencehttps://docs.ascii.dev/box/use-in-codehttps://box.ascii.dev/box/dashboard?tab=environmenthttps://docs.ascii.dev-oBatchMode=yesConnectTimeout=15ServerAliveInterval=10ServerAliveCountMax=6remote
+https://docs.ascii.dev/box/use-in-code
+https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eofinternal
+https://github.com/clap-rs/clap/issues
+https://github.com/clap-rs/clap/issuesa
+https://github.com/clap-rs/clap/issuesfalseTryFromIntErrora
+https://github.com/clap-rs/clap/issuesinternal
+amsterdam.ascii.dev
+box.ascii.dev
+docs.ascii.dev
+staging.ascii.dev
+=== command help diff ===
+--- new
+--- /tmp/p-new	2026-08-21 21:31:55.156743915 +0000
++++ /tmp/s-new	2026-08-21 21:31:55.158743922 +0000
+@@ -1,20 +1,21 @@
+ Create a new Box sandbox
+ 
+-Usage: box-ascii-prod new [OPTIONS]
++Usage: box-staging new [OPTIONS]
+ 
+ Options:
+       --api-url <API_URL>            [env: BOX_API_URL=]
+       --ttl <TTL>                    Lifetime in seconds before the Box is eligible for cleanup.
+-      --json                         Force machine-readable JSON/JSONL output
+       --no-auto-stop                 Disable automatic stop. The Box runs until you stop it.
++      --org <ID_OR_NAME>             Run this command in an organization's scope. See `box org list`. [env: BOX_ORG=]
+   -e, --env <KEY=VALUE>              Per-box environment variable. Repeat for multiple values. Overrides dashboard variables with the same name.
+-      --no-update                    Skip the automatic CLI update check
++      --json                         Force machine-readable JSON/JSONL output
+       --no-env                       Create a box with none of your account's stored secrets, for boxes you give to your own users. SSH, desktop, snapshots, and public URLs still work.
++      --no-update                    Skip the automatic CLI update check
+       --environment <NAME>           Named environment to start from (repos, secrets, credentials). Defaults to your default environment ('base').
+       --type <TYPE>                  Machine size: small (2 vCPU, 4GB, half rate), default (4 vCPU, 8GB), or large (8 vCPU, 16GB, 2x rate). Default: default.
+       --setup-file <PATH>            Shell script file to run on the Box after it is ready (max 64KB). Runs in the background; watch `setupStatus` in box info for the result.
+       --machine-provider <PROVIDER>  Admins only: pin the Box to an exact machine provider: hetzner, cloudstack, or baremetal.
+       --from <NAME>                  Create the Box from a named snapshot (saved with `box snapshot <id> <name>`).
+-      --team <TEAM_ID>               Create the Box in a team's context: it runs on the team's shared balance instead of yours. See `box team list`.
+-      --personal                     Bill this Box to your personal account even when a team scope is active (`box team switch`).
++      --team <TEAM_ID>               Create the Box in a team's context: it runs on the team's shared balance instead of yours. See `box team list` or `box org list`.
++      --personal                     Bill this Box to your personal account even when a team or org scope is active (`box team switch`, `box org switch`).
+   -h, --help                         Print help
+--- get
+--- /tmp/p-get	2026-08-21 21:31:55.177743992 +0000
++++ /tmp/s-get	2026-08-21 21:31:55.178743996 +0000
+@@ -1,5 +1,5 @@
+ error: unrecognized subcommand 'get'
+ 
+-Usage: box-ascii-prod [OPTIONS] [COMMAND]
++Usage: box-staging [OPTIONS] [COMMAND]
+ 
+ For more information, try '--help'.
+--- list
+--- /tmp/p-list	2026-08-21 21:31:55.182744011 +0000
++++ /tmp/s-list	2026-08-21 21:31:55.184744018 +0000
+@@ -1,11 +1,12 @@
+ List your Boxes
+ 
+-Usage: box-ascii-prod list [OPTIONS]
++Usage: box-staging list [OPTIONS]
+ 
+ Options:
+       --api-url <API_URL>  [env: BOX_API_URL=]
+       --filter <GROUPS>    State groups to include: r=up/running, s=stopped, p=pending, t=stopping, e=error. Combine letters, e.g. sr. Default: r.
+       --all                Include every state (same as --filter rspte).
++      --org <ID_OR_NAME>   Run this command in an organization's scope. See `box org list`. [env: BOX_ORG=]
+       --json               Force machine-readable JSON/JSONL output
+       --no-update          Skip the automatic CLI update check
+   -h, --help               Print help
+--- fork
+--- /tmp/p-fork	2026-08-21 21:31:55.188744033 +0000
++++ /tmp/s-fork	2026-08-21 21:31:55.190744040 +0000
+@@ -1,6 +1,6 @@
+ Fork a Box from its latest snapshot
+ 
+-Usage: box-ascii-prod fork [OPTIONS] <ID>
++Usage: box-staging fork [OPTIONS] <ID>
+ 
+ Arguments:
+   <ID>  Box ID.
+@@ -8,9 +8,10 @@
+ Options:
+       --api-url <API_URL>            [env: BOX_API_URL=]
+   -e, --env <KEY=VALUE>              Per-box environment variable for the fork. Repeat for multiple values. Overrides dashboard variables with the same name. Replaces the per-box variables the fork would inherit from the source box.
+-      --json                         Force machine-readable JSON/JSONL output
+       --no-env                       Fork into a no-env box: drop all of your account's stored secrets and scrub any inherited from the source snapshot. The fork stays no-env.
++      --org <ID_OR_NAME>             Run this command in an organization's scope. See `box org list`. [env: BOX_ORG=]
+       --environment <NAME>           Re-pin the fork to a named environment's latest version. Omit to inherit the source box's environment.
++      --json                         Force machine-readable JSON/JSONL output
+       --no-update                    Skip the automatic CLI update check
+       --type <TYPE>                  Fork onto a different machine size: small, default or large. Omit to inherit the source box's size. Shrinking is refused if the box's data does not fit.
+       --ttl <TTL>                    Lifetime in seconds for the fork. Omit for 1 hour; the fork does not inherit the source Box's setting.
+--- snapshot
+--- /tmp/p-snapshot	2026-08-21 21:31:55.193744051 +0000
++++ /tmp/s-snapshot	2026-08-21 21:31:55.195744059 +0000
+@@ -1,7 +1,7 @@
+ Save a Box's state under a name, or inspect/download snapshots
+ 
+-Usage: box-ascii-prod snapshot [OPTIONS] [ID] [NAME]
+-       box-ascii-prod snapshot <COMMAND>
++Usage: box-staging snapshot [OPTIONS] [ID] [NAME]
++       box-staging snapshot <COMMAND>
+ 
+ Commands:
+   latest  Show the most recent snapshot for a Box
+@@ -17,6 +17,7 @@
+ 
+ Options:
+       --api-url <API_URL>  [env: BOX_API_URL=]
++      --org <ID_OR_NAME>   Run this command in an organization's scope. See `box org list`. [env: BOX_ORG=]
+       --json               Force machine-readable JSON/JSONL output
+       --no-update          Skip the automatic CLI update check
+   -h, --help               Print help
+--- desktop
+--- /tmp/p-desktop	2026-08-21 21:31:55.199744073 +0000
++++ /tmp/s-desktop	2026-08-21 21:31:55.201744081 +0000
+@@ -1,6 +1,6 @@
+ Open the Box desktop or browser preview URL
+ 
+-Usage: box-ascii-prod desktop [OPTIONS] <ID>
++Usage: box-staging desktop [OPTIONS] <ID>
+ 
+ Arguments:
+   <ID>  Box ID.
+@@ -8,7 +8,8 @@
+ Options:
+       --api-url <API_URL>  [env: BOX_API_URL=]
+       --vnc                Use VNC streaming (more stable on poor/locked-down networks).
+-      --json               Force machine-readable JSON/JSONL output
++      --org <ID_OR_NAME>   Run this command in an organization's scope. See `box org list`. [env: BOX_ORG=]
+       --public             With --vnc, return a URL that does not require an access token.
++      --json               Force machine-readable JSON/JSONL output
+       --no-update          Skip the automatic CLI update check
+   -h, --help               Print help
+--- env
+--- /tmp/p-env	2026-08-21 21:31:55.204744092 +0000
++++ /tmp/s-env	2026-08-21 21:31:55.206744099 +0000
+@@ -1,6 +1,6 @@
+ Manage named box environments: repos, env vars, secret files, safety toggles
+ 
+-Usage: box-ascii-prod env [OPTIONS] <COMMAND>
++Usage: box-staging env [OPTIONS] <COMMAND>
+ 
+ Commands:
+   list      List your environments: default marker, latest version, live boxes per version
+@@ -21,6 +21,7 @@
+ 
+ Options:
+       --api-url <API_URL>  [env: BOX_API_URL=]
++      --org <ID_OR_NAME>   Run this command in an organization's scope. See `box org list`. [env: BOX_ORG=]
+       --json               Force machine-readable JSON/JSONL output
+       --no-update          Skip the automatic CLI update check
+   -h, --help               Print help
+--- ssh
+--- /tmp/p-ssh	2026-08-21 21:31:55.209744110 +0000
++++ /tmp/s-ssh	2026-08-21 21:31:55.211744118 +0000
+@@ -1,6 +1,6 @@
+ Open an SSH session into a Box, or run a command non-interactively
+ 
+-Usage: box-ascii-prod ssh [OPTIONS] <ID> [COMMAND]...
++Usage: box-staging ssh [OPTIONS] <ID> [COMMAND]...
+ 
+ Arguments:
+   <ID>          Box ID.
+@@ -8,6 +8,7 @@
+ 
+ Options:
+       --api-url <API_URL>  [env: BOX_API_URL=]
++      --org <ID_OR_NAME>   Run this command in an organization's scope. See `box org list`. [env: BOX_ORG=]
+       --json               Force machine-readable JSON/JSONL output
+       --no-update          Skip the automatic CLI update check
+   -h, --help               Print help
+--- scp
+--- /tmp/p-scp	2026-08-21 21:31:55.215744132 +0000
++++ /tmp/s-scp	2026-08-21 21:31:55.217744140 +0000
+@@ -1,6 +1,6 @@
+ Copy files to or from a Box over scp
+ 
+-Usage: box-ascii-prod scp [OPTIONS] <SOURCE> <DESTINATION>
++Usage: box-staging scp [OPTIONS] <SOURCE> <DESTINATION>
+ 
+ Arguments:
+   <SOURCE>       Source path. Use <box-id>:<path> for remote paths.
+@@ -9,6 +9,7 @@
+ Options:
+       --api-url <API_URL>  [env: BOX_API_URL=]
+   -r, --recursive          Copy directories recursively.
++      --org <ID_OR_NAME>   Run this command in an organization's scope. See `box org list`. [env: BOX_ORG=]
+       --json               Force machine-readable JSON/JSONL output
+       --no-update          Skip the automatic CLI update check
+   -h, --help               Print help
+--- stop
+--- /tmp/p-stop	2026-08-21 21:31:55.223744162 +0000
++++ /tmp/s-stop	2026-08-21 21:31:55.225744169 +0000
+@@ -1,6 +1,6 @@
+ Stop a running Box and snapshot it for resume/fork
+ 
+-Usage: box-ascii-prod stop [OPTIONS] <ID>
++Usage: box-staging stop [OPTIONS] <ID>
+ 
+ Arguments:
+   <ID>  Box ID.
+@@ -8,6 +8,7 @@
+ Options:
+       --api-url <API_URL>  [env: BOX_API_URL=]
+       --force              Stop even if the Box cannot be snapshotted. Everything written since the last successful snapshot is LOST. Only use this after a stop has already failed.
++      --org <ID_OR_NAME>   Run this command in an organization's scope. See `box org list`. [env: BOX_ORG=]
+       --json               Force machine-readable JSON/JSONL output
+       --no-update          Skip the automatic CLI update check
+   -h, --help               Print help
+--- resume
+--- /tmp/p-resume	2026-08-21 21:31:55.229744184 +0000
++++ /tmp/s-resume	2026-08-21 21:31:55.231744191 +0000
+@@ -1,6 +1,6 @@
+ Resume a stopped Box from its latest snapshot
+ 
+-Usage: box-ascii-prod resume [OPTIONS] <ID>
++Usage: box-staging resume [OPTIONS] <ID>
+ 
+ Arguments:
+   <ID>  Box ID.
+@@ -8,9 +8,10 @@
+ Options:
+       --api-url <API_URL>            [env: BOX_API_URL=]
+   -e, --env <KEY=VALUE>              Per-box environment variable. Repeat for multiple values. Overrides dashboard variables with the same name. Replaces the box's current per-box variables.
+-      --json                         Force machine-readable JSON/JSONL output
+       --no-env                       Resume into a no-env box: drop all of your account's stored secrets and scrub any inherited from the snapshot. One-way; the box stays no-env after.
++      --org <ID_OR_NAME>             Run this command in an organization's scope. See `box org list`. [env: BOX_ORG=]
+       --environment <NAME>           Re-pin the box to a named environment's latest version before resuming.
++      --json                         Force machine-readable JSON/JSONL output
+       --no-update                    Skip the automatic CLI update check
+       --type <TYPE>                  Resume onto a different machine size: small, default or large. Omit to keep the box's current size. Shrinking is refused if the box's data does not fit.
+       --ttl <TTL>                    Set the resumed Box's lifetime in seconds. Omit to keep the Box's current setting.
+--- host
+--- /tmp/p-host	2026-08-21 21:31:55.234744202 +0000
++++ /tmp/s-host	2026-08-21 21:31:55.236744210 +0000
+@@ -1,6 +1,6 @@
+ Expose a Box port on a stable HTTPS URL
+ 
+-Usage: box-ascii-prod host [OPTIONS] <ID> <PORT>
++Usage: box-staging host [OPTIONS] <ID> <PORT>
+ 
+ Arguments:
+   <ID>    Box ID.
+@@ -9,8 +9,9 @@
+ Options:
+       --api-url <API_URL>  [env: BOX_API_URL=]
+       --public             Return an ungated public URL.
+-      --json               Force machine-readable JSON/JSONL output
++      --org <ID_OR_NAME>   Run this command in an organization's scope. See `box org list`. [env: BOX_ORG=]
+       --private            Return a token-gated URL. This is the default.
+-      --no-update          Skip the automatic CLI update check
++      --json               Force machine-readable JSON/JSONL output
+       --title <TITLE>      Display title for the hosted port.
++      --no-update          Skip the automatic CLI update check
+   -h, --help               Print help
+--- onboard
+--- /tmp/p-onboard	2026-08-21 21:31:55.240744225 +0000
++++ /tmp/s-onboard	2026-08-21 21:31:55.242744232 +0000
+@@ -1,11 +1,12 @@
+ Sign in, choose repositories, and start the Box plan
+ 
+-Usage: box-ascii-prod onboard [OPTIONS]
++Usage: box-staging onboard [OPTIONS]
+ 
+ Options:
+       --api-url <API_URL>  [env: BOX_API_URL=]
+       --google             Use Google sign-in during onboarding.
+       --email <EMAIL>      Use email code sign-in during onboarding.
++      --org <ID_OR_NAME>   Run this command in an organization's scope. See `box org list`. [env: BOX_ORG=]
+       --json               Force machine-readable JSON/JSONL output
+       --no-update          Skip the automatic CLI update check
+   -h, --help               Print help
+--- auth
+--- /tmp/p-auth	2026-08-21 21:31:55.246744247 +0000
++++ /tmp/s-auth	2026-08-21 21:31:55.248744254 +0000
+@@ -1,5 +1,5 @@
+ error: unrecognized subcommand 'auth'
+ 
+-Usage: box-ascii-prod [OPTIONS] [COMMAND]
++Usage: box-staging [OPTIONS] [COMMAND]
+ 
+ For more information, try '--help'.
+--- prompt
+--- /tmp/p-prompt	2026-08-21 21:31:55.631745668 +0000
++++ /tmp/s-prompt	2026-08-21 21:31:56.056747236 +0000
+@@ -1,6 +1,6 @@
+ Send a prompt to Codex or Claude inside a Box
+ 
+-Usage: box prompt [OPTIONS] --provider <PROVIDER> <ID> [PROMPT]...
++Usage: box-staging prompt [OPTIONS] --provider <PROVIDER> <ID> [PROMPT]...
+ 
+ Arguments:
+   <ID>          Box ID.
+@@ -20,7 +20,7 @@
+   codex        OpenAI Codex / ChatGPT
+   claude       Claude Code (alias: claude-code)
+ 
+-Models from https://ascii.dev/api/provider-models:
++Models from https://staging.ascii.dev/api/provider-models:
+   codex        gpt-5.6-sol, gpt-5.6-terra (default), gpt-5.6-luna, gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex
+   claude       claude-fable-5, opus-5, opus, sonnet (default), haiku
+ 
+=== public Apple Wallet route ===
+HTTP/2 200 
+cache-control: public, max-age=3600
+content-type: application/vnd.apple.pkpass
+/tmp/wallet.pkpass: Zip archive data, at least v2.0 to extract, compression method=deflate
+0b0d65bc0877544b74cb42cb9750910a01625ede48ef7d82217208f11f486842  /tmp/wallet.pkpass
+Archive:  /tmp/wallet.pkpass
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+     1256  2026-05-24 17:43   icon.png
+     5519  2026-05-24 17:43   signature
+     3242  2026-05-24 17:43   icon@2x.png
+     7345  2026-05-24 17:43   logo.png
+      658  2026-05-24 17:43   pass.json
+    15242  2026-05-24 17:43   logo@2x.png
+   103717  2026-05-24 17:43   strip@2x.png
+      391  2026-05-24 17:43   manifest.json
+    29983  2026-05-24 17:43   strip.png
+---------                     -------
+   167353                     9 files
+--- pass.json
+{"formatVersion":1,"passTypeIdentifier":"pass.com.ascii.box","serialNumber":"box.pass","teamIdentifier":"69C52X8599","organizationName":"Dedale AI, Corp.","description":"try box","logoText":"","foregroundColor":"rgb(17, 17, 17)","backgroundColor":"rgb(255, 255, 255)","labelColor":"rgb(120, 120, 120)","barcodes":[{"message":"https://box.ascii.dev","format":"PKBarcodeFormatQR","messageEncoding":"iso-8859-1","altText":"go to box.ascii.dev on desktop"}],"coupon":{"headerFields":[{"key":"offer","label":"OFFER","value":"7 DAYS FREE"}],"primaryFields":[],"secondaryFields":[{"key":"tagline","label":"NOW","value":"The choice is yours"}],"auxiliaryFields":[]}}
+--- manifest.json
+{"pass.json":"6002beb5f965779d6c64719b9260483e503b9038","icon.png":"09ff26831a012eb76ec0fa985962bc543a0152fc","icon@2x.png":"16a0c6de2a1c8647224bec770d09303641f5d989","logo.png":"fbe0b508bff6465e6be62c21fc812ef6ef319759","logo@2x.png":"c57a8635e027699fa2adb9d7b4b946f402334013","strip.png":"4107ba65e3e0c04ea506782148e7e676bcb97b76","strip@2x.png":"15e90cea7bad9f465126f29cb1f558d08075c1bc"}
+=== pass token/url fields ===
+/tmp/wallet/pass.json:1:{"formatVersion":1,"passTypeIdentifier":"pass.com.ascii.box","serialNumber":"box.pass","teamIdentifier":"69C52X8599","organizationName":"Dedale AI, Corp.","description":"try box","logoText":"","foregroundColor":"rgb(17, 17, 17)","backgroundColor":"rgb(255, 255, 255)","labelColor":"rgb(120, 120, 120)","barcodes":[{"message":"https://box.ascii.dev","format":"PKBarcodeFormatQR","messageEncoding":"iso-8859-1","altText":"go to box.ascii.dev on desktop"}],"coupon":{"headerFields":[{"key":"offer","label":"OFFER","value":"7 DAYS FREE"}],"primaryFields":[],"secondaryFields":[{"key":"tagline","label":"NOW","value":"The choice is yours"}],"auxiliaryFields":[]}}
+=== pass signing certs ===
+subject=C = US, O = Apple Inc., OU = Apple Worldwide Developer Relations, CN = Apple Worldwide Developer Relations Certification Authority
+issuer=C = US, O = Apple Inc., OU = Apple Certification Authority, CN = Apple Root CA
+
+subject=CN = Apple Worldwide Developer Relations Certification Authority, OU = G3, O = Apple Inc., C = US
+issuer=C = US, O = Apple Inc., OU = Apple Certification Authority, CN = Apple Root CA
+
+subject=C = US, O = Apple Inc., OU = Apple Worldwide Developer Relations, CN = Apple Worldwide Developer Relations Certification Authority
+issuer=C = US, O = Apple Inc., OU = Apple Certification Authority, CN = Apple Root CA
+
+subject=UID = pass.com.ascii.box, CN = Pass Type ID: pass.com.ascii.box, OU = 69C52X8599, O = "Dedale AI, Corp.", C = US
+issuer=CN = Apple Worldwide Developer Relations Certification Authority, OU = G4, O = Apple Inc., C = US
+
+=== wallet related public route probes ===
+--- /wallet/hello-world
+HTTP=200 BYTES=163378 TYPE=application/vnd.apple.pkpass REDIR=
+HTTP/2 200 
+content-type: application/vnd.apple.pkpass
+icon.pngUT	
+^%00X
+E*?<
+U]zm
+oXgZp
+87E7
+@Wi?
+--- /wallet/hello-world/
+HTTP=308 BYTES=19 TYPE= REDIR=https://box.ascii.dev/wallet/hello-world
+HTTP/2 308 
+location: /wallet/hello-world
+/wallet/hello-world
+--- /api/wallet/hello-world
+HTTP=404 BYTES=54 TYPE=application/json;charset=utf-8 REDIR=
+HTTP/2 404 
+content-type: application/json;charset=utf-8
+{"error":"Not Found","path":"/api/wallet/hello-world"}
+--- /api/box/wallet/hello-world
+HTTP=404 BYTES=58 TYPE=application/json;charset=utf-8 REDIR=
+HTTP/2 404 
+content-type: application/json;charset=utf-8
+{"error":"Not Found","path":"/api/box/wallet/hello-world"}
+--- /wallet
+HTTP=404 BYTES=17639 TYPE=text/html; charset=utf-8 REDIR=
+HTTP/2 404 
+content-type: text/html; charset=utf-8
+x-nextjs-cache: HIT
+x-nextjs-prerender: 1
+x-nextjs-prerender: 1
+x-nextjs-stale-time: 300
+x-powered-by: Next.js
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="/_next/static/chunks/14ia2_r262dg_.css" data-precedence="next"/><link rel="preload" as="script" fetchPriority="low" href="/_next/static/chunks/3s6nzrbk-8mnv.js"/><script src="/_next/static/chunks/19mx3mg6lkumu.js" async=""></script><script src="/_next/static/chunks/4561u0v7ysn3r.js" async=""></script><script src="/_next/static/chunks/0td_q_
+--- /wallet/register
+HTTP=404 BYTES=17639 TYPE=text/html; charset=utf-8 REDIR=
+HTTP/2 404 
+content-type: text/html; charset=utf-8
+x-nextjs-cache: HIT
+x-nextjs-prerender: 1
+x-nextjs-prerender: 1
+x-nextjs-stale-time: 300
+x-powered-by: Next.js
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="/_next/static/chunks/14ia2_r262dg_.css" data-precedence="next"/><link rel="preload" as="script" fetchPriority="low" href="/_next/static/chunks/3s6nzrbk-8mnv.js"/><script src="/_next/static/chunks/19mx3mg6lkumu.js" async=""></script><script src="/_next/static/chunks/4561u0v7ysn3r.js" async=""></script><script src="/_next/static/chunks/0td_q_
+--- /wallet/v1/devices/canary/registrations/canary/canary
+HTTP=404 BYTES=17639 TYPE=text/html; charset=utf-8 REDIR=
+HTTP/2 404 
+content-type: text/html; charset=utf-8
+x-nextjs-cache: HIT
+x-nextjs-prerender: 1
+x-nextjs-prerender: 1
+x-nextjs-stale-time: 300
+x-powered-by: Next.js
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="/_next/static/chunks/14ia2_r262dg_.css" data-precedence="next"/><link rel="preload" as="script" fetchPriority="low" href="/_next/static/chunks/3s6nzrbk-8mnv.js"/><script src="/_next/static/chunks/19mx3mg6lkumu.js" async=""></script><script src="/_next/static/chunks/4561u0v7ysn3r.js" async=""></script><script src="/_next/static/chunks/0td_q_
+=== staging release metadata via public GitHub ===
+tag_name='box-cli-v0.1.178-staging1'
+name='box-cli-v0.1.178-staging1'
+draft=False
+prerelease=False
+published_at='2026-08-21T18:59:39Z'
+html_url='https://github.com/ariana-dot-dev/agent-server/releases/tag/box-cli-v0.1.178-staging1'
+body='Box CLI release box-cli-v0.1.178-staging1'
+assets= [('box-darwin-arm64', 6252960, 'https://github.com/ariana-dot-dev/agent-server/releases/download/box-cli-v0.1.178-staging1/box-darwin-arm64'), ('box-darwin-x64', 6582000, 'https://github.com/ariana-dot-dev/agent-server/releases/download/box-cli-v0.1.178-staging1/box-darwin-x64'), ('box-linux-arm64', 7151000, 'https://github.com/ariana-dot-dev/agent-server/releases/download/box-cli-v0.1.178-staging1/box-linux-arm64'), ('box-linux-x64', 7433216, 'https://github.com/ariana-dot-dev/agent-server/releases/download/box-cli-v0.1.178-staging1/box-linux-x64'), ('box-windows-x64.exe', 5839360, 'https://github.com/ariana-dot-dev/agent-server/releases/download/box-cli-v0.1.178-staging1/box-windows-x64.exe'), ('install.ps1', 2631, 'https://github.com/ariana-dot-dev/agent-server/releases/download/box-cli-v0.1.178-staging1/install.ps1'), ('install.sh', 1808, 'https://github.com/ariana-dot-dev/agent-server/releases/download/box-cli-v0.1.178-staging1/install.sh'), ('SHA256SUMS', 412, 'https://github.com/ariana-dot-dev/agent-server/releases/download/box-cli-v0.1.178-staging1/SHA256SUMS')]
