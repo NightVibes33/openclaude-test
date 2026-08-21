@@ -1,0 +1,51 @@
+name: Box node-manager fast audit
+on:
+  push:
+    paths:
+      - '.github/workflows/box-node-manager-fast-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract and audit latest public package
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nm && mkdir -p /tmp/nm
+          curl -fsSL 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=30' -o /tmp/nm/r.json
+          url=$(jq -r 'sort_by(.published_at)|last|.assets[]|select(.name=="ascii-node-manager-linux-x64.tar.gz")|.browser_download_url' /tmp/nm/r.json)
+          curl -fL "$url" -o /tmp/nm/a.tgz
+          tar -xzf /tmp/nm/a.tgz -C /tmp/nm
+          R=/tmp/nm/bare-metal-node
+          O=box-node-manager-fast-audit.txt
+          : > "$O"
+          for f in provision-vm.sh delete-vm.sh guest-runtime-setup.sh ensure-tenant-isolation.sh lib/isolate_domain_network.py lib/ssh-identity.sh sweep-operator-keys.sh; do
+            p="$R/$f"; [ -f "$p" ] || continue
+            {
+              echo; echo "===== $f ====="
+              echo '--- validators / user-or-backend supplied fields ---'
+              grep -nE -C 10 'validate|VM_NAME|MACHINE_|OWNERSHIP|BASE_IMAGE|GATEWAY_|BOX_CLI|AGENT.*TAG|SUBDOMAIN|VM_IPV6|VM_INDEX|PUBLIC_MAC|NAT_MAC' "$p" | head -n 6000 || true
+              echo '--- host command / filesystem / parser sinks ---'
+              grep -nE -C 10 'eval|source |bash -c|sh -c|virsh|virt-install|qemu|mkisofs|geniso|mount|umount|rm -rf|cp |mv |ln -s|sed |awk |jq |curl |ssh |scp |tar |unzip|python' "$p" | head -n 6000 || true
+              echo '--- networking / host reachability / isolation ---'
+              grep -nE -C 10 'nwfilter|iptables|nft|ebtables|bridge|FORWARD|INPUT|OUTPUT|route|gateway|proxy|127\.0\.0\.1|169\.254|8787|22|53|metadata|tap|mac|spoof' "$p" | head -n 6000 || true
+            } >> "$O"
+          done
+          if command -v shellcheck >/dev/null; then
+            { echo; echo '===== shellcheck warning+ ====='; shellcheck -S warning "$R"/*.sh "$R"/lib/*.sh || true; } >> "$O" 2>&1
+          fi
+          echo "Generated $(wc -l < "$O") lines"
+      - name: Commit audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-node-manager-fast-audit.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: record fast Box isolation audit'
+          git push
