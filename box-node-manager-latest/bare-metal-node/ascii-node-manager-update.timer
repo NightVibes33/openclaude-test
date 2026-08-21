@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic ascii-node-manager release check
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+# Jitter so a fleet does not stampede the GitHub API in lockstep.
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

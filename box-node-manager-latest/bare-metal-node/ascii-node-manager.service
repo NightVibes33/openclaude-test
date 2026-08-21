@@ -1,0 +1,30 @@
+[Unit]
+Description=Ascii Bare-Metal Node Manager
+After=network-online.target libvirtd.service ascii-baremetal-reconcile.service
+Wants=network-online.target
+Requires=ascii-baremetal-reconcile.service
+RequiresMountsFor=/var/lib/ascii /etc/ascii
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/lib/ascii/baremetal
+EnvironmentFile=/etc/ascii/baremetal-node-agent.env
+# Root-installed safety scripts and the release under /opt/ascii/node-manager
+# cannot be altered by the unprivileged deployment user after bootstrap.
+ExecStartPre=/usr/local/libexec/ascii-baremetal/verify-encrypted-storage.sh
+ExecStartPre=/usr/local/libexec/ascii-baremetal/ensure-tenant-isolation.sh
+# `current` is an atomically flipped symlink to a verified, checksummed release
+# (update-node-manager.sh); the binary and the scripts it shells out to always
+# come from the same release.
+ExecStart=/opt/ascii/node-manager/current/bin/ascii-node-manager
+KillMode=control-group
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

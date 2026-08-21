@@ -1,0 +1,10 @@
+[Unit]
+Description=Pull and apply the newest ascii-node-manager release
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# The updater defers itself while provisions are in flight and is a no-op when
+# the active release already matches the channel (or NODE_MANAGER_TAG_PIN).
+ExecStart=/usr/local/libexec/ascii-baremetal/update-node-manager.sh check --apply

@@ -1,0 +1,16 @@
+[Unit]
+Description=Reconcile Ascii bare-metal VMs after host reboot
+After=network-online.target libvirtd.service
+Wants=network-online.target
+Requires=libvirtd.service
+RequiresMountsFor=/var/lib/ascii /etc/ascii
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/ascii/baremetal-reconcile.env
+ExecStartPre=/usr/local/libexec/ascii-baremetal/verify-encrypted-storage.sh
+ExecStart=/usr/local/libexec/ascii-baremetal/reconcile-node.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
