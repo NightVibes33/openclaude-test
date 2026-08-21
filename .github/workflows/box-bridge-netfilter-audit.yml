@@ -1,0 +1,40 @@
+name: Box bridge netfilter audit
+on:
+  push:
+    paths:
+      - '.github/workflows/box-bridge-netfilter-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nm && mkdir -p /tmp/nm
+          curl -fsSL 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=30' -o /tmp/nm/r.json
+          tag=$(jq -r 'sort_by(.published_at)|last|.tag_name' /tmp/nm/r.json)
+          url=$(jq -r 'sort_by(.published_at)|last|.assets[]|select(.name=="ascii-node-manager-linux-x64.tar.gz")|.browser_download_url' /tmp/nm/r.json)
+          curl -fL "$url" -o /tmp/nm/a.tgz
+          tar -xzf /tmp/nm/a.tgz -C /tmp/nm
+          {
+            echo "TAG=$tag"
+            echo '=== explicit bridge netfilter enablement anywhere in package ==='
+            grep -RInE -C 5 'br_netfilter|bridge-nf-call-(ip6tables|iptables|arptables)|modprobe[[:space:]]+br_netfilter|sysctl.*net\.bridge' /tmp/nm || true
+            echo '=== tenant isolation implementation ==='
+            grep -nE -C 12 'install_forward_drop|FORWARD|ip6tables|iptables|bridge' /tmp/nm/bare-metal-node/ensure-tenant-isolation.sh || true
+            echo '=== bootstrap networking sysctls/modules ==='
+            grep -nE -C 8 'modprobe|modules-load|sysctl|forward|bridge|net\.ipv|net\.bridge' /tmp/nm/bare-metal-node/bootstrap-node.sh || true
+          } > box-bridge-netfilter-audit.txt
+      - shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-bridge-netfilter-audit.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: record Box bridge netfilter audit'
+          git push
