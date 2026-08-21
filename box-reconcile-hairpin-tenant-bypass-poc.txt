@@ -1,0 +1,39 @@
+=== topology ===
+boxA=10.77.0.2 boxB=10.77.0.3 host-public=198.18.77.1:21003 -> boxB:8911
+Both VM bridge ports have isolated=on.
+6: apeer@if7: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 master bxbr state forwarding priority 32 cost 2 
+    hairpin off guard off root_block off fastleave off learning on flood on mcast_flood on bcast_flood on mcast_router 1 mcast_to_unicast off neigh_suppress off vlan_tunnel off isolated on locked off 
+8: bpeer@if9: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 master bxbr state forwarding priority 32 cost 2 
+    hairpin off guard off root_block off fastleave off learning on flood on mcast_flood on bcast_flood on mcast_router 1 mcast_to_unicast off neigh_suppress off vlan_tunnel off isolated on locked off 
+
+=== initial Box provisioning rule order ===
+Chain FORWARD (policy DROP 0 packets, 0 bytes)
+num   pkts bytes target     prot opt in     out     source               destination         
+1        0     0 DROP       0    --  bxbr   bxbr    0.0.0.0/0            0.0.0.0/0            /* bx-tenant-drop */
+2        0     0 ACCEPT     0    --  bxpub  *       0.0.0.0/0            10.77.0.3            ctstate DNAT /* bx-initial-accept */
+3        0     0 DOCKER-USER  0    --  *      *       0.0.0.0/0            0.0.0.0/0           
+4        0     0 DOCKER-FORWARD  0    --  *      *       0.0.0.0/0            0.0.0.0/0           
+
+=== direct peer test (must fail) ===
+DIRECT_PEER=BLOCKED
+=== pre-reconcile public-IP hairpin test (must fail) ===
+PRE_RECONCILE_HAIRPIN=BLOCKED
+
+=== post-reconcile rule order ===
+Chain FORWARD (policy DROP 0 packets, 0 bytes)
+num   pkts bytes target     prot opt in     out     source               destination         
+1        0     0 ACCEPT     0    --  *      *       0.0.0.0/0            10.77.0.3            ctstate DNAT /* bx-reconcile-accept */
+2        0     0 DROP       0    --  bxbr   bxbr    0.0.0.0/0            0.0.0.0/0            /* bx-tenant-drop */
+3        0     0 ACCEPT     0    --  bxpub  *       0.0.0.0/0            10.77.0.3            ctstate DNAT /* bx-initial-accept */
+4        0     0 DOCKER-USER  0    --  *      *       0.0.0.0/0            0.0.0.0/0           
+5        0     0 DOCKER-FORWARD  0    --  *      *       0.0.0.0/0            0.0.0.0/0           
+
+=== post-reconcile public-IP hairpin test ===
+POST_RECONCILE_HAIRPIN=BLOCKED
+
+=== counters ===
+1        0     0 ACCEPT     0    --  *      *       0.0.0.0/0            10.77.0.3            ctstate DNAT /* bx-reconcile-accept */
+2        0     0 DROP       0    --  bxbr   bxbr    0.0.0.0/0            0.0.0.0/0            /* bx-tenant-drop */
+3        0     0 ACCEPT     0    --  bxpub  *       0.0.0.0/0            10.77.0.3            ctstate DNAT /* bx-initial-accept */
+
+VALIDATED_LOGIC_BYPASS=NO
