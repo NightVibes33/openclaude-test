@@ -1,0 +1,104 @@
+name: Box guest-agent route census
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enumerate and classify exact production guest-agent routes locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=/tmp/box-route-census
+          rm -rf "$root" && mkdir -p "$root/work"
+          O=box-guest-route-census.txt
+          : > "$O"
+          tag=agent-server-v0.0.49-ascii-prod29
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-agents-server-linux-x64" -o "$root/agent"
+          chmod +x "$root/agent"
+
+          # Extract URL-looking path literals from the bundled production binary.
+          strings -a -n 3 "$root/agent" > "$root/strings.txt"
+          python3 - "$root/strings.txt" "$root/routes.txt" <<'PY'
+          import re,sys
+          src=open(sys.argv[1],errors='replace').read()
+          out=set()
+          # Conservative HTTP route-looking literals; exclude filesystem paths and package noise.
+          for m in re.finditer(r'(?<![A-Za-z0-9._-])/(?:[A-Za-z0-9._:-]+/){0,5}[A-Za-z0-9._:-]+(?:\?[A-Za-z0-9_=&.:-]*)?',src):
+              p=m.group(0).split('?')[0]
+              if len(p)>100 or p.count('/')>7: continue
+              if any(x in p for x in ['/usr/','/lib/','/node_modules/','/tmp/','/home/','/proc/','/sys/','/etc/','/dev/','/var/']): continue
+              if re.search(r'\.(js|ts|map|so|node|json|md|txt|png|svg|css|html)$',p): continue
+              out.add(p)
+          # Known routes are included even if bundler formatting defeats the regex.
+          out.update(['/health','/start','/stop','/exec','/execute','/file','/files','/upload','/download','/git-hook-event','/spokesperson/interrupt','/spokesperson/cli-output','/spokesperson/cycle'])
+          open(sys.argv[2],'w').write('\n'.join(sorted(out))+'\n')
+          PY
+
+          # Local fake backend: nothing leaves the runner and any relay becomes observable.
+          cat >"$root/backend.py" <<'PY'
+          from http.server import BaseHTTPRequestHandler,HTTPServer
+          class H(BaseHTTPRequestHandler):
+            def _x(self):
+              n=int(self.headers.get('content-length','0')); b=self.rfile.read(n)
+              with open('/tmp/box-route-census/backend.log','ab') as f:
+                f.write(('METHOD='+self.command+' PATH='+self.path+' AUTH='+self.headers.get('authorization','')+'\n').encode()+b+b'\n')
+              self.send_response(200); self.send_header('content-type','application/json'); self.end_headers(); self.wfile.write(b'{"ok":true,"exitCode":0}')
+            do_GET=_x; do_POST=_x; do_PUT=_x; do_DELETE=_x; do_PATCH=_x
+            def log_message(self,*a): pass
+          HTTPServer(('127.0.0.1',19090),H).serve_forever()
+          PY
+          python3 "$root/backend.py" >"$root/backend.out" 2>&1 & bpid=$!
+
+          export MACHINE_ID=box-route-census
+          export SHARED_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          export WORK_DIR="$root/work" HOME="$root/work" ASCII_PORT=18911 IS_SANDBOX=1
+          export BACKEND_URL=http://127.0.0.1:19090 BOX_CLI_API_URL=http://127.0.0.1:19090
+          export NO_PROXY=127.0.0.1,localhost
+          "$root/agent" >"$root/agent.log" 2>&1 & apid=$!
+          trap 'kill "$apid" "$bpid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 80); do curl -sS --max-time 1 http://127.0.0.1:18911/health >/dev/null 2>&1 && break; sleep .25; done
+
+          {
+            echo "TAG=$tag"
+            echo "SHA256=$(sha256sum "$root/agent"|awk '{print $1}')"
+            echo "ROUTE_LITERAL_COUNT=$(wc -l < "$root/routes.txt")"
+            echo '=== ROUTE CLASSIFICATION ==='
+          } >> "$O"
+
+          while IFS= read -r p; do
+            [ -n "$p" ] || continue
+            # Test only URL paths that the local server recognizes or rejects; all payloads are inert.
+            for method in GET POST; do
+              body="$root/body"
+              code=$(curl -sS --max-time 2 -o "$body" -w '%{http_code}' -X "$method" "http://127.0.0.1:18911$p" -H 'Content-Type: application/json' --data-binary '{}' 2>/dev/null || true)
+              txt=$(tr '\n\r' '  ' < "$body" 2>/dev/null | head -c 260 || true)
+              # 404s are noise; everything else is an actual handler/middleware clue.
+              if [ "$code" != 404 ] && [ -n "$code" ]; then
+                printf '%s %s status=%s body=%s\n' "$method" "$p" "$code" "$txt" >> "$O"
+              fi
+            done
+          done < "$root/routes.txt"
+
+          {
+            echo '=== HIGH-SIGNAL BINARY CONTEXT ==='
+            for needle in 'git-hook-event' 'cli-output' 'interrupt' 'localhost' '127.0.0.1' 'fetch(' 'Bun.file' 'readFile' 'writeFile' 'execFile' 'spawn(' 'child_process' 'shell:' 'websocket' 'upgrade'; do
+              echo "--- $needle ---"
+              grep -F -B3 -A5 "$needle" "$root/strings.txt" | head -n 240 || true
+            done
+            echo '=== BACKEND RELAYS FROM UNA/RAW PROBES ==='
+            cat "$root/backend.log" 2>/dev/null || true
+            echo '=== AGENT LOG TAIL ==='
+            tail -n 160 "$root/agent.log" || true
+          } >> "$O"
+          cat "$O"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: box-guest-route-census
+          path: box-guest-route-census.txt
