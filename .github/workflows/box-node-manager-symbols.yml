@@ -1,0 +1,37 @@
+name: Box node-manager symbols
+on:
+  push:
+    paths:
+      - '.github/workflows/box-node-manager-symbols.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  symbols:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nm && mkdir -p /tmp/nm
+          curl -fsSL 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=30' -o /tmp/nm/r.json
+          url=$(jq -r 'sort_by(.published_at)|last|.assets[]|select(.name=="ascii-node-manager-linux-x64.tar.gz")|.browser_download_url' /tmp/nm/r.json)
+          curl -fL "$url" -o /tmp/nm/a.tgz
+          tar -xzf /tmp/nm/a.tgz -C /tmp/nm
+          B=/tmp/nm/bin/ascii-node-manager
+          {
+            echo '=== demangled relevant defined symbols ==='
+            nm -C --defined-only "$B" 2>/dev/null | grep -Eai 'ascii_node_manager::(auth|handlers|machines|stats|routes|server|main)|hmac|nonce|signature|secret|ownership|provision|delete|gateway' || true
+            echo; echo '=== raw strings around endpoint/auth literals ==='
+            strings -a -n 3 "$B" | grep -Eai -C 8 '^/(health|inventory|provision|delete|secret)|X-Baremetal|timestamp|nonce|signature|ownershipId|gatewayCapability|newSecret|missing signature|stale request|remote address' || true
+          } > box-node-manager-symbols.txt
+      - shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-node-manager-symbols.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: record Box node-manager symbol map'
+          git push
