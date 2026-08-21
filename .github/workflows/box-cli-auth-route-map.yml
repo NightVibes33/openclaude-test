@@ -1,0 +1,40 @@
+name: Box CLI auth route map
+on:
+  push:
+    paths:
+      - '.github/workflows/box-cli-auth-route-map.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  map:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download current public Box CLI and map auth/routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/bx && mkdir -p /tmp/bx
+          url='https://ascii.dev/api/box/cli/download?platform=linux&arch=x64&channel=prod'
+          curl -fL "$url" -o /tmp/bx/box
+          chmod +x /tmp/bx/box
+          strings -a -n 4 /tmp/bx/box > /tmp/bx/strings
+          {
+            echo '=== version ==='; /tmp/bx/box --version || true
+            echo '=== API-looking paths ==='
+            grep -Eo '/(api/)?box/[A-Za-z0-9_./{}:?=&-]+' /tmp/bx/strings | sort -u | head -n 3000 || true
+            echo '=== auth/token/env context ==='
+            grep -Eai -C 8 'BOX_CLI_TOKEN|ASCII_TOKEN|ASCII_API_URL|BOX_ID|MACHINE_ID|SHARED_KEY|service.?preview|scop(ed|e)|current/self|current|self token|api.?key|Authorization|Bearer|no.?env|token file|config.json|credentials|session|/me|/boxes|snapshot|desktop|host(port)?' /tmp/bx/strings | head -n 20000 || true
+            echo '=== rust symbols around auth/http ==='
+            nm -C /tmp/bx/box 2>/dev/null | grep -Eai 'auth|token|scope|box.*(info|list|snapshot|desktop|host)|http|request|header|api_key|current|self' | head -n 8000 || true
+          } > box-cli-auth-route-map.txt
+      - name: Commit result
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-cli-auth-route-map.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: record Box CLI auth/route map'
+          git push
