@@ -1,0 +1,138 @@
+=== public release metadata ===
+node-manager-v0.5.0-staging9	2026-08-17T10:07:45Z	3
+node-manager-v0.5.0-staging8	2026-08-17T10:04:05Z	3
+node-manager-v0.5.0-staging7	2026-08-17T10:01:36Z	3
+node-manager-v0.5.0-staging6	2026-08-16T23:15:33Z	3
+node-manager-v0.5.0-staging5	2026-08-16T11:09:53Z	3
+node-manager-v0.5.0-staging4	2026-08-16T10:18:20Z	3
+node-manager-v0.5.0-staging3	2026-08-15T16:30:41Z	3
+node-manager-v0.5.0-staging2	2026-08-15T16:19:33Z	3
+node-manager-v0.5.0-staging12	2026-08-21T18:58:15Z	3
+node-manager-v0.5.0-staging11	2026-08-21T15:57:23Z	3
+=== public asset URLs ===
+ascii-node-manager-linux-x64.tar.gz	1545107	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging9/ascii-node-manager-linux-x64.tar.gz
+SHA256SUMS	191	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging9/SHA256SUMS
+update-node-manager.sh	13140	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging9/update-node-manager.sh
+ascii-node-manager-linux-x64.tar.gz	1544237	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging8/ascii-node-manager-linux-x64.tar.gz
+SHA256SUMS	191	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging8/SHA256SUMS
+update-node-manager.sh	13140	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging8/update-node-manager.sh
+ascii-node-manager-linux-x64.tar.gz	1545363	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging7/ascii-node-manager-linux-x64.tar.gz
+SHA256SUMS	191	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging7/SHA256SUMS
+update-node-manager.sh	13140	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging7/update-node-manager.sh
+ascii-node-manager-linux-x64.tar.gz	1544220	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging6/ascii-node-manager-linux-x64.tar.gz
+SHA256SUMS	191	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging6/SHA256SUMS
+update-node-manager.sh	13140	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging6/update-node-manager.sh
+ascii-node-manager-linux-x64.tar.gz	1544484	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging5/ascii-node-manager-linux-x64.tar.gz
+SHA256SUMS	191	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging5/SHA256SUMS
+update-node-manager.sh	13140	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging5/update-node-manager.sh
+ascii-node-manager-linux-x64.tar.gz	1543560	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging4/ascii-node-manager-linux-x64.tar.gz
+SHA256SUMS	191	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging4/SHA256SUMS
+update-node-manager.sh	13140	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging4/update-node-manager.sh
+ascii-node-manager-linux-x64.tar.gz	1543764	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging3/ascii-node-manager-linux-x64.tar.gz
+SHA256SUMS	191	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging3/SHA256SUMS
+update-node-manager.sh	11326	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging3/update-node-manager.sh
+ascii-node-manager-linux-x64.tar.gz	1544066	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging2/ascii-node-manager-linux-x64.tar.gz
+SHA256SUMS	191	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging2/SHA256SUMS
+update-node-manager.sh	11326	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging2/update-node-manager.sh
+ascii-node-manager-linux-x64.tar.gz	1547689	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging12/ascii-node-manager-linux-x64.tar.gz
+SHA256SUMS	191	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging12/SHA256SUMS
+update-node-manager.sh	13620	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging12/update-node-manager.sh
+ascii-node-manager-linux-x64.tar.gz	1545463	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging11/ascii-node-manager-linux-x64.tar.gz
+SHA256SUMS	191	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging11/SHA256SUMS
+update-node-manager.sh	13620	https://github.com/ariana-dot-dev/agent-server/releases/download/node-manager-v0.5.0-staging11/update-node-manager.sh
+
+=== asset ascii-node-manager-linux-x64.tar.gz high-signal strings ===
+
+=== asset SHA256SUMS high-signal strings ===
+
+=== asset update-node-manager.sh high-signal strings ===
+#!/usr/bin/env bash
+# Pull, verify and activate an ascii-node-manager release on a bare-metal node.
+# The node manager ships like everything else (ASC-286): tagged, checksummed,
+# immutable GitHub releases in ariana-dot-dev/agent-server. This is the
+# node-side puller:
+#   update-node-manager.sh install <node-manager-vX.Y.Z[-<chan>N]>  # exact tag
+#   update-node-manager.sh check [--apply]   # newest channel tag; --apply installs
+#   update-node-manager.sh rollback          # flip back to the previous release
+#   update-node-manager.sh status            # active/previous tags, in-flight provisions
+# Channel + optional pin live in /etc/ascii/baremetal-node-agent.env:
+#   NODE_MANAGER_CHANNEL   channel to follow (e.g. staging, ascii-prod)
+#   NODE_MANAGER_TAG_PIN   exact tag; wins over the channel while set
+# A release unpacks to /opt/ascii/node-manager/releases/<tag> (binary + the
+--
+log() { printf '\033[1;32m[node-manager-update]\033[0m %s\n' "$*"; }
+fail() { printf '\033[1;31m[node-manager-update] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
+[ "$(id -u)" = "0" ] || fail "run as root"
+RELEASE_REPO="ariana-dot-dev/agent-server"
+ASSET="ascii-node-manager-linux-x64.tar.gz"
+HOME_DIR=/opt/ascii/node-manager
+RELEASES_DIR="$HOME_DIR/releases"
+ENV_FILE="${NODE_MANAGER_ENV_FILE:-/etc/ascii/baremetal-node-agent.env}"
+OWNERSHIP_ROOT=/var/lib/ascii/baremetal/ownership
+LIBEXEC=/usr/local/libexec/ascii-baremetal
+UNIT=ascii-node-manager.service
+LEGACY_UNIT=ascii-baremetal-node-agent.service
+KEEP_RELEASES=3
+env_get() { # key -> value ('' when absent)
+  [ -f "$ENV_FILE" ] || { printf ''; return; }
+--
+    grep -q '"state":"provisioning"' "$record" && count=$((count + 1))
+  done
+  printf '%s' "$count"
+# Authenticated when a token is available (GITHUB_TOKEN in the env file or the
+# invoking environment): the anonymous api.github.com limit is 60 req/hr/IP,
+# and nodes behind one egress IP polling every 5 minutes starve each other 
+# updates then silently stop until the window resets.
+gh_curl() {
+  local token
+  token="$(env_get GITHUB_TOKEN)"
+  [ -n "$token" ] || token="${GITHUB_TOKEN:-}"
+  if [ -n "$token" ]; then
+    curl -LfsS --retry 5 --retry-all-errors -H "Authorization: Bearer $token" "$@"
+  else
+    curl -LfsS --retry 5 --retry-all-errors "$@"
+# Newest tag on the channel, resolved from the public artifact repo the same
+# way the agent-server SDK does (matching-refs sorts reliably; /releases does
+# not). Tags look like node-manager-v0.5.0-staging12.
+resolve_channel_tag() {
+  local channel="$1"
+--
+# persisted so the timer can follow it.
+migrate_env_file() {
+  [ -f "$ENV_FILE" ] || return 0
+  if ! grep -q '^BAREMETAL_NODE_AGENT_REPO=/opt/ascii/node-manager/current$' "$ENV_FILE"; then
+    if grep -q '^BAREMETAL_NODE_AGENT_REPO=' "$ENV_FILE"; then
+      sed -i 's|^BAREMETAL_NODE_AGENT_REPO=.*|BAREMETAL_NODE_AGENT_REPO=/opt/ascii/node-manager/current|' "$ENV_FILE"
+    else
+      printf 'BAREMETAL_NODE_AGENT_REPO=/opt/ascii/node-manager/current\n' >> "$ENV_FILE"
+    fi
+    log "pointed BAREMETAL_NODE_AGENT_REPO at /opt/ascii/node-manager/current"
+  if [ -n "${NODE_MANAGER_CHANNEL:-}" ] && ! grep -q '^NODE_MANAGER_CHANNEL=' "$ENV_FILE"; then
+    printf 'NODE_MANAGER_CHANNEL=%s\n' "$NODE_MANAGER_CHANNEL" >> "$ENV_FILE"
+    log "persisted NODE_MANAGER_CHANNEL=$NODE_MANAGER_CHANNEL"
+# One-time migration off the compiled-in-place node agent.
+retire_legacy_agent() {
+  if [ -f "/etc/systemd/system/$LEGACY_UNIT" ]; then
+    log "retiring legacy $LEGACY_UNIT"
+    systemctl disable --now "$LEGACY_UNIT" >/dev/null 2>&1 || true
+    rm -f "/etc/systemd/system/$LEGACY_UNIT"
+    rm -f /usr/local/bin/ascii-baremetal-node-agent
+    systemctl daemon-reload
+prune_releases() {
+  local keep tag dir
+--
+  [ -d "$RELEASES_DIR/$tag" ] || fail "release $tag is not staged"
+  install_system_pieces "$RELEASES_DIR/$tag"
+  migrate_env_file
+  retire_legacy_agent
+  # Atomic flip: build the new symlink next to `current`, then rename over it.
+  ln -sfn "$RELEASES_DIR/$tag" "$HOME_DIR/.current-next"
+  if [ -n "$current" ]; then
+--
+    log "rolling back to $prev"
+    activate "$prev" --force
+    ;;
+  # Activate an already-staged release dir by name. Used by bootstrap-node.sh
+  # for dev source builds (staged as source-<sha>); everything else should go
+  # through `install`, which fetches and checksum-verifies.
+  activate)
