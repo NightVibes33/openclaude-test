@@ -17,74 +17,65 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Probe staging control-plane hosts from publicly downloadable CLI
+      - name: Probe legacy API authentication coverage
         shell: bash
         run: |
           set -uo pipefail
           mkdir -p box-research-results
-          OUT=box-research-results/deep-recon-3.txt
+          OUT=box-research-results/deep-recon-4.txt
           exec > >(tee "$OUT") 2>&1
           date -u
 
-          base='https://ascii.dev/api/box/cli/download'
-          curl -fsSL --max-time 45 "$base?platform=linux-x64&channel=staging" -o /tmp/box-staging || true
-          chmod +x /tmp/box-staging || true
-          /tmp/box-staging --version || true
+          paths=(
+            '/api/box/me'
+            '/api/box/boxes'
+            '/api/box/snapshots'
+            '/api/box/named-snapshots'
+            '/api/box/environments'
+            '/api/box/limits'
+            '/api/box/teams'
+            '/api/box/orgs'
+            '/api/box/api-keys'
+            '/api/box/webhooks'
+            '/api/box/data-retention'
+            '/api/box/providers'
+            '/api/box/deletions'
+          )
 
-          echo '=== staging CLI signed-out status against its defaults ==='
-          HOME=/tmp/boxhome /tmp/box-staging --json status 2>&1 | head -c 12000 || true
-          echo
-
-          probe_host() {
-            h="$1"
-            echo "========== HOST $h =========="
-            for p in \
-              '/' \
-              '/health' \
-              '/status' \
-              '/api/health' \
-              '/api/box/status' \
-              '/api/box/v1/me' \
-              '/api/box/v1/boxes' \
-              '/api/box/v1/snapshots' \
-              '/api/box/v1/named-snapshots' \
-              '/api/box/v1/environments' \
-              '/api/box/v1/limits' \
-              '/api/box/v1/teams' \
-              '/api/box/v1/orgs' \
-              '/api/box/v1/api-keys' \
-              '/api/box/v1/webhooks' \
-              '/openapi.json' \
-              '/api/box/v1/openapi.json' \
-              '/.well-known/security.txt'; do
-              echo "--- GET $p"
-              curl -sS --max-time 12 -D /tmp/h -o /tmp/b -w 'HTTP=%{http_code} BYTES=%{size_download} TYPE=%{content_type} REDIR=%{redirect_url}\n' "https://$h$p" || true
-              grep -iE '^(HTTP/|location:|www-authenticate:|content-type:|content-length:|set-cookie:|access-control|allow:|x-|server:)' /tmp/h | head -n 80 || true
-              echo '[body-prefix]'
-              head -c 1800 /tmp/b 2>/dev/null | sed -E 's/(token|secret|key)(["=: ]+)[A-Za-z0-9._-]{8,}/\1\2[REDACTED]/Ig' || true
-              echo
+          for h in ascii.dev staging.ascii.dev amsterdam.ascii.dev; do
+            echo "========== $h =========="
+            for p in "${paths[@]}"; do
+              for variant in normal fakebearer orgpersonal orgcanary; do
+                headers=()
+                case "$variant" in
+                  fakebearer) headers=(-H 'Authorization: Bearer box_invalid_canary_000000000000') ;;
+                  orgpersonal) headers=(-H 'X-Box-Org: personal') ;;
+                  orgcanary) headers=(-H 'X-Box-Org: org_canary_nonexistent') ;;
+                esac
+                printf '%-12s %-36s ' "$variant" "$p"
+                curl -sS --max-time 10 "${headers[@]}" -o /tmp/b -D /tmp/h \
+                  -w 'HTTP=%{http_code} BYTES=%{size_download} TYPE=%{content_type}\n' "https://$h$p" || true
+                body=$(head -c 500 /tmp/b 2>/dev/null | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g; s/(token|secret|key)(["=: ]+)[A-Za-z0-9._-]{8,}/\1\2[REDACTED]/Ig')
+                echo "BODY=$body"
+              done
             done
-            echo '--- OPTIONS collection'
-            curl -sS -X OPTIONS --max-time 12 -D /tmp/h -o /tmp/b -w 'HTTP=%{http_code} BYTES=%{size_download}\n' "https://$h/api/box/v1/boxes" || true
-            grep -iE '^(HTTP/|allow:|access-control|www-authenticate:|x-|server:)' /tmp/h | head -n 80 || true
-          }
 
-          probe_host 'staging.ascii.dev'
-          probe_host 'amsterdam.ascii.dev'
-
-          echo '=== signed-out CLI forced against leaked hosts ==='
-          for host in staging.ascii.dev amsterdam.ascii.dev; do
-            echo "--- $host status"
-            HOME=/tmp/boxhome /tmp/box-staging --api-url "https://$host" --json status 2>&1 | head -c 10000 || true
-            echo
-            echo "--- $host org list"
-            HOME=/tmp/boxhome /tmp/box-staging --api-url "https://$host" --json org list 2>&1 | head -c 10000 || true
-            echo
+            echo '=== harmless method-dispatch fingerprints ==='
+            for p in '/api/box/boxes' '/api/box/api-keys' '/api/box/webhooks'; do
+              for m in HEAD OPTIONS; do
+                printf '%-8s %-36s ' "$m" "$p"
+                curl -sS -X "$m" --max-time 10 -o /tmp/b -D /tmp/h \
+                  -w 'HTTP=%{http_code} BYTES=%{size_download} TYPE=%{content_type}\n' "https://$h$p" || true
+                grep -iE '^(allow:|access-control-allow-|www-authenticate:)' /tmp/h | tr '\n' ' '; echo
+              done
+            done
           done
 
-          echo '=== TLS certificate identities ==='
-          for host in staging.ascii.dev amsterdam.ascii.dev; do
-            echo | openssl s_client -connect "$host:443" -servername "$host" 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName 2>/dev/null || true
+          echo '=== exact legacy paths extracted from production/staging binaries ==='
+          base='https://ascii.dev/api/box/cli/download'
+          for c in ascii-prod staging; do
+            curl -fsSL --max-time 45 "$base?platform=linux-x64&channel=$c" -o "/tmp/box-$c" || true
+            strings -a "/tmp/box-$c" | grep -Eo '/api/box/[A-Za-z0-9_?&=./{}:-]+' | sort -u | head -n 1000 | sed "s/^/$c /" || true
           done
 
       - name: Persist text result
@@ -92,7 +83,7 @@ jobs:
         run: |
           git config user.name 'box-recon-bot'
           git config user.email 'box-recon-bot@users.noreply.github.com'
-          git add -f box-research-results/deep-recon-3.txt
+          git add -f box-research-results/deep-recon-4.txt
           git diff --cached --quiet && exit 0
-          git commit -m 'Record Box staging control-plane recon [skip ci]'
+          git commit -m 'Record Box legacy API auth recon [skip ci]'
           git push origin HEAD:main
