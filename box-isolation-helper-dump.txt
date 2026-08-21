@@ -1,0 +1,356 @@
+===== isolate_domain_network.py =====
+#!/usr/bin/env python3
+"""Atomically isolate the two expected libvirt domain network interfaces."""
+
+import argparse
+from collections import Counter
+import os
+from pathlib import Path
+import tempfile
+import xml.etree.ElementTree as ET
+
+
+class IsolationError(ValueError):
+    pass
+
+
+def _expected_interfaces(root, expected_networks):
+    if len(expected_networks) != 2:
+        raise IsolationError("exactly two expected networks are required")
+
+    interfaces = root.findall("./devices/interface")
+    if len(interfaces) != 2:
+        raise IsolationError(
+            f"expected exactly 2 domain network interfaces, found {len(interfaces)}"
+        )
+
+    actual_networks = []
+    for interface in interfaces:
+        if interface.get("type") != "network":
+            raise IsolationError("both domain interfaces must have type='network'")
+
+        sources = interface.findall("source")
+        if len(sources) != 1 or not sources[0].get("network"):
+            raise IsolationError("each domain interface must have one network source")
+        actual_networks.append(sources[0].get("network"))
+
+        if len(interface.findall("port")) > 1:
+            raise IsolationError("a domain interface has multiple port elements")
+
+    if Counter(actual_networks) != Counter(expected_networks):
+        raise IsolationError(
+            f"expected network interfaces {expected_networks}, found {actual_networks}"
+        )
+
+    return interfaces
+
+
+def isolate_tree(tree, expected_networks):
+    interfaces = _expected_interfaces(tree.getroot(), expected_networks)
+    for interface in interfaces:
+        port = interface.find("port")
+        if port is None:
+            port = ET.SubElement(interface, "port")
+        port.set("isolated", "yes")
+
+    isolated = sum(
+        interface.find("port") is not None
+        and interface.find("port").get("isolated") == "yes"
+        for interface in _expected_interfaces(tree.getroot(), expected_networks)
+    )
+    if isolated != 2:
+        raise IsolationError(
+            f"expected 2 isolated network interfaces, found {isolated}"
+        )
+
+
+def isolate_domain_xml(xml_path, expected_networks):
+    path = Path(xml_path)
+    try:
+        tree = ET.parse(path)
+    except (ET.ParseError, OSError) as error:
+        raise IsolationError(f"cannot parse domain XML {path}: {error}") from error
+
+    isolate_tree(tree, expected_networks)
+
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+    )
+    try:
+        with os.fdopen(file_descriptor, "wb") as temporary_file:
+            tree.write(temporary_file, encoding="utf-8", xml_declaration=True)
+            temporary_file.flush()
+            os.fsync(temporary_file.fileno())
+        os.chmod(temporary_name, path.stat().st_mode & 0o777)
+
+        written_tree = ET.parse(temporary_name)
+        interfaces = _expected_interfaces(written_tree.getroot(), expected_networks)
+        if any(
+            interface.find("port") is None
+            or interface.find("port").get("isolated") != "yes"
+            for interface in interfaces
+        ):
+            raise IsolationError(
+                "atomic output validation found an unisolated interface"
+            )
+
+        os.replace(temporary_name, path)
+        temporary_name = None
+    finally:
+        if temporary_name is not None:
+            Path(temporary_name).unlink(missing_ok=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("xml_path", help="rendered libvirt domain XML to update")
+    parser.add_argument(
+        "--expected-network",
+        action="append",
+        required=True,
+        help="expected libvirt network name; pass exactly twice",
+    )
+    args = parser.parse_args()
+
+    try:
+        isolate_domain_xml(args.xml_path, args.expected_network)
+    except IsolationError as error:
+        parser.exit(1, f"network isolation validation failed: {error}\n")
+
+
+if __name__ == "__main__":
+    main()
+
+===== ensure-tenant-isolation.sh =====
+#!/usr/bin/env bash
+# Restore tenant isolation after firewall/libvirt reloads and migrate existing
+# harness domains. Safe to run at every node-agent start and before each create.
+set -euo pipefail
+
+fail() { echo "tenant isolation: $*" >&2; exit 1; }
+need_cmd() { command -v "$1" >/dev/null 2>&1 || fail "missing command: $1"; }
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NODE_ID="${NODE_ID:-node0}"
+PUBLIC_NETWORK="${PUBLIC_NETWORK:-libvirt-$NODE_ID}"
+NAT_NETWORK="${NAT_NETWORK:-default}"
+VM_ROOT="${VM_ROOT:-/var/lib/ascii/vms}"
+XML_HELPER="$SCRIPT_DIR/lib/isolate_domain_network.py"
+
+for command in virsh iptables ip6tables bridge python3; do
+  need_cmd "$command"
+done
+[ -f "$XML_HELPER" ] || fail "missing XML helper: $XML_HELPER"
+
+network_bridge() {
+  local network="$1"
+  local bridge
+  bridge="$(virsh net-info "$network" | awk '/^Bridge:/ { print $2; exit }')"
+  [ -n "$bridge" ] || fail "cannot resolve bridge for $network"
+  printf '%s\n' "$bridge"
+}
+
+install_forward_drop() {
+  local command="$1"
+  local bridge="$2"
+  local comment="ascii:tenant-isolation:$bridge"
+
+  while "$command" -C FORWARD -i "$bridge" -o "$bridge" \
+    -m comment --comment "$comment" -j DROP >/dev/null 2>&1; do
+    "$command" -D FORWARD -i "$bridge" -o "$bridge" \
+      -m comment --comment "$comment" -j DROP
+  done
+  "$command" -I FORWARD 1 -i "$bridge" -o "$bridge" \
+    -m comment --comment "$comment" -j DROP
+}
+
+public_bridge="$(network_bridge "$PUBLIC_NETWORK")"
+nat_bridge="$(network_bridge "$NAT_NETWORK")"
+install_forward_drop ip6tables "$public_bridge"
+install_forward_drop iptables "$nat_bridge"
+
+[ -d "$VM_ROOT" ] || exit 0
+while IFS= read -r vm_dir; do
+  name="$(basename "$vm_dir")"
+  [[ "$name" =~ ^box-[a-z0-9]+-[a-z0-9-]+$ ]] || continue
+  virsh dominfo "$name" >/dev/null 2>&1 || continue
+
+  domain_xml="$(mktemp)"
+  trap 'rm -f "${domain_xml:-}"' EXIT
+  virsh dumpxml --inactive "$name" > "$domain_xml"
+  python3 "$XML_HELPER" "$domain_xml" \
+    --expected-network "$PUBLIC_NETWORK" \
+    --expected-network "$NAT_NETWORK"
+  virsh define "$domain_xml" >/dev/null
+  rm -f "$domain_xml"
+  trap - EXIT
+
+  while IFS= read -r tap; do
+    [ -e "/sys/class/net/$tap" ] || continue
+    bridge link set dev "$tap" isolated on
+  done < <(
+    virsh domiflist "$name" | awk -v public="$PUBLIC_NETWORK" -v nat="$NAT_NETWORK" \
+      'NR > 2 && ($3 == public || $3 == nat) { print $1 }'
+  )
+done < <(find "$VM_ROOT" -mindepth 1 -maxdepth 1 -type d -print)
+
+===== domain/network persistence references =====
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-52-  virsh dominfo "$name" >/dev/null 2>&1 || continue
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-53-
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-54-  domain_xml="$(mktemp)"
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-55-  trap 'rm -f "${domain_xml:-}"' EXIT
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-56-  virsh dumpxml --inactive "$name" > "$domain_xml"
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-57-  python3 "$XML_HELPER" "$domain_xml" \
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-58-    --expected-network "$PUBLIC_NETWORK" \
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-59-    --expected-network "$NAT_NETWORK"
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh:60:  virsh define "$domain_xml" >/dev/null
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-61-  rm -f "$domain_xml"
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-62-  trap - EXIT
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-63-
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-64-  while IFS= read -r tap; do
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-65-    [ -e "/sys/class/net/$tap" ] || continue
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh:66:    bridge link set dev "$tap" isolated on
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-67-  done < <(
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-68-    virsh domiflist "$name" | awk -v public="$PUBLIC_NETWORK" -v nat="$NAT_NETWORK" \
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-69-      'NR > 2 && ($3 == public || $3 == nat) { print $1 }'
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-70-  )
+/tmp/nm/bare-metal-node/ensure-tenant-isolation.sh-71-done < <(find "$VM_ROOT" -mindepth 1 -maxdepth 1 -type d -print)
+--
+/tmp/nm/bare-metal-node/provision-vm.sh-359-  # stock no-ip-spoofing filter explicitly allows 0.0.0.0 DHCP requests.
+/tmp/nm/bare-metal-node/provision-vm.sh-360-  cat > "$nat_xml" <<EOF
+/tmp/nm/bare-metal-node/provision-vm.sh-361-<filter name='$NAT_FILTER' chain='root'>
+/tmp/nm/bare-metal-node/provision-vm.sh-362-  <filterref filter='clean-traffic'>
+/tmp/nm/bare-metal-node/provision-vm.sh-363-    <parameter name='IP' value='$NAT_IP'/>
+/tmp/nm/bare-metal-node/provision-vm.sh-364-  </filterref>
+/tmp/nm/bare-metal-node/provision-vm.sh-365-</filter>
+/tmp/nm/bare-metal-node/provision-vm.sh-366-EOF
+/tmp/nm/bare-metal-node/provision-vm.sh:367:  if ! virsh nwfilter-define "$public_xml" >/dev/null; then
+/tmp/nm/bare-metal-node/provision-vm.sh-368-    rm -f "$public_xml" "$nat_xml"
+/tmp/nm/bare-metal-node/provision-vm.sh:369:    fail "failed to define public nwfilter $PUBLIC_FILTER"
+/tmp/nm/bare-metal-node/provision-vm.sh-370-  fi
+/tmp/nm/bare-metal-node/provision-vm.sh:371:  if ! virsh nwfilter-define "$nat_xml" >/dev/null; then
+/tmp/nm/bare-metal-node/provision-vm.sh:372:    virsh nwfilter-undefine "$PUBLIC_FILTER" >/dev/null 2>&1 || true
+/tmp/nm/bare-metal-node/provision-vm.sh-373-    rm -f "$public_xml" "$nat_xml"
+/tmp/nm/bare-metal-node/provision-vm.sh:374:    fail "failed to define NAT nwfilter $NAT_FILTER"
+/tmp/nm/bare-metal-node/provision-vm.sh-375-  fi
+/tmp/nm/bare-metal-node/provision-vm.sh-376-  rm -f "$public_xml" "$nat_xml"
+/tmp/nm/bare-metal-node/provision-vm.sh-377-}
+/tmp/nm/bare-metal-node/provision-vm.sh-378-
+/tmp/nm/bare-metal-node/provision-vm.sh-379-cleanup_vm_filters() {
+/tmp/nm/bare-metal-node/provision-vm.sh:380:  [ -n "$PUBLIC_FILTER" ] && virsh nwfilter-undefine "$PUBLIC_FILTER" >/dev/null 2>&1 || true
+/tmp/nm/bare-metal-node/provision-vm.sh:381:  [ -n "$NAT_FILTER" ] && virsh nwfilter-undefine "$NAT_FILTER" >/dev/null 2>&1 || true
+/tmp/nm/bare-metal-node/provision-vm.sh-382-}
+/tmp/nm/bare-metal-node/provision-vm.sh-383-
+/tmp/nm/bare-metal-node/provision-vm.sh-384-validate_names() {
+/tmp/nm/bare-metal-node/provision-vm.sh-385-  [[ "$VM_NAME" =~ ^box-[a-z0-9]+-[a-z0-9-]+$ ]] || fail "VM_NAME must look like box-node0-abc123: $VM_NAME"
+/tmp/nm/bare-metal-node/provision-vm.sh-386-  [[ "$OWNERSHIP_ID" =~ ^[A-Za-z0-9_-]{8,128}$ ]] || fail "OWNERSHIP_ID is required and invalid"
+/tmp/nm/bare-metal-node/provision-vm.sh-387-  [[ "$MACHINE_SUBDOMAIN" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || fail "invalid subdomain: $MACHINE_SUBDOMAIN"
+/tmp/nm/bare-metal-node/provision-vm.sh-388-}
+/tmp/nm/bare-metal-node/provision-vm.sh-389-
+--
+/tmp/nm/bare-metal-node/provision-vm.sh-643-  log "adding proxy NDP for $VM_IPV6 on $PUBLIC_INTERFACE"
+/tmp/nm/bare-metal-node/provision-vm.sh-644-  sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+/tmp/nm/bare-metal-node/provision-vm.sh-645-  sysctl -w net.ipv6.conf.default.forwarding=1 >/dev/null
+/tmp/nm/bare-metal-node/provision-vm.sh-646-  sysctl -w "net.ipv6.conf.$PUBLIC_INTERFACE.proxy_ndp=1" >/dev/null
+/tmp/nm/bare-metal-node/provision-vm.sh-647-  ip -6 neigh replace proxy "$VM_IPV6" dev "$PUBLIC_INTERFACE"
+/tmp/nm/bare-metal-node/provision-vm.sh-648-
+/tmp/nm/bare-metal-node/provision-vm.sh-649-  local domain_xml="$VM_DIR/domain.xml"
+/tmp/nm/bare-metal-node/provision-vm.sh-650-
+/tmp/nm/bare-metal-node/provision-vm.sh:651:  log "rendering isolated domain XML for $VM_NAME"
+/tmp/nm/bare-metal-node/provision-vm.sh-652-  define_vm_filters
+/tmp/nm/bare-metal-node/provision-vm.sh-653-  virt-install \
+/tmp/nm/bare-metal-node/provision-vm.sh-654-    --import \
+/tmp/nm/bare-metal-node/provision-vm.sh-655-    --name "$VM_NAME" \
+/tmp/nm/bare-metal-node/provision-vm.sh-656-    --memory "$MEMORY_MB" \
+/tmp/nm/bare-metal-node/provision-vm.sh-657-    --vcpus "$VCPU_TOPOLOGY_SPEC" \
+/tmp/nm/bare-metal-node/provision-vm.sh-658-    --cpu host-passthrough \
+/tmp/nm/bare-metal-node/provision-vm.sh-659-    --disk "path=$VM_DIR/root.qcow2,format=qcow2,bus=virtio,discard=unmap" \
+--
+/tmp/nm/bare-metal-node/provision-vm.sh-666-    --print-xml \
+/tmp/nm/bare-metal-node/provision-vm.sh-667-    --dry-run > "$domain_xml"
+/tmp/nm/bare-metal-node/provision-vm.sh-668-
+/tmp/nm/bare-metal-node/provision-vm.sh-669-  python3 "$NETWORK_ISOLATION_HELPER" "$domain_xml" \
+/tmp/nm/bare-metal-node/provision-vm.sh-670-    --expected-network "$PUBLIC_NETWORK" \
+/tmp/nm/bare-metal-node/provision-vm.sh-671-    --expected-network "$NAT_NETWORK"
+/tmp/nm/bare-metal-node/provision-vm.sh-672-
+/tmp/nm/bare-metal-node/provision-vm.sh-673-  log "defining and starting $VM_NAME"
+/tmp/nm/bare-metal-node/provision-vm.sh:674:  virsh define "$domain_xml" >/dev/null
+/tmp/nm/bare-metal-node/provision-vm.sh-675-  VM_CREATED=1
+/tmp/nm/bare-metal-node/provision-vm.sh-676-  virsh start "$VM_NAME" >/dev/null
+/tmp/nm/bare-metal-node/provision-vm.sh-677-
+/tmp/nm/bare-metal-node/provision-vm.sh-678-  # Do not impose an absolute disk ceiling on an otherwise idle guest. Apply
+/tmp/nm/bare-metal-node/provision-vm.sh-679-  # explicit zeros live and persistently so inherited limits cannot survive.
+/tmp/nm/bare-metal-node/provision-vm.sh-680-  virsh schedinfo "$VM_NAME" --set "cpu_shares=$CPU_SHARES" --live --config >/dev/null
+/tmp/nm/bare-metal-node/provision-vm.sh-681-  vm_io_apply_policy "$VM_NAME" vda --live --config >/dev/null
+/tmp/nm/bare-metal-node/provision-vm.sh-682-  virsh autostart "$VM_NAME" >/dev/null
+--
+/tmp/nm/bare-metal-node/delete-vm.sh-96-      echo "Failed to undefine libvirt domain $VM_NAME" >&2
+/tmp/nm/bare-metal-node/delete-vm.sh-97-      exit 1
+/tmp/nm/bare-metal-node/delete-vm.sh-98-    }
+/tmp/nm/bare-metal-node/delete-vm.sh-99-fi
+/tmp/nm/bare-metal-node/delete-vm.sh-100-if virsh dominfo "$VM_NAME" >/dev/null 2>&1; then
+/tmp/nm/bare-metal-node/delete-vm.sh-101-  echo "Refusing to erase ownership metadata: libvirt domain $VM_NAME still exists" >&2
+/tmp/nm/bare-metal-node/delete-vm.sh-102-  exit 1
+/tmp/nm/bare-metal-node/delete-vm.sh-103-fi
+/tmp/nm/bare-metal-node/delete-vm.sh:104:virsh nwfilter-undefine "$PUBLIC_FILTER" >/dev/null 2>&1 || true
+/tmp/nm/bare-metal-node/delete-vm.sh:105:virsh nwfilter-undefine "$NAT_FILTER" >/dev/null 2>&1 || true
+/tmp/nm/bare-metal-node/delete-vm.sh-106-for filter in "$PUBLIC_FILTER" "$NAT_FILTER"; do
+/tmp/nm/bare-metal-node/delete-vm.sh:107:  if virsh nwfilter-info "$filter" >/dev/null 2>&1; then
+/tmp/nm/bare-metal-node/delete-vm.sh:108:    echo "Failed to remove libvirt nwfilter $filter" >&2
+/tmp/nm/bare-metal-node/delete-vm.sh-109-    exit 1
+/tmp/nm/bare-metal-node/delete-vm.sh-110-  fi
+/tmp/nm/bare-metal-node/delete-vm.sh-111-done
+/tmp/nm/bare-metal-node/delete-vm.sh-112-
+/tmp/nm/bare-metal-node/delete-vm.sh-113-if [ -n "$MACHINE_IP" ]; then
+/tmp/nm/bare-metal-node/delete-vm.sh-114-  echo "Removing proxy NDP $MACHINE_IP"
+/tmp/nm/bare-metal-node/delete-vm.sh-115-  ip -6 neigh del proxy "$MACHINE_IP" dev "$PUBLIC_INTERFACE" >/dev/null 2>&1 || true
+/tmp/nm/bare-metal-node/delete-vm.sh-116-fi
+--
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-45-
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-46-
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-47-def isolate_tree(tree, expected_networks):
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-48-    interfaces = _expected_interfaces(tree.getroot(), expected_networks)
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-49-    for interface in interfaces:
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-50-        port = interface.find("port")
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-51-        if port is None:
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-52-            port = ET.SubElement(interface, "port")
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py:53:        port.set("isolated", "yes")
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-54-
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py:55:    isolated = sum(
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-56-        interface.find("port") is not None
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py:57:        and interface.find("port").get("isolated") == "yes"
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-58-        for interface in _expected_interfaces(tree.getroot(), expected_networks)
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-59-    )
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py:60:    if isolated != 2:
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-61-        raise IsolationError(
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py:62:            f"expected 2 isolated network interfaces, found {isolated}"
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-63-        )
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-64-
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-65-
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-66-def isolate_domain_xml(xml_path, expected_networks):
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-67-    path = Path(xml_path)
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-68-    try:
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-69-        tree = ET.parse(path)
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-70-    except (ET.ParseError, OSError) as error:
+--
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-81-            temporary_file.flush()
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-82-            os.fsync(temporary_file.fileno())
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-83-        os.chmod(temporary_name, path.stat().st_mode & 0o777)
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-84-
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-85-        written_tree = ET.parse(temporary_name)
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-86-        interfaces = _expected_interfaces(written_tree.getroot(), expected_networks)
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-87-        if any(
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-88-            interface.find("port") is None
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py:89:            or interface.find("port").get("isolated") != "yes"
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-90-            for interface in interfaces
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-91-        ):
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-92-            raise IsolationError(
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py:93:                "atomic output validation found an unisolated interface"
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-94-            )
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-95-
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-96-        os.replace(temporary_name, path)
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-97-        temporary_name = None
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-98-    finally:
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-99-        if temporary_name is not None:
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-100-            Path(temporary_name).unlink(missing_ok=True)
+/tmp/nm/bare-metal-node/lib/isolate_domain_network.py-101-
