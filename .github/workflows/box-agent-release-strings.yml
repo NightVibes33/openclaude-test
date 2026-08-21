@@ -11,35 +11,47 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect public agent-server release assets
+      - name: Inspect latest public node-manager release
         shell: bash
         run: |
           set -euo pipefail
           rm -rf /tmp/box-agent && mkdir -p /tmp/box-agent/assets /tmp/box-agent/extract
           curl -fsSL -H 'Accept: application/vnd.github+json' \
-            https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=10 \
+            'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=30' \
             -o /tmp/box-agent/releases.json
+          jq 'sort_by(.published_at) | last' /tmp/box-agent/releases.json > /tmp/box-agent/latest.json
           {
-            echo '=== public release metadata ==='
-            jq -r '.[] | [.tag_name,.published_at,(.assets|length)] | @tsv' /tmp/box-agent/releases.json
-            echo '=== public asset URLs ==='
-            jq -r '.[].assets[]? | [.name,.size,.browser_download_url] | @tsv' /tmp/box-agent/releases.json
+            echo '=== latest public release ==='
+            jq -r '[.tag_name,.published_at,(.assets|length)] | @tsv' /tmp/box-agent/latest.json
+            echo '=== assets ==='
+            jq -r '.assets[]? | [.name,.size,.browser_download_url] | @tsv' /tmp/box-agent/latest.json
           } > box-agent-release-strings.txt
-          mapfile -t urls < <(jq -r '.[0].assets[]?.browser_download_url' /tmp/box-agent/releases.json)
-          i=0
+          mapfile -t urls < <(jq -r '.assets[]?.browser_download_url' /tmp/box-agent/latest.json)
           for url in "${urls[@]}"; do
-            i=$((i+1))
             name=$(basename "${url%%\?*}")
-            out="/tmp/box-agent/assets/$i-$name"
+            out="/tmp/box-agent/assets/$name"
             curl -fL --retry 2 "$url" -o "$out" || continue
-            chmod +x "$out" || true
-            strings -a -n 5 "$out" > "/tmp/box-agent/strings-$i.txt" || true
+            case "$name" in
+              *.tar.gz|*.tgz) tar -xzf "$out" -C /tmp/box-agent/extract ;;
+              *.zip) unzip -q "$out" -d /tmp/box-agent/extract ;;
+              *) cp "$out" "/tmp/box-agent/extract/$name" ;;
+            esac
+          done
+          {
+            echo
+            echo '=== extracted files ==='
+            find /tmp/box-agent/extract -maxdepth 4 -type f -printf '%p\t%s bytes\n' | sort
+          } >> box-agent-release-strings.txt
+          n=0
+          while IFS= read -r f; do
+            n=$((n+1))
+            strings -a -n 5 "$f" > "/tmp/box-agent/strings-$n.txt" || true
             {
               echo
-              echo "=== asset $name high-signal strings ==="
-              grep -Eai -C 3 'BOX_CLI_TOKEN|SERVICE_PREVIEW_TOKEN|ASCII_TOKEN|ASCII_API_URL|BOX_ID|169\.254|metadata|userdata|user-data|cloud-init|snapshot|signed.?url|desktop|host(port)?|scope|scoped|token|credential|authorization|bearer|api/box|localhost|127\.0\.0\.1|unix|socket|vsock|fuse|mount|ssh|agent|bootstrap|internal' "/tmp/box-agent/strings-$i.txt" | head -n 5000 || true
+              echo "=== $(basename "$f") high-signal strings ==="
+              grep -Eai -C 4 'BOX_CLI_TOKEN|SERVICE_PREVIEW_TOKEN|ASCII_TOKEN|ASCII_API_URL|BOX_ID|169\.254|metadata|userdata|user-data|cloud-init|snapshot|signed.?url|desktop|host(port)?|scope|scoped|token|credential|authorization|bearer|api/box|localhost|127\.0\.0\.1|unix|socket|vsock|fuse|mount|ssh|agent|bootstrap|internal|node.?token|ownership|provision|control.?plane|callback|websocket|wss://|https://' "/tmp/box-agent/strings-$n.txt" | head -n 8000 || true
             } >> box-agent-release-strings.txt
-          done
+          done < <(find /tmp/box-agent/extract -type f -size +1k -print)
           echo "Generated $(wc -l < box-agent-release-strings.txt) lines"
       - name: Commit result
         shell: bash
@@ -49,5 +61,5 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add box-agent-release-strings.txt
           git diff --cached --quiet && exit 0
-          git commit -m 'research: capture Box agent release strings'
+          git commit -m 'research: capture extracted Box node-manager strings'
           git push
