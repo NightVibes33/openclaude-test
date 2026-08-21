@@ -1,0 +1,1121 @@
+=== time ===
+Fri Aug 21 21:28:57 UTC 2026
+=== auth availability (boolean only) ===
+BOX_API_KEY_PRESENT=0
+=== install endpoints ===
+--- https://ascii.dev/api/box/install
+HTTP/2 200 
+access-control-allow-credentials: false
+access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete
+access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+access-control-allow-origin: http://localhost:1420
+access-control-max-age: 86400
+content-type: application/x-sh
+content-length: 3214
+bytes=3214
+#!/usr/bin/env sh
+set -eu
+MODE="box"
+API_URL="https://ascii.dev"
+CHANNEL="ascii-prod"
+INSTALL_DIR="$HOME/.ascii/bin"
+
+case "$(uname -s)" in
+  Linux) OS="linux" ;;
+  Darwin) OS="darwin" ;;
+  *) echo "Unsupported OS: $(uname -s)" >&2; exit 1 ;;
+esac
+
+case "$(uname -m)" in
+  x86_64|amd64) ARCH="x64" ;;
+  arm64|aarch64) ARCH="arm64" ;;
+  *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+URL="$API_URL/api/box/cli/download?platform=$OS-$ARCH&channel=$CHANNEL"
+mkdir -p "$INSTALL_DIR"
+TMP="$(mktemp)"
+curl -fsSL "$URL" -o "$TMP"
+chmod +x "$TMP"
+mv "$TMP" "$INSTALL_DIR/$MODE"
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/ascii/$MODE"
+mkdir -p "$CONFIG_DIR"
+cat > "$CONFIG_DIR/config.json" <<EOF
+{
+  "api_url": "$API_URL",
+  "channel": "$CHANNEL"
+}
+EOF
+
+CURRENT_ENV_NAME="BOX_CURRENT_ID"
+if [ "$MODE" = "box-dev" ]; then CURRENT_ENV_NAME="BOX_DEV_CURRENT_ID"; fi
+if [ "$MODE" = "box-staging" ]; then CURRENT_ENV_NAME="BOX_STAGING_CURRENT_ID"; fi
+SHELL_NAME="$(basename "$SHELL" 2>/dev/null || echo sh)"
+PROFILE="$HOME/.profile"
+if [ "$SHELL_NAME" = "zsh" ]; then PROFILE="$HOME/.zshrc"; fi
+if [ "$SHELL_NAME" = "bash" ]; then PROFILE="$HOME/.bashrc"; fi
+if [ "$SHELL_NAME" = "bash" ] || [ "$SHELL_NAME" = "zsh" ]; then
+if [ -f "$PROFILE" ]; then
+  TMP_PROFILE="$(mktemp)"
+  sed "/# ASCII BOX SHELL INTEGRATION START $MODE/,/# ASCII BOX SHELL INTEGRATION END $MODE/d" "$PROFILE" > "$TMP_PROFILE"
+  cat "$TMP_PROFILE" > "$PROFILE"
+  rm -f "$TMP_PROFILE"
+fi
+cat >> "$PROFILE" <<EOF
+
+# ASCII BOX SHELL INTEGRATION START $MODE
+$MODE() {
+EOF
+cat >> "$PROFILE" <<'EOF'
+  current_file=$(mktemp)
+  old_current_file=${BOX_CURRENT_ID_FILE-}
+  export BOX_CURRENT_ID_FILE="$current_file"
+EOF
+cat >> "$PROFILE" <<EOF
+  command "$INSTALL_DIR/$MODE" "\$@"
+EOF
+cat >> "$PROFILE" <<'EOF'
+  box_status=$?
+  if [ "$box_status" -eq 0 ]; then
+    case "${1:-}" in
+      new|start|fork)
+        if [ -s "$current_file" ]; then
+          current_id=$(tr -d '[:space:]' < "$current_file")
+EOF
+cat >> "$PROFILE" <<EOF
+          if [ -n "\$current_id" ]; then export $CURRENT_ENV_NAME="\$current_id"; fi
+EOF
+cat >> "$PROFILE" <<'EOF'
+        fi
+        ;;
+    esac
+  fi
+  if [ -n "$old_current_file" ]; then export BOX_CURRENT_ID_FILE="$old_current_file"; else unset BOX_CURRENT_ID_FILE; fi
+  rm -f "$current_file"
+  return "$box_status"
+}
+EOF
+cat >> "$PROFILE" <<EOF
+# ASCII BOX SHELL INTEGRATION END $MODE
+EOF
+echo "Updated $MODE shell integration in $PROFILE."
+else
+echo "Shell integration for 'current' is available for bash and zsh. Use explicit box IDs in $SHELL_NAME."
+fi
+
+echo "Installed $MODE to $INSTALL_DIR/$MODE"
+case ":$PATH:" in
+  *":$INSTALL_DIR:"*)
+    echo "$INSTALL_DIR is already on PATH."
+    echo "Run: $MODE onboard"
+    ;;
+  *)
+    echo ""
+    echo "$INSTALL_DIR is not on PATH yet."
+    echo "For this terminal, run:"
+    echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
+    echo "  $MODE onboard"
+    echo ""
+    echo "To make it permanent, run:"
+    echo "  printf '\nexport PATH=\"$INSTALL_DIR:\$PATH\"\n' >> $PROFILE"
+    echo "  source $PROFILE"
+    echo "  $MODE onboard"
+    ;;
+esac
+echo ""
+if [ -r /dev/tty ]; then
+  "$INSTALL_DIR/$MODE" onboard < /dev/tty
+else
+  "$INSTALL_DIR/$MODE" onboard
+fi
+
+--- https://ascii.dev/api/box/install.ps1
+HTTP/2 200 
+access-control-allow-credentials: false
+access-control-allow-headers: Content-Type, Authorization, X-Audio-Filename, X-Whisper-Prompt, X-Ascii-Confirm-Delete
+access-control-allow-methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+access-control-allow-origin: http://localhost:1420
+access-control-max-age: 86400
+content-type: text/plain; charset=utf-8
+content-length: 5261
+bytes=5261
+$ErrorActionPreference = "Stop"
+$Mode = "box"
+$ApiUrl = "https://ascii.dev"
+$InstallDir = Join-Path $HOME ".ascii\bin"
+
+if (-not [Environment]::Is64BitOperatingSystem) {
+  throw "Only Windows x64 is supported for the initial Box CLI release."
+}
+
+New-Item -ItemType Directory -Force $InstallDir | Out-Null
+$DownloadUrl = "$ApiUrl/api/box/cli/download?platform=windows-x64&channel=ascii-prod"
+$Target = Join-Path $InstallDir "$Mode.exe"
+$TempTarget = Join-Path $InstallDir "$Mode.exe.download"
+if (Test-Path $TempTarget) {
+  Remove-Item -Force $TempTarget
+}
+$DefenderHelp = @"
+Windows Defender blocked the download of $Mode.exe.
+
+This is a false positive. Our Windows binary is not code-signed yet, and
+Defender's cloud filter blocks unsigned executables it has not seen before.
+The binary is unchanged apart from the version bump.
+
+To install, open PowerShell **as Administrator** and run:
+
+  Add-MpPreference -ExclusionPath "$InstallDir"
+
+then run this installer again.
+"@
+
+try {
+  Invoke-WebRequest -Uri $DownloadUrl -OutFile $TempTarget
+} catch {
+  # Defender tears down the connection mid-transfer rather than returning an error.
+  Write-Host $DefenderHelp
+  throw "Install aborted: $_"
+}
+if (-not (Test-Path $TempTarget)) {
+  # Or it lets the download finish and deletes the file from under us.
+  Write-Host $DefenderHelp
+  throw "Install aborted: $TempTarget was removed after download."
+}
+
+$Running = @(Get-Process -Name $Mode -ErrorAction SilentlyContinue)
+if ($Running.Count -gt 0) {
+  Write-Host "Stopping running $Mode process before upgrade..."
+  $Running | Stop-Process -Force
+  Start-Sleep -Milliseconds 500
+}
+
+$Installed = $false
+for ($i = 0; $i -lt 20; $i++) {
+  try {
+    Move-Item -Force $TempTarget $Target
+    $Installed = $true
+    break
+  } catch {
+    Start-Sleep -Milliseconds 250
+  }
+}
+if (-not $Installed) {
+  if (Test-Path $TempTarget) {
+    Remove-Item -Force $TempTarget -ErrorAction SilentlyContinue
+  }
+  throw "Could not replace $Target. Close any running $Mode windows or terminals and run the installer again."
+}
+
+$ConfigDir = Join-Path ([Environment]::GetFolderPath("ApplicationData")) "ascii\$Mode"
+New-Item -ItemType Directory -Force $ConfigDir | Out-Null
+@{
+  api_url = $ApiUrl
+  channel = "ascii-prod"
+} | ConvertTo-Json | ForEach-Object {
+  [System.IO.File]::WriteAllText((Join-Path $ConfigDir "config.json"), $_, [System.Text.UTF8Encoding]::new($false))
+}
+
+$CurrentEnvName = if ($Mode -eq "box-dev") { "BOX_DEV_CURRENT_ID" } elseif ($Mode -eq "box-staging") { "BOX_STAGING_CURRENT_ID" } else { "BOX_CURRENT_ID" }
+$ProfilePath = $PROFILE.CurrentUserAllHosts
+$ProfileDir = Split-Path -Parent $ProfilePath
+if ($ProfileDir) { New-Item -ItemType Directory -Force $ProfileDir | Out-Null }
+$FunctionBlock = @"
+
+# ASCII BOX SHELL INTEGRATION START $Mode
+function $Mode {
+  `$currentFile = [System.IO.Path]::GetTempFileName()
+  `$oldCurrentFile = [Environment]::GetEnvironmentVariable("BOX_CURRENT_ID_FILE", "Process")
+  [Environment]::SetEnvironmentVariable("BOX_CURRENT_ID_FILE", `$currentFile, "Process")
+  try {
+    & "$Target" @args
+    `$status = `$LASTEXITCODE
+    if (`$status -eq 0 -and `$args.Count -gt 0 -and @("new", "start", "fork") -contains `$args[0] -and (Test-Path `$currentFile)) {
+      `$currentId = (Get-Content -Raw `$currentFile -ErrorAction SilentlyContinue).Trim()
+      if (`$currentId) {
+        [Environment]::SetEnvironmentVariable("$CurrentEnvName", `$currentId, "Process")
+      }
+    }
+  } finally {
+    if (`$oldCurrentFile) {
+      [Environment]::SetEnvironmentVariable("BOX_CURRENT_ID_FILE", `$oldCurrentFile, "Process")
+    } else {
+      [Environment]::SetEnvironmentVariable("BOX_CURRENT_ID_FILE", `$null, "Process")
+    }
+    Remove-Item -Force `$currentFile -ErrorAction SilentlyContinue
+  }
+  `$global:LASTEXITCODE = `$status
+  return
+}
+# ASCII BOX SHELL INTEGRATION END $Mode
+"@
+$ExistingProfile = if (Test-Path $ProfilePath) { Get-Content -Raw $ProfilePath -ErrorAction SilentlyContinue } else { "" }
+$Pattern = "(?s)\r?\n?# ASCII BOX SHELL INTEGRATION START $([regex]::Escape($Mode)).*?# ASCII BOX SHELL INTEGRATION END $([regex]::Escape($Mode))\r?\n?"
+$NextProfile = [regex]::Replace($ExistingProfile, $Pattern, "`n")
+[System.IO.File]::WriteAllText($ProfilePath, $NextProfile.TrimEnd() + $FunctionBlock + "`n")
+Invoke-Expression $FunctionBlock
+Write-Host "Updated $Mode shell integration in $ProfilePath."
+
+Write-Host "Installed $Mode to $Target"
+$UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+if (($UserPath -split ";") -notcontains $InstallDir) {
+  [Environment]::SetEnvironmentVariable("Path", "$UserPath;$InstallDir", "User")
+  $env:Path = "$env:Path;$InstallDir"
+  Write-Host "Added $InstallDir to your user PATH."
+  Write-Host "Open a new PowerShell/CMD window, then run: $Mode onboard"
+} else {
+  Write-Host "$InstallDir is already on your user PATH."
+  Write-Host "Run: $Mode onboard"
+}
+Write-Host "For this terminal only, you can also run:"
+Write-Host ('  $env:Path = "' + $InstallDir + ';" + $env:Path')
+Write-Host "  $Mode onboard"
+Write-Host ""
+if (-not (Test-Path $Target)) {
+  # Defender can also quarantine the binary after it lands on disk.
+  Write-Host $DefenderHelp
+  throw "Install aborted: $Target was removed after install."
+}
+& $Target onboard
+
+=== CLI download baseline + channel matrix ===
+--- channel=ascii-prod
+FINAL_HTTP=200 FINAL_URL=https://release-assets.githubusercontent.com/github-production-release-asset/1102360720/6edfffdd-a12b-4ea4-9bb1-6ee4bded8181?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-08-21T22%3A08%3A29Z&rscd=attachment%3B+filename%3Dbox-linux-x64&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-08-21T21%3A07%3A32Z&ske=2026-08-21T22%3A08%3A29Z&sks=b&skv=2018-11-09&sig=NiI%2FM%2Bg11wjt12Qf4spct713W%2BSTugk3XTLgI4VidAM%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc4NzM0Nzk0NiwibmJmIjoxNzg3MzQ3NjQ2LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.P0JWoMqVrAn5h8hY1KtoIiUMNECYiLVE6kTz6m_Jpro&response-content-disposition=attachment%3B%20filename%3Dbox-linux-x64&response-content-type=application%2Foctet-stream BYTES=7356168
+HTTP/2 302 
+location: https://github.com/ariana-dot-dev/agent-server/releases/download/box-cli-v0.1.176-ascii-prod1/box-linux-x64
+content-length: 0
+HTTP/2 302 
+content-type: text/html; charset=utf-8
+location: https://release-assets.githubusercontent.com/github-production-release-asset/1102360720/6edfffdd-a12b-4ea4-9bb1-6ee4bded8181?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-08-21T22%3A08%3A29Z&rscd=attachment%3B+filename%3Dbox-linux-x64&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-08-21T21%3A07%3A32Z&ske=2026-08-21T22%3A08%3A29Z&sks=b&skv=2018-11-09&sig=NiI%2FM%2Bg11wjt12Qf4spct713W%2BSTugk3XTLgI4VidAM%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc4NzM0Nzk0NiwibmJmIjoxNzg3MzQ3NjQ2LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.P0JWoMqVrAn5h8hY1KtoIiUMNECYiLVE6kTz6m_Jpro&response-content-disposition=attachment%3B%20filename%3Dbox-linux-x64&response-content-type=application%2Foctet-stream
+cache-control: no-cache
+x-frame-options: deny
+x-content-type-options: nosniff
+x-xss-protection: 0
+server: github.com
+content-length: 0
+x-github-request-id: 0941:2E8C39:AF6E0:EC8E9:6A88C31A
+x-github-edge-region: iad
+HTTP/2 200 
+etag: "0x8DEFEF8D4CB033D"
+server: Windows-Azure-Blob/1.0 Microsoft-HTTPAPI/2.0
+x-ms-request-id: 38515b60-401e-0049-2de1-30a3be000000
+x-ms-version: 2018-11-09
+x-ms-creation-time: Thu, 20 Aug 2026 20:23:00 GMT
+x-ms-blob-content-md5: h8VpxeZjXIK/4TrglKk2NA==
+x-ms-lease-status: unlocked
+x-ms-lease-state: available
+x-ms-blob-type: BlockBlob
+x-ms-server-encrypted: true
+x-ms-access-tier: Hot
+x-ms-access-tier-inferred: true
+x-served-by: cache-iad-kiad7000083-IAD
+x-cache: HIT
+x-cache-hits: 1
+x-timer: S1787347739.800387,VS0,VE20
+content-type: application/octet-stream
+content-length: 7356168
+/tmp/box-ascii-prod: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), static-pie linked, BuildID[sha1]=544e2a6272b7b20a765bc60ca242c6825e981ebd, not stripped
+--- channel=ascii-staging
+FINAL_HTTP=404 FINAL_URL=https://ascii.dev/api/box/cli/download?platform=linux-x64&channel=ascii-staging BYTES=171
+HTTP/2 404 
+content-type: application/json;charset=utf-8
+content-length: 171
+/tmp/box-ascii-staging: JSON text data
+[non-executable body prefix]
+{"channel":"ascii-staging","platform":"linux-x64","error":"No Box CLI release found for channel ascii-staging","detail":"No matching Box CLI tags found for ascii-staging"}
+--- channel=ascii-dev
+FINAL_HTTP=404 FINAL_URL=https://ascii.dev/api/box/cli/download?platform=linux-x64&channel=ascii-dev BYTES=159
+HTTP/2 404 
+content-type: application/json;charset=utf-8
+content-length: 159
+/tmp/box-ascii-dev: JSON text data
+[non-executable body prefix]
+{"channel":"ascii-dev","platform":"linux-x64","error":"No Box CLI release found for channel ascii-dev","detail":"No matching Box CLI tags found for ascii-dev"}
+--- channel=staging
+FINAL_HTTP=200 FINAL_URL=https://release-assets.githubusercontent.com/github-production-release-asset/1102360720/058275f2-0dd6-40d5-bc7e-acaa73538f11?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-08-21T22%3A09%3A52Z&rscd=attachment%3B+filename%3Dbox-linux-x64&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-08-21T21%3A09%3A19Z&ske=2026-08-21T22%3A09%3A52Z&sks=b&skv=2018-11-09&sig=lNDElyloV37ybcNLFJx2XcZ22Z4unsrw5ulU1Bbq3%2FE%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc4NzM0ODA0MCwibmJmIjoxNzg3MzQ3NzQwLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.Cb6RLTThk1WQaEGdhdzYE8KThS1F3MshQuTOZ9uzM7A&response-content-disposition=attachment%3B%20filename%3Dbox-linux-x64&response-content-type=application%2Foctet-stream BYTES=7433216
+HTTP/2 302 
+location: https://github.com/ariana-dot-dev/agent-server/releases/download/box-cli-v0.1.178-staging1/box-linux-x64
+content-length: 0
+HTTP/2 302 
+content-type: text/html; charset=utf-8
+location: https://release-assets.githubusercontent.com/github-production-release-asset/1102360720/058275f2-0dd6-40d5-bc7e-acaa73538f11?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-08-21T22%3A09%3A52Z&rscd=attachment%3B+filename%3Dbox-linux-x64&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-08-21T21%3A09%3A19Z&ske=2026-08-21T22%3A09%3A52Z&sks=b&skv=2018-11-09&sig=lNDElyloV37ybcNLFJx2XcZ22Z4unsrw5ulU1Bbq3%2FE%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc4NzM0ODA0MCwibmJmIjoxNzg3MzQ3NzQwLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.Cb6RLTThk1WQaEGdhdzYE8KThS1F3MshQuTOZ9uzM7A&response-content-disposition=attachment%3B%20filename%3Dbox-linux-x64&response-content-type=application%2Foctet-stream
+cache-control: no-cache
+x-frame-options: deny
+x-content-type-options: nosniff
+x-xss-protection: 0
+server: github.com
+content-length: 0
+x-github-request-id: 0942:2FD0F6:B1A53:EC6D0:6A88C31C
+x-github-edge-region: iad
+HTTP/2 200 
+etag: "0x8DEFFB659270837"
+server: Windows-Azure-Blob/1.0 Microsoft-HTTPAPI/2.0
+x-ms-request-id: c6358aaf-a01e-0023-6faf-317b96000000
+x-ms-version: 2018-11-09
+x-ms-creation-time: Fri, 21 Aug 2026 18:59:37 GMT
+x-ms-blob-content-md5: zvT/GueI0kGTeStHVvaCyw==
+x-ms-lease-status: unlocked
+x-ms-lease-state: available
+x-ms-blob-type: BlockBlob
+x-ms-server-encrypted: true
+x-ms-access-tier: Hot
+x-ms-access-tier-inferred: true
+x-served-by: cache-iad-kcgs7200062-IAD
+x-cache: HIT
+x-cache-hits: 1
+x-timer: S1787347741.795484,VS0,VE15
+content-type: application/octet-stream
+content-length: 7433216
+/tmp/box-staging: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), static-pie linked, BuildID[sha1]=325eb9ef50416b1b7a795abb6220499c1bf03b89, not stripped
+--- channel=dev
+FINAL_HTTP=404 FINAL_URL=https://ascii.dev/api/box/cli/download?platform=linux-x64&channel=dev BYTES=141
+HTTP/2 404 
+content-type: application/json;charset=utf-8
+content-length: 141
+/tmp/box-dev: JSON text data
+[non-executable body prefix]
+{"channel":"dev","platform":"linux-x64","error":"No Box CLI release found for channel dev","detail":"No matching Box CLI tags found for dev"}
+--- channel=invalid-canary
+FINAL_HTTP=404 FINAL_URL=https://ascii.dev/api/box/cli/download?platform=linux-x64&channel=invalid-canary BYTES=174
+HTTP/2 404 
+content-type: application/json;charset=utf-8
+content-length: 174
+/tmp/box-invalid-canary: JSON text data
+[non-executable body prefix]
+{"channel":"invalid-canary","platform":"linux-x64","error":"No Box CLI release found for channel invalid-canary","detail":"No matching Box CLI tags found for invalid-canary"}
+=== CLI download input-boundary probes ===
+--- platform=invalid-canary&channel=ascii-prod
+HTTP=404 BYTES=107 TYPE=application/json;charset=utf-8
+HTTP/2 404 
+content-type: application/json;charset=utf-8
+content-length: 107
+[body fingerprint]
+ 7b 22 63 68 61 6e 6e 65 6c 22 3a 22 61 73 63 69
+ 69 2d 70 72 6f 64 22 2c 22 70 6c 61 74 66 6f 72
+ 6d 22 3a 22 69 6e 76 61 6c 69 64 2d 63 61 6e 61
+ 72 79 22 2c 22 65 72 72 6f 72 22 3a 22 55 6e 73
+ 75 70 70 6f 72 74 65 64 20 42 6f 78 20 43 4c 49
+ 20 70 6c 61 74 66 6f 72 6d 3a 20 69 6e 76 61 6c
+ 69 64 2d 63 61 6e 61 72 79 22 7d
+--- platform=..%2F..%2F..%2F..%2Fetc%2Fhostname&channel=ascii-prod
+HTTP=404 BYTES=127 TYPE=application/json;charset=utf-8
+HTTP/2 404 
+content-type: application/json;charset=utf-8
+content-length: 127
+[body fingerprint]
+ 7b 22 63 68 61 6e 6e 65 6c 22 3a 22 61 73 63 69
+ 69 2d 70 72 6f 64 22 2c 22 70 6c 61 74 66 6f 72
+ 6d 22 3a 22 2e 2e 2f 2e 2e 2f 2e 2e 2f 2e 2e 2f
+ 65 74 63 2f 68 6f 73 74 6e 61 6d 65 22 2c 22 65
+ 72 72 6f 72 22 3a 22 55 6e 73 75 70 70 6f 72 74
+ 65 64 20 42 6f 78 20 43 4c 49 20 70 6c 61 74 66
+ 6f 72 6d 3a 20 2e 2e 2f 2e 2e 2f 2e 2e 2f 2e 2e
+ 2f 65 74 63 2f 68 6f 73 74 6e 61 6d 65 22 7d
+--- platform=linux-x64&channel=..%2F..%2F..%2F..%2Fetc%2Fhostname
+HTTP=404 BYTES=204 TYPE=application/json;charset=utf-8
+HTTP/2 404 
+content-type: application/json;charset=utf-8
+content-length: 204
+[body fingerprint]
+ 7b 22 63 68 61 6e 6e 65 6c 22 3a 22 2e 2e 2f 2e
+ 2e 2f 2e 2e 2f 2e 2e 2f 65 74 63 2f 68 6f 73 74
+ 6e 61 6d 65 22 2c 22 70 6c 61 74 66 6f 72 6d 22
+ 3a 22 6c 69 6e 75 78 2d 78 36 34 22 2c 22 65 72
+ 72 6f 72 22 3a 22 4e 6f 20 42 6f 78 20 43 4c 49
+ 20 72 65 6c 65 61 73 65 20 66 6f 75 6e 64 20 66
+ 6f 72 20 63 68 61 6e 6e 65 6c 20 2e 2e 2f 2e 2e
+ 2f 2e 2e 2f 2e 2e 2f 65 74 63 2f 68 6f 73 74 6e
+ 61 6d 65 22 2c 22 64 65 74 61 69 6c 22 3a 22 4e
+ 6f 20 6d 61 74 63 68 69 6e 67 20 42 6f 78 20 43
+ 4c 49 20 74 61 67 73 20 66 6f 75 6e 64 20 66 6f
+ 72 20 2e 2e 2f 2e 2e 2f 2e 2e 2f 2e 2e 2f 65 74
+ 63 2f 68 6f 73 74 6e 61 6d 65 22 7d
+--- platform=linux-x64&channel=%2e%2e%252f%2e%2e%252fcanary
+HTTP=404 BYTES=180 TYPE=application/json;charset=utf-8
+HTTP/2 404 
+content-type: application/json;charset=utf-8
+content-length: 180
+[body fingerprint]
+ 7b 22 63 68 61 6e 6e 65 6c 22 3a 22 2e 2e 25 32
+ 66 2e 2e 25 32 66 63 61 6e 61 72 79 22 2c 22 70
+ 6c 61 74 66 6f 72 6d 22 3a 22 6c 69 6e 75 78 2d
+ 78 36 34 22 2c 22 65 72 72 6f 72 22 3a 22 4e 6f
+ 20 42 6f 78 20 43 4c 49 20 72 65 6c 65 61 73 65
+ 20 66 6f 75 6e 64 20 66 6f 72 20 63 68 61 6e 6e
+ 65 6c 20 2e 2e 25 32 66 2e 2e 25 32 66 63 61 6e
+ 61 72 79 22 2c 22 64 65 74 61 69 6c 22 3a 22 4e
+ 6f 20 6d 61 74 63 68 69 6e 67 20 42 6f 78 20 43
+ 4c 49 20 74 61 67 73 20 66 6f 75 6e 64 20 66 6f
+ 72 20 2e 2e 25 32 66 2e 2e 25 32 66 63 61 6e 61
+ 72 79 22 7d
+=== current prod CLI ===
+box 0.1.176-ascii-prod1
+Ascii Box CLI
+
+Usage: box-cli [OPTIONS] [COMMAND]
+
+Commands:
+  onboard         Sign in, choose repositories, and start the Box plan
+  login           Sign in with a Box token, GitHub, Google, or email
+  logout          Revoke this device's session and clear the stored token
+  api-key         Manage API keys for SDKs and programmatic use
+  webhook         Manage Box lifecycle webhooks
+  env             Manage named box environments: repos, env vars, secret files, safety toggles
+  new             Create a new Box sandbox
+  team            Show or switch your team billing scope (sticky: applies to every `box new`)
+  info            Show details for one Box
+  list            List your Boxes
+  extend          Extend or set how long a Box stays on
+  delete          Permanently delete a Box and all of its data
+  deletion        Inspect an asynchronous data deletion operation
+  stop            Stop a running Box and snapshot it for resume/fork
+  resume          Resume a stopped Box from its latest snapshot
+  prompt          Send a prompt to Codex or Claude inside a Box
+  interrupt       Stop the agent running in a Box
+  events          Stream a Box's agent chat events (prompts, responses, git checkpoints). A Box that was never prompted returns nothing; use `box info` for state
+  limits          Show your plan and usage limits
+  fork            Fork a Box from its latest snapshot
+  ssh             Open an SSH session into a Box, or run a command non-interactively
+  exec            Run a command in a Box over the Box API (no SSH), optionally in the background
+  host            Expose a Box port on a stable HTTPS URL
+  desktop         Open the Box desktop or browser preview URL
+  scp             Copy files to or from a Box over scp
+  forward         Forward a TCP port from a Box to your machine
+  dashboard       Open the Box dashboard in a browser
+  status          Show API health, account, plan, and CLI configuration
+  data-retention  Show or enable delete-on-stop data retention
+  snapshots       List filesystem snapshots taken of your Boxes
+  snapshot        Save a Box's state under a name, or inspect/download snapshots
+  self-update     Check for and install the latest CLI release for this channel
+  completions     Print a shell completion script (box IDs included) for bash, zsh, fish, or powershell
+  help            Print this message or the help of the given subcommand(s)
+
+Options:
+      --api-url <API_URL>  [env: BOX_API_URL=]
+      --json               Force machine-readable JSON/JSONL output
+      --no-update          Skip the automatic CLI update check
+  -h, --help               Print help
+  -V, --version            Print version
+
+Docs: https://docs.ascii.dev/box/cli-reference
+Programmatic use: https://docs.ascii.dev/box/use-in-code
+Secrets: https://box.ascii.dev/box/dashboard?tab=secrets
+--- box onboard --help
+Sign in, choose repositories, and start the Box plan
+
+Usage: box-cli onboard [OPTIONS]
+
+Options:
+      --api-url <API_URL>  [env: BOX_API_URL=]
+      --google             Use Google sign-in during onboarding.
+      --email <EMAIL>      Use email code sign-in during onboarding.
+      --json               Force machine-readable JSON/JSONL output
+      --no-update          Skip the automatic CLI update check
+  -h, --help               Print help
+--- box auth --help
+error: unrecognized subcommand 'auth'
+
+Usage: box-cli [OPTIONS] [COMMAND]
+
+For more information, try '--help'.
+--- box new --help
+Create a new Box sandbox
+
+Usage: box-cli new [OPTIONS]
+
+Options:
+      --api-url <API_URL>            [env: BOX_API_URL=]
+      --ttl <TTL>                    Lifetime in seconds before the Box is eligible for cleanup.
+      --json                         Force machine-readable JSON/JSONL output
+      --no-auto-stop                 Disable automatic stop. The Box runs until you stop it.
+  -e, --env <KEY=VALUE>              Per-box environment variable. Repeat for multiple values. Overrides dashboard variables with the same name.
+      --no-update                    Skip the automatic CLI update check
+      --no-env                       Create a box with none of your account's stored secrets, for boxes you give to your own users. SSH, desktop, snapshots, and public URLs still work.
+      --environment <NAME>           Named environment to start from (repos, secrets, credentials). Defaults to your default environment ('base').
+      --type <TYPE>                  Machine size: small (2 vCPU, 4GB, half rate), default (4 vCPU, 8GB), or large (8 vCPU, 16GB, 2x rate). Default: default.
+      --setup-file <PATH>            Shell script file to run on the Box after it is ready (max 64KB). Runs in the background; watch `setupStatus` in box info for the result.
+      --machine-provider <PROVIDER>  Admins only: pin the Box to an exact machine provider: hetzner, cloudstack, or baremetal.
+      --from <NAME>                  Create the Box from a named snapshot (saved with `box snapshot <id> <name>`).
+      --team <TEAM_ID>               Create the Box in a team's context: it runs on the team's shared balance instead of yours. See `box team list`.
+      --personal                     Bill this Box to your personal account even when a team scope is active (`box team switch`).
+  -h, --help                         Print help
+--- box get --help
+error: unrecognized subcommand 'get'
+
+Usage: box-cli [OPTIONS] [COMMAND]
+
+For more information, try '--help'.
+--- box list --help
+List your Boxes
+
+Usage: box-cli list [OPTIONS]
+
+Options:
+      --api-url <API_URL>  [env: BOX_API_URL=]
+      --filter <GROUPS>    State groups to include: r=up/running, s=stopped, p=pending, t=stopping, e=error. Combine letters, e.g. sr. Default: r.
+      --all                Include every state (same as --filter rspte).
+      --json               Force machine-readable JSON/JSONL output
+      --no-update          Skip the automatic CLI update check
+  -h, --help               Print help
+--- box fork --help
+Fork a Box from its latest snapshot
+
+Usage: box-cli fork [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Box ID.
+
+Options:
+      --api-url <API_URL>            [env: BOX_API_URL=]
+  -e, --env <KEY=VALUE>              Per-box environment variable for the fork. Repeat for multiple values. Overrides dashboard variables with the same name. Replaces the per-box variables the fork would inherit from the source box.
+      --json                         Force machine-readable JSON/JSONL output
+      --no-env                       Fork into a no-env box: drop all of your account's stored secrets and scrub any inherited from the source snapshot. The fork stays no-env.
+      --environment <NAME>           Re-pin the fork to a named environment's latest version. Omit to inherit the source box's environment.
+      --no-update                    Skip the automatic CLI update check
+      --type <TYPE>                  Fork onto a different machine size: small, default or large. Omit to inherit the source box's size. Shrinking is refused if the box's data does not fit.
+      --ttl <TTL>                    Lifetime in seconds for the fork. Omit for 1 hour; the fork does not inherit the source Box's setting.
+      --no-auto-stop                 Disable automatic stop. The fork runs until you stop it.
+      --machine-provider <PROVIDER>  Admins only: fork onto an exact machine provider: hetzner, cloudstack, or baremetal. Omit to inherit the source box's provider.
+  -h, --help                         Print help
+--- box snapshot --help
+Save a Box's state under a name, or inspect/download snapshots
+
+Usage: box-cli snapshot [OPTIONS] [ID] [NAME]
+       box-cli snapshot <COMMAND>
+
+Commands:
+  latest  Show the most recent snapshot for a Box
+  tree    Print the file tree captured in a snapshot
+  pull    Download a snapshot and reassemble it into a local directory
+  delete  Permanently delete one ordinary filesystem snapshot by snapshot ID
+  rm      Remove a named snapshot
+  help    Print this message or the help of the given subcommand(s)
+
+Arguments:
+  [ID]    Box ID, or "current"/"self", to save a named snapshot from.
+  [NAME]  Name to save the snapshot under. Reuse a name to replace it.
+
+Options:
+      --api-url <API_URL>  [env: BOX_API_URL=]
+      --json               Force machine-readable JSON/JSONL output
+      --no-update          Skip the automatic CLI update check
+  -h, --help               Print help
+--- box desktop --help
+Open the Box desktop or browser preview URL
+
+Usage: box-cli desktop [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Box ID.
+
+Options:
+      --api-url <API_URL>  [env: BOX_API_URL=]
+      --vnc                Use VNC streaming (more stable on poor/locked-down networks).
+      --json               Force machine-readable JSON/JSONL output
+      --public             With --vnc, return a URL that does not require an access token.
+      --no-update          Skip the automatic CLI update check
+  -h, --help               Print help
+--- box env --help
+Manage named box environments: repos, env vars, secret files, safety toggles
+
+Usage: box-cli env [OPTIONS] <COMMAND>
+
+Commands:
+  list      List your environments: default marker, latest version, live boxes per version
+  info      Show one environment in full: toggles, variables, secret files, repos, versions
+  new       Create a new named environment. It starts empty with everything injected by default
+  rename    Rename an environment. Boxes stay pinned to their versions
+  default   Make an environment the default for new boxes
+  rm        Delete an environment. Boxes pinned to its versions keep running; new boxes can no longer use it
+  set       Change what the environment injects into boxes. Mints a new version; running boxes are NOT touched until you `env upgrade`
+  set-var   Set one environment variable. Mints a new version
+  rm-var    Remove one environment variable. Mints a new version
+  set-file  Write one secret file (contents from --from or stdin). Mints a new version
+  rm-file   Remove one secret file. Mints a new version
+  add-repo  Add (or re-branch) a repo in the environment. Mints a new version
+  rm-repo   Remove a repo from the environment. Mints a new version
+  upgrade   Re-pin this environment's boxes to its latest version: live boxes get the new config pushed now (withheld secrets scrubbed first), stopped ones pick it up at resume
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+      --api-url <API_URL>  [env: BOX_API_URL=]
+      --json               Force machine-readable JSON/JSONL output
+      --no-update          Skip the automatic CLI update check
+  -h, --help               Print help
+--- box ssh --help
+Open an SSH session into a Box, or run a command non-interactively
+
+Usage: box-cli ssh [OPTIONS] <ID> [COMMAND]...
+
+Arguments:
+  <ID>          Box ID.
+  [COMMAND]...  Command to run. Omit for an interactive shell.
+
+Options:
+      --api-url <API_URL>  [env: BOX_API_URL=]
+      --json               Force machine-readable JSON/JSONL output
+      --no-update          Skip the automatic CLI update check
+  -h, --help               Print help
+--- box scp --help
+Copy files to or from a Box over scp
+
+Usage: box-cli scp [OPTIONS] <SOURCE> <DESTINATION>
+
+Arguments:
+  <SOURCE>       Source path. Use <box-id>:<path> for remote paths.
+  <DESTINATION>  Destination path. Use <box-id>:<path> for remote paths.
+
+Options:
+      --api-url <API_URL>  [env: BOX_API_URL=]
+  -r, --recursive          Copy directories recursively.
+      --json               Force machine-readable JSON/JSONL output
+      --no-update          Skip the automatic CLI update check
+  -h, --help               Print help
+--- box stop --help
+Stop a running Box and snapshot it for resume/fork
+
+Usage: box-cli stop [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Box ID.
+
+Options:
+      --api-url <API_URL>  [env: BOX_API_URL=]
+      --force              Stop even if the Box cannot be snapshotted. Everything written since the last successful snapshot is LOST. Only use this after a stop has already failed.
+      --json               Force machine-readable JSON/JSONL output
+      --no-update          Skip the automatic CLI update check
+  -h, --help               Print help
+--- box resume --help
+Resume a stopped Box from its latest snapshot
+
+Usage: box-cli resume [OPTIONS] <ID>
+
+Arguments:
+  <ID>  Box ID.
+
+Options:
+      --api-url <API_URL>            [env: BOX_API_URL=]
+  -e, --env <KEY=VALUE>              Per-box environment variable. Repeat for multiple values. Overrides dashboard variables with the same name. Replaces the box's current per-box variables.
+      --json                         Force machine-readable JSON/JSONL output
+      --no-env                       Resume into a no-env box: drop all of your account's stored secrets and scrub any inherited from the snapshot. One-way; the box stays no-env after.
+      --environment <NAME>           Re-pin the box to a named environment's latest version before resuming.
+      --no-update                    Skip the automatic CLI update check
+      --type <TYPE>                  Resume onto a different machine size: small, default or large. Omit to keep the box's current size. Shrinking is refused if the box's data does not fit.
+      --ttl <TTL>                    Set the resumed Box's lifetime in seconds. Omit to keep the Box's current setting.
+      --no-auto-stop                 Disable automatic stop. The Box runs until you stop it.
+      --machine-provider <PROVIDER>  Admins only: resume the Box onto an exact machine provider: hetzner, cloudstack, or baremetal. Sticky until changed on a later resume.
+  -h, --help                         Print help
+--- box host --help
+Expose a Box port on a stable HTTPS URL
+
+Usage: box-cli host [OPTIONS] <ID> <PORT>
+
+Arguments:
+  <ID>    Box ID.
+  <PORT>  Port inside the Box to expose.
+
+Options:
+      --api-url <API_URL>  [env: BOX_API_URL=]
+      --public             Return an ungated public URL.
+      --json               Force machine-readable JSON/JSONL output
+      --private            Return a token-gated URL. This is the default.
+      --no-update          Skip the automatic CLI update check
+      --title <TITLE>      Display title for the hosted port.
+  -h, --help               Print help
+=== CLI endpoint/security strings ===
+/api/box/account/data-retentionenable
+/api/box/api-keys/
+/api/box/auth/logoutnot
+/api/box/billing/checkoutcheckout
+/api/box/boxes/
+/api/box/boxes?limit=
+/api/box/boxes?limit=200current
+/api/box/boxesbilling:
+/api/box/cli/login/poll/
+/api/box/cli/login/start
+/api/box/cli/version?platform=
+/api/box/dashboard/bootstrap
+/api/box/deletion-operations/
+/api/box/environments/
+/api/box/environmentsenvironments
+/api/box/limitslimitsyou
+/api/box/meactivesigned
+/api/box/named-snapshots/
+/api/box/named-snapshotsunknown
+/api/box/reposdeletion
+/api/box/snapshots/
+/api/box/snapshots?limit=200
+/api/box/snapshotssnapshotsMore
+/api/box/teamsteams/api/box/api-keysapiKeysNo
+/api/box/webhooks/
+/api/box/webhooksNo
+Authorization
+Bearer
+DESKTOP
+Desktop
+INTERNAL
+Internal
+SNAPSHOT
+STAGING
+Snapshot
+_TOKEN
+_token
+authorization
+bearer
+desktop
+http://localhost:3000https://staging.ascii.devpending
+https://ascii.dev
+https://ascii.devBOX_STAGING_API_URLBOX_DEV_API_URLstagingdevforwardDocs:
+https://box.ascii.dev/box/dashboard?tab=secretslogoutapi-keyttlno_auto_stopno_envmachine_typebeta_bare_metalsetup_filefilterallhoursdeleteresumefollowtimeoutdetachdesktoprecursivesourcedestinationremotelocaldata-retentionself-updatecompletionsshellidssnapshot-idsa
+https://box.ascii.dev/box/dashboarddeletion
+https://docs.ascii.dev/box/cli-reference
+https://docs.ascii.dev/box/cli-referencehttps://docs.ascii.dev/box/use-in-codehttps://box.ascii.dev/box/dashboard?tab=environmenthttps://docs.ascii.dev-oBatchMode=yesConnectTimeout=15ServerAliveInterval=10ServerAliveCountMax=6remote
+https://docs.ascii.dev/box/use-in-code
+https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eofinternal
+https://github.com/clap-rs/clap/issues
+https://github.com/clap-rs/clap/issuesa
+https://github.com/clap-rs/clap/issuesfalseTryFromIntErrora
+https://github.com/clap-rs/clap/issuesinternal
+internal
+snapshot
+staging
+=== public web hidden-route fingerprints ===
+--- https://box.ascii.dev/wallet/hello-world
+HTTP=200 FINAL=https://box.ascii.dev/wallet/hello-world BYTES=163378
+HTTP/2 200 
+cache-control: public, max-age=3600
+content-type: application/vnd.apple.pkpass
+--- https://box.ascii.dev/dashboard
+HTTP=200 FINAL=https://box.ascii.dev/box/dashboard BYTES=639
+HTTP/2 302 
+location: /box/dashboard?
+server: Caddy
+HTTP/2 200 
+cache-control: no-cache
+content-type: text/html; charset=utf-8
+dashboard/icon.svg
+dashboard
+dashboard/assets/index-c7ldgut7.js
+dashboard/assets/index-qnHRu4WP.css
+--- https://box.ascii.dev/box/dashboard
+HTTP=200 FINAL=https://box.ascii.dev/box/dashboard BYTES=639
+HTTP/2 200 
+cache-control: no-cache
+content-type: text/html; charset=utf-8
+dashboard/icon.svg
+dashboard
+dashboard/assets/index-c7ldgut7.js
+dashboard/assets/index-qnHRu4WP.css
+=== urlscan discovery of ascii hosted/desktop names ===
+alas-zippy-eunuch-desktop.on.ascii.dev
+alas-zippy-eunuch.on.ascii.dev
+alphyl-curdy-unlet-desktop.on.ascii.dev
+amatol-spite-wamble.on.ascii.dev
+angle-karsts-mead-desktop.on.ascii.dev
+angle-karsts-mead.on.ascii.dev
+atman-foyers-egests.on.ascii.dev
+basts-began-tires-desktop.on.ascii.dev
+basts-began-tires.on.ascii.dev
+bedu-sepia-curter-desktop.on.ascii.dev
+bedu-sepia-curter.on.ascii.dev
+birl-ziram-find-desktop.on.ascii.dev
+boosts-jurors-tanist-5173.on.ascii.dev
+crated-gybing-lick-desktop.on.ascii.dev
+crated-gybing-lick.on.ascii.dev
+embank-stoper-paten-desktop.on.ascii.dev
+embank-stoper-paten.on.ascii.dev
+enoki-tephra-fifing.on.ascii.dev
+feoff-binocs-alphas-desktop.on.ascii.dev
+fetas-sixte-argal-6080.on.ascii.dev
+fetas-sixte-argal-desktop.on.ascii.dev
+fetas-sixte-argal.on.ascii.dev
+folles-azoted-aeons-desktop.on.ascii.dev
+folles-azoted-aeons.on.ascii.dev
+foodie-swan-zips-desktop.on.ascii.dev
+foodie-swan-zips.on.ascii.dev
+gangue-gulled-skeigh-8765.on.ascii.dev
+gangue-gulled-skeigh-desktop.on.ascii.dev
+gangue-gulled-skeigh.on.ascii.dev
+gentry-versts-amines-desktop.on.ascii.dev
+=== desktop auth handshake probes (no application data) ===
+alas-zippy-eunuch-desktop.on.ascii.dev
+alphyl-curdy-unlet-desktop.on.ascii.dev
+angle-karsts-mead-desktop.on.ascii.dev
+basts-began-tires-desktop.on.ascii.dev
+bedu-sepia-curter-desktop.on.ascii.dev
+birl-ziram-find-desktop.on.ascii.dev
+crated-gybing-lick-desktop.on.ascii.dev
+embank-stoper-paten-desktop.on.ascii.dev
+feoff-binocs-alphas-desktop.on.ascii.dev
+fetas-sixte-argal-desktop.on.ascii.dev
+### alas-zippy-eunuch-desktop.on.ascii.dev
+GET / HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html?_token=invalid-canary HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+--- WSS alas-zippy-eunuch-desktop.on.ascii.dev/websockify
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:09 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+--- WSS alas-zippy-eunuch-desktop.on.ascii.dev/websockify?_token=invalid-canary
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:09 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+### alphyl-curdy-unlet-desktop.on.ascii.dev
+GET / HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html?_token=invalid-canary HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+--- WSS alphyl-curdy-unlet-desktop.on.ascii.dev/websockify
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:11 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+--- WSS alphyl-curdy-unlet-desktop.on.ascii.dev/websockify?_token=invalid-canary
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:11 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+### angle-karsts-mead-desktop.on.ascii.dev
+GET / HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html?_token=invalid-canary HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+--- WSS angle-karsts-mead-desktop.on.ascii.dev/websockify
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:13 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+--- WSS angle-karsts-mead-desktop.on.ascii.dev/websockify?_token=invalid-canary
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:13 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+### basts-began-tires-desktop.on.ascii.dev
+GET / HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html?_token=invalid-canary HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+--- WSS basts-began-tires-desktop.on.ascii.dev/websockify
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:15 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+--- WSS basts-began-tires-desktop.on.ascii.dev/websockify?_token=invalid-canary
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:15 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+### bedu-sepia-curter-desktop.on.ascii.dev
+GET / HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html?_token=invalid-canary HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+--- WSS bedu-sepia-curter-desktop.on.ascii.dev/websockify
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:17 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+--- WSS bedu-sepia-curter-desktop.on.ascii.dev/websockify?_token=invalid-canary
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:17 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+### birl-ziram-find-desktop.on.ascii.dev
+GET / HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html?_token=invalid-canary HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+--- WSS birl-ziram-find-desktop.on.ascii.dev/websockify
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:19 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+--- WSS birl-ziram-find-desktop.on.ascii.dev/websockify?_token=invalid-canary
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:19 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+### crated-gybing-lick-desktop.on.ascii.dev
+GET / HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html?_token=invalid-canary HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+--- WSS crated-gybing-lick-desktop.on.ascii.dev/websockify
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:21 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+--- WSS crated-gybing-lick-desktop.on.ascii.dev/websockify?_token=invalid-canary
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:21 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+### embank-stoper-paten-desktop.on.ascii.dev
+GET / HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html?_token=invalid-canary HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+--- WSS embank-stoper-paten-desktop.on.ascii.dev/websockify
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:22 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+--- WSS embank-stoper-paten-desktop.on.ascii.dev/websockify?_token=invalid-canary
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:23 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+### feoff-binocs-alphas-desktop.on.ascii.dev
+GET / HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+GET /vnc.html?_token=invalid-canary HTTP=404 REDIRECT= BYTES=25
+HTTP/2 404 
+x-content-type-options: nosniff
+--- WSS feoff-binocs-alphas-desktop.on.ascii.dev/websockify
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:24 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+--- WSS feoff-binocs-alphas-desktop.on.ascii.dev/websockify?_token=invalid-canary
+HTTP/1.1 404 Not Found
+Alt-Svc: h3=":443"; ma=2592000
+Content-Length: 25
+Content-Type: text/plain; charset=utf-8
+Date: Fri, 21 Aug 2026 21:29:25 GMT
+Via: 1.1 Caddy
+X-Content-Type-Options: nosniff
+
+STATUS=404 REDIRECT=
+=== authenticated self-account boundary tests, only if repo secret exists ===
