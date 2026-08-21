@@ -1,0 +1,53 @@
+name: Box agent release strings
+on:
+  push:
+    paths:
+      - '.github/workflows/box-agent-release-strings.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect public agent-server release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/box-agent && mkdir -p /tmp/box-agent/assets /tmp/box-agent/extract
+          curl -fsSL -H 'Accept: application/vnd.github+json' \
+            https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=10 \
+            -o /tmp/box-agent/releases.json
+          {
+            echo '=== public release metadata ==='
+            jq -r '.[] | [.tag_name,.published_at,(.assets|length)] | @tsv' /tmp/box-agent/releases.json
+            echo '=== public asset URLs ==='
+            jq -r '.[].assets[]? | [.name,.size,.browser_download_url] | @tsv' /tmp/box-agent/releases.json
+          } > box-agent-release-strings.txt
+          mapfile -t urls < <(jq -r '.[0].assets[]?.browser_download_url' /tmp/box-agent/releases.json)
+          i=0
+          for url in "${urls[@]}"; do
+            i=$((i+1))
+            name=$(basename "${url%%\?*}")
+            out="/tmp/box-agent/assets/$i-$name"
+            curl -fL --retry 2 "$url" -o "$out" || continue
+            chmod +x "$out" || true
+            strings -a -n 5 "$out" > "/tmp/box-agent/strings-$i.txt" || true
+            {
+              echo
+              echo "=== asset $name high-signal strings ==="
+              grep -Eai -C 3 'BOX_CLI_TOKEN|SERVICE_PREVIEW_TOKEN|ASCII_TOKEN|ASCII_API_URL|BOX_ID|169\.254|metadata|userdata|user-data|cloud-init|snapshot|signed.?url|desktop|host(port)?|scope|scoped|token|credential|authorization|bearer|api/box|localhost|127\.0\.0\.1|unix|socket|vsock|fuse|mount|ssh|agent|bootstrap|internal' "/tmp/box-agent/strings-$i.txt" | head -n 5000 || true
+            } >> box-agent-release-strings.txt
+          done
+          echo "Generated $(wc -l < box-agent-release-strings.txt) lines"
+      - name: Commit result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-agent-release-strings.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: capture Box agent release strings'
+          git push
