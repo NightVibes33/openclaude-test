@@ -1,0 +1,121 @@
+name: QEMU 48914 safe discriminator
+on:
+  push:
+    paths:
+      - '.github/workflows/qemu-48914-safe-discriminator.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install QEMU build deps
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build pkg-config libglib2.0-dev libpixman-1-dev python3-venv libfdt-dev zlib1g-dev >/dev/null
+      - name: Build and compare vulnerable/fixed QEMU safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          O="$GITHUB_WORKSPACE/qemu-48914-safe-discriminator.txt"
+          : > "$O"
+          for TAG in v11.0.1 v11.0.2; do
+            echo "===== $TAG =====" | tee -a "$O"
+            rm -rf /tmp/qemu-src
+            git clone -q --depth 1 --branch "$TAG" https://github.com/qemu/qemu.git /tmp/qemu-src
+            cd /tmp/qemu-src
+            python3 - <<'PY'
+from pathlib import Path
+p=Path('tests/qtest/virtio-blk-test.c')
+s=p.read_text()
+needle='    qvirtio_set_driver_ok(dev);\n\n'
+probe=r'''    qvirtio_set_driver_ok(dev);
+
+    /* Non-destructive CVE-2026-48914 discriminator.
+     * The vulnerable handler writes 4 bytes into an 8-byte SCSI in-header
+     * (still in-bounds) and returns UNSUPP. The fixed handler rejects the
+     * non-canonical 8-byte header before any write and returns IOERR.
+     */
+    {
+        QVirtioBlkReq scsi_req = {0};
+        uint64_t a_hdr, a_cmd, a_sense, a_inhdr, a_status;
+        uint32_t head, errors = 0xA5A5A5A5;
+        uint8_t st = 0xFF;
+        uint8_t cmd[6] = {0};
+        uint8_t sense[96] = {0};
+        uint8_t inhdr[8];
+
+        memset(inhdr, 0xA5, sizeof(inhdr));
+        scsi_req.type = VIRTIO_BLK_T_SCSI_CMD;
+        scsi_req.ioprio = 0;
+        scsi_req.sector = 0;
+        virtio_blk_fix_request(dev, &scsi_req);
+
+        a_hdr = guest_alloc(alloc, 16);
+        a_cmd = guest_alloc(alloc, sizeof(cmd));
+        a_sense = guest_alloc(alloc, sizeof(sense));
+        a_inhdr = guest_alloc(alloc, sizeof(inhdr));
+        a_status = guest_alloc(alloc, 1);
+        memwrite(a_hdr, &scsi_req, 16);
+        memwrite(a_cmd, cmd, sizeof(cmd));
+        memwrite(a_sense, sense, sizeof(sense));
+        memwrite(a_inhdr, inhdr, sizeof(inhdr));
+        memwrite(a_status, &st, 1);
+
+        head = qvirtqueue_add(qts, vq, a_hdr, 16, false, true);
+        qvirtqueue_add(qts, vq, a_cmd, sizeof(cmd), false, true);
+        qvirtqueue_add(qts, vq, a_sense, sizeof(sense), true, true);
+        qvirtqueue_add(qts, vq, a_inhdr, sizeof(inhdr), true, true);
+        qvirtqueue_add(qts, vq, a_status, 1, true, false);
+        qvirtqueue_kick(qts, dev, vq, head);
+        qvirtio_wait_used_elem(qts, dev, vq, head, NULL,
+                               QVIRTIO_BLK_TIMEOUT_US);
+        st = readb(a_status);
+        memread(a_inhdr, &errors, sizeof(errors));
+        g_print("SAFE_48914 status=%u errors=0x%08x\\n", st, errors);
+
+        guest_free(alloc, a_hdr);
+        guest_free(alloc, a_cmd);
+        guest_free(alloc, a_sense);
+        guest_free(alloc, a_inhdr);
+        guest_free(alloc, a_status);
+    }
+
+'''
+if needle not in s:
+    raise SystemExit('insertion point not found')
+s=s.replace(needle, probe, 1)
+p.write_text(s)
+PY
+            ./configure --target-list=x86_64-softmmu --disable-docs --disable-tools --disable-guest-agent --disable-werror > /tmp/config-$TAG.log 2>&1
+            ninja -C build qemu-system-x86_64 tests/qtest/virtio-blk-test > /tmp/build-$TAG.log 2>&1
+            set +e
+            QTEST_QEMU_BINARY="$PWD/build/qemu-system-x86_64" \
+              timeout 120 ./build/tests/qtest/virtio-blk-test --verbose > /tmp/run-$TAG.log 2>&1
+            rc=$?
+            set -e
+            echo "RC=$rc" | tee -a "$O"
+            grep -E 'SAFE_48914|ERROR|Bail out|not ok|ok ' /tmp/run-$TAG.log | head -n 200 | tee -a "$O" || true
+            echo | tee -a "$O"
+          done
+          {
+            echo '=== interpretation ==='
+            echo 'status=2 (UNSUPP) + errors=0x000000ff => vulnerable handler reached safely.'
+            echo 'status=1 (IOERR) + errors unchanged 0xa5a5a5a5 => size check present/fixed.'
+          } >> "$O"
+          cat "$O"
+      - name: Commit result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -f qemu-48914-safe-discriminator.txt ] || exit 0
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add qemu-48914-safe-discriminator.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: validate safe QEMU 48914 discriminator'
+          git push
