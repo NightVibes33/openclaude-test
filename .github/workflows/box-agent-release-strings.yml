@@ -60,8 +60,7 @@ jobs:
             {
               echo
               echo "=== SCRIPT DIFF $prev -> $curr ==="
-              diff -ruN \
-                --exclude='ascii-node-manager' --exclude='*.pyc' --exclude='manifest.json' --exclude='SHA256SUMS' \
+              diff -ruN --exclude='ascii-node-manager' --exclude='*.pyc' --exclude='manifest.json' --exclude='SHA256SUMS' \
                 "$root/extract/$prev" "$root/extract/$curr" || true
               if [ -f "$root/strings/$prev.txt" ] && [ -f "$root/strings/$curr.txt" ]; then
                 echo
@@ -73,8 +72,16 @@ jobs:
             } >> "$report"
           done
 
-          # Guest-agent releases are single binaries. Diff high-signal strings for the
-          # newest consecutive Linux x64 artifacts that are publicly downloadable.
+          # Preserve the newest publicly shipped source-like node-manager files so
+          # sibling security controls can be reviewed directly.
+          latest=${nmtags[$((${#nmtags[@]}-1))]}
+          rm -rf box-node-manager-latest
+          mkdir -p box-node-manager-latest
+          cp -a "$root/extract/$latest/bare-metal-node" box-node-manager-latest/
+          rm -rf box-node-manager-latest/bare-metal-node/__pycache__
+          find box-node-manager-latest -type f \( -name '*.pyc' -o -name 'ascii-node-manager' \) -delete
+          printf '%s\n' "$latest" > box-node-manager-latest/RELEASE_TAG
+
           mapfile -t gatags < <(jq -r '[.[] | select(.tag_name|startswith("agent-server-v"))] | sort_by(.published_at) | reverse | .[:6] | reverse[] | .tag_name' "$root/releases.json")
           for tag in "${gatags[@]}"; do
             url=$(jq -r --arg t "$tag" '.[] | select(.tag_name==$t) | .assets[]? | select(.name|test("(ascii|ariana)-agents-server-linux-x64$")) | .browser_download_url' "$root/releases.json" | head -1)
@@ -106,7 +113,7 @@ jobs:
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add box-release-patch-diff.txt
+          git add box-release-patch-diff.txt box-node-manager-latest
           git diff --cached --quiet && exit 0
-          git commit -m 'research: capture recent Box release patch diff'
+          git commit -m 'research: capture recent Box release patch diff and scripts'
           git push
