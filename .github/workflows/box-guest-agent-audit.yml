@@ -1,0 +1,60 @@
+name: Box guest agent audit
+on:
+  push:
+    paths:
+      - '.github/workflows/box-guest-agent-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate and inspect latest public agent-server release
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/ga && mkdir -p /tmp/ga/extract
+          curl -fsSL 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=100' -o /tmp/ga/releases.json
+          jq '[.[] | select(.tag_name|startswith("agent-server-v"))] | sort_by(.published_at) | last' /tmp/ga/releases.json > /tmp/ga/latest.json
+          {
+            echo '=== latest agent-server release ==='
+            jq -r '[.tag_name,.published_at,(.assets|length)] | @tsv' /tmp/ga/latest.json
+            echo '=== assets ==='
+            jq -r '.assets[]? | [.name,.size,.browser_download_url] | @tsv' /tmp/ga/latest.json
+          } > box-guest-agent-audit.txt
+          mapfile -t urls < <(jq -r '.assets[]?.browser_download_url' /tmp/ga/latest.json)
+          i=0
+          for url in "${urls[@]}"; do
+            i=$((i+1)); name=$(basename "${url%%\?*}"); out="/tmp/ga/$i-$name"
+            curl -fL --retry 2 "$url" -o "$out" || continue
+            mkdir -p "/tmp/ga/extract/$i"
+            case "$name" in
+              *.tar.gz|*.tgz) tar -xzf "$out" -C "/tmp/ga/extract/$i" || true ;;
+              *.zip) unzip -q "$out" -d "/tmp/ga/extract/$i" || true ;;
+              *) cp "$out" "/tmp/ga/extract/$i/$name" ;;
+            esac
+          done
+          {
+            echo; echo '=== extracted files ==='
+            find /tmp/ga/extract -type f -printf '%p\t%s bytes\n' | sort
+          } >> box-guest-agent-audit.txt
+          n=0
+          while IFS= read -r f; do
+            n=$((n+1)); strings -a -n 4 "$f" > "/tmp/ga/s$n" || true
+            {
+              echo; echo "===== $(basename "$f") ====="
+              grep -Eai -C 5 'BOX_CLI_TOKEN|SERVICE_PREVIEW_TOKEN|ASCII_TOKEN|ASCII_API_URL|BOX_ID|token|scop|bearer|authorization|credential|api/box|/boxes|snapshot|desktop|host(port)?|public.?url|gateway|capabil|localhost|127\.0\.0\.1|8911|ssh|websocket|wss://|https://|env|secret|no.?env|metadata|cloud|agent|internal|machine' "/tmp/ga/s$n" | head -n 12000 || true
+            } >> box-guest-agent-audit.txt
+          done < <(find /tmp/ga/extract -type f -size +1k -print)
+      - name: Commit audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-guest-agent-audit.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: record Box guest agent token audit'
+          git push
