@@ -1,0 +1,64 @@
+name: Box auth-boundary PR harness
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  guest-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Local guest-agent auth map
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/gaf && mkdir -p /tmp/gaf/work
+          tag=agent-server-v0.0.49-ascii-prod29
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-agents-server-linux-x64" -o /tmp/gaf/agent
+          chmod +x /tmp/gaf/agent
+          export MACHINE_ID=box-node-test-authfuzz SHARED_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef WORK_DIR=/tmp/gaf/work ASCII_PORT=18911 IS_SANDBOX=1 HOME=/tmp/gaf/work BACKEND_URL=http://127.0.0.1:9 BOX_CLI_API_URL=http://127.0.0.1:9
+          /tmp/gaf/agent >/tmp/gaf/server.log 2>&1 & echo $! >/tmp/gaf/pid
+          for i in $(seq 1 80); do curl -sS --max-time 1 http://127.0.0.1:18911/health >/dev/null 2>&1 && break; kill -0 "$(cat /tmp/gaf/pid)" 2>/dev/null || break; sleep .25; done
+          O=box-guest-agent-auth-map.txt
+          { echo "SHA256=$(sha256sum /tmp/gaf/agent|awk '{print $1}')"; echo '=== startup ==='; cat /tmp/gaf/server.log || true; echo '=== routes/auth strings ==='; strings -a -n 4 /tmp/gaf/agent | grep -Eai -C 2 'SHARED_KEY|shared.?key|unauthori|forbidden|bearer|authorization|websocket|terminal|shell|command|execute|pty|upload|download|snapshot|filesystem|/health|/api|/ws|/terminal|/exec|/files' | tail -n 7000 || true; } > "$O"
+          req(){ n="$1"; m="$2"; p="$3"; h="${4-}"; d="${5-}"; : >/tmp/gaf/body; a=(-sS --path-as-is --max-time 3 -o /tmp/gaf/body -w '%{http_code}' -X "$m" "http://127.0.0.1:18911$p"); [ -n "$h" ]&&a+=(-H "$h"); [ -n "$d" ]&&a+=(--data-binary "$d"); c=$(curl "${a[@]}" 2>/dev/null||printf 000); printf 'PROBE %-20s %-6s %-24s status=%s body=%s\n' "$n" "$m" "$p" "$c" "$(tr '\n\r' '  ' </tmp/gaf/body|head -c 260)" >> "$O"; }
+          for p in / /health /status /api /ws /terminal /shell /exec /execute /command /commands /files /file /upload /download /snapshot /snapshots /process /pty; do req "get-${p//\//_}" GET "$p"; done
+          for p in /exec /execute /command /commands /shell /files /file /upload /download /snapshot /snapshots /process /pty /api/exec /api/files /api/shell; do req "post-${p//\//_}" POST "$p" '' '{'; done
+          for h in 'Authorization: Bearer 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' 'X-Shared-Key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' 'X-API-Key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'; do req auth-root GET / "$h"; req auth-exec POST /exec "$h" '{'; done
+          cat "$O"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box-guest-agent-auth-map
+          path: box-guest-agent-auth-map.txt
+          if-no-files-found: warn
+  node-manager:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Local node-manager auth map
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nmf && mkdir -p /tmp/nmf/tls /tmp/nmf/state /tmp/nmf/vms
+          tag=$(curl -fsSL 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=100'|jq -r '[.[]|select(.tag_name|startswith("node-manager-v"))]|sort_by(.published_at)|last.tag_name')
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-node-manager-linux-x64.tar.gz" -o /tmp/nmf/nm.tgz
+          tar -xzf /tmp/nmf/nm.tgz -C /tmp/nmf
+          bin=/tmp/nmf/bin/ascii-node-manager; chmod +x "$bin"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=127.0.0.1' -keyout /tmp/nmf/tls/key.pem -out /tmp/nmf/tls/cert.pem >/dev/null 2>&1
+          export BAREMETAL_NODE_ID=node-test BAREMETAL_NODE_AGENT_BIND=127.0.0.1 BAREMETAL_NODE_AGENT_PORT=18787 BAREMETAL_NODE_AGENT_HMAC_SECRET=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA BAREMETAL_NODE_AGENT_ALLOWED_IPS='127.0.0.1/32,::1/128' BAREMETAL_NODE_AGENT_TLS_CERT=/tmp/nmf/tls/cert.pem BAREMETAL_NODE_AGENT_TLS_KEY=/tmp/nmf/tls/key.pem BAREMETAL_NODE_AGENT_REPO=/tmp/nmf BAREMETAL_OWNERSHIP_ROOT=/tmp/nmf/state VM_ROOT=/tmp/nmf/vms BAREMETAL_ABUSE_MONITOR=0
+          "$bin" >/tmp/nmf/server.log 2>&1 & echo $! >/tmp/nmf/pid
+          for i in $(seq 1 60); do curl -sk --max-time 1 https://127.0.0.1:18787/health >/dev/null 2>&1 && break; kill -0 "$(cat /tmp/nmf/pid)" 2>/dev/null || break; sleep .25; done
+          O=box-node-manager-auth-map.txt; { echo "TAG=$tag"; echo "SHA256=$(sha256sum "$bin"|awk '{print $1}')"; cat /tmp/nmf/server.log || true; } > "$O"
+          probe(){ n="$1"; m="$2"; p="$3"; d="${4-}"; : >/tmp/nmf/body; a=(-sk --path-as-is --max-time 3 -o /tmp/nmf/body -w '%{http_code}' -X "$m" "https://127.0.0.1:18787$p"); [ -n "$d" ]&&a+=(--data-binary "$d"); c=$(curl "${a[@]}" 2>/dev/null||printf 000); printf 'UNSIGNED %-18s %-6s %-34s status=%s body=%s\n' "$n" "$m" "$p" "$c" "$(tr '\n\r' '  ' </tmp/nmf/body|head -c 260)" >> "$O"; }
+          probe secret POST /secret '{'; probe secret_pct POST '/%73ecret' '{'; probe secret_dot POST '/./secret' '{'; probe secret_double POST '//secret' '{'; probe secret_query POST '/secret?x=1' '{'; probe vms POST /vms '{'; probe vms_pct POST '/%76ms' '{'; probe maintenance POST /maintenance '{'; probe delete DELETE '/vms/box-node0-deadbeef?ownershipId=AAAAAAAA'; probe traversal POST '/foo/../secret' '{'; probe pct_traversal POST '/foo/%2e%2e/secret' '{'; probe encoded_slash POST '/x%2f..%2fsecret' '{'; probe semicolon POST '/secret;foo' '{'; probe trailing POST '/secret/' '{'
+          cat "$O"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box-node-manager-auth-map
+          path: box-node-manager-auth-map.txt
+          if-no-files-found: warn
