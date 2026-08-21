@@ -1,0 +1,144 @@
+TAG=node-manager-v0.5.0-staging12
+=== explicit bridge netfilter enablement anywhere in package ===
+=== tenant isolation implementation ===
+4-set -euo pipefail
+5-
+6-fail() { echo "tenant isolation: $*" >&2; exit 1; }
+7-need_cmd() { command -v "$1" >/dev/null 2>&1 || fail "missing command: $1"; }
+8-
+9-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+10-NODE_ID="${NODE_ID:-node0}"
+11-PUBLIC_NETWORK="${PUBLIC_NETWORK:-libvirt-$NODE_ID}"
+12-NAT_NETWORK="${NAT_NETWORK:-default}"
+13-VM_ROOT="${VM_ROOT:-/var/lib/ascii/vms}"
+14-XML_HELPER="$SCRIPT_DIR/lib/isolate_domain_network.py"
+15-
+16:for command in virsh iptables ip6tables bridge python3; do
+17-  need_cmd "$command"
+18-done
+19-[ -f "$XML_HELPER" ] || fail "missing XML helper: $XML_HELPER"
+20-
+21:network_bridge() {
+22-  local network="$1"
+23:  local bridge
+24:  bridge="$(virsh net-info "$network" | awk '/^Bridge:/ { print $2; exit }')"
+25:  [ -n "$bridge" ] || fail "cannot resolve bridge for $network"
+26:  printf '%s\n' "$bridge"
+27-}
+28-
+29:install_forward_drop() {
+30-  local command="$1"
+31:  local bridge="$2"
+32:  local comment="ascii:tenant-isolation:$bridge"
+33-
+34:  while "$command" -C FORWARD -i "$bridge" -o "$bridge" \
+35-    -m comment --comment "$comment" -j DROP >/dev/null 2>&1; do
+36:    "$command" -D FORWARD -i "$bridge" -o "$bridge" \
+37-      -m comment --comment "$comment" -j DROP
+38-  done
+39:  "$command" -I FORWARD 1 -i "$bridge" -o "$bridge" \
+40-    -m comment --comment "$comment" -j DROP
+41-}
+42-
+43:public_bridge="$(network_bridge "$PUBLIC_NETWORK")"
+44:nat_bridge="$(network_bridge "$NAT_NETWORK")"
+45:install_forward_drop ip6tables "$public_bridge"
+46:install_forward_drop iptables "$nat_bridge"
+47-
+48-[ -d "$VM_ROOT" ] || exit 0
+49-while IFS= read -r vm_dir; do
+50-  name="$(basename "$vm_dir")"
+51-  [[ "$name" =~ ^box-[a-z0-9]+-[a-z0-9-]+$ ]] || continue
+52-  virsh dominfo "$name" >/dev/null 2>&1 || continue
+53-
+54-  domain_xml="$(mktemp)"
+55-  trap 'rm -f "${domain_xml:-}"' EXIT
+56-  virsh dumpxml --inactive "$name" > "$domain_xml"
+57-  python3 "$XML_HELPER" "$domain_xml" \
+58-    --expected-network "$PUBLIC_NETWORK" \
+59-    --expected-network "$NAT_NETWORK"
+60-  virsh define "$domain_xml" >/dev/null
+61-  rm -f "$domain_xml"
+62-  trap - EXIT
+63-
+64-  while IFS= read -r tap; do
+65-    [ -e "/sys/class/net/$tap" ] || continue
+66:    bridge link set dev "$tap" isolated on
+67-  done < <(
+68-    virsh domiflist "$name" | awk -v public="$PUBLIC_NETWORK" -v nat="$NAT_NETWORK" \
+69-      'NR > 2 && ($3 == public || $3 == nat) { print $1 }'
+70-  )
+71-done < <(find "$VM_ROOT" -mindepth 1 -maxdepth 1 -type d -print)
+=== bootstrap networking sysctls/modules ===
+11-#     NODE_MANAGER_CHANNEL=staging \
+12-#     R2_QEMU_IMAGES_ENV=/path/to/r2-qemu-images.env \
+13-#     ./bare-metal-node/bootstrap-node.sh
+14-#
+15-# What it does (idempotent):
+16-#   1. Requires /etc/ascii/r2-qemu-images.env (installed from R2_QEMU_IMAGES_ENV
+17-#      if given) so every exact image id can be fetched and checksum-verified.
+18-#   2. Installs libvirt/QEMU + tooling.
+19:#   3. Persists IPv6 forwarding + proxy_ndp sysctls (per-VM NDP entries are
+20-#      managed by provision-vm.sh at create/delete time).
+21:#   4. Defines the routed libvirt network libvirt-<NODE_ID> (bridge br-<NODE_ID>,
+22-#      host <IPV6_PREFIX64>:100::1/80) and ensures the NAT `default` network
+23-#      (create-time IPv4 egress for dependency downloads).
+24-#   5. Creates /var/lib/ascii/{images,vms,baremetal/{leases,ownership}}.
+25-#   6. Writes /etc/ascii/baremetal-node-agent.env (mode 600) with the node-level
+26-#      overrides provision-vm.sh needs (NODE_ID, IPV6_PREFIX,
+27-#      PUBLIC_INTERFACE) and a generated HMAC secret unless one is provided.
+28-#   7. Installs the node manager from its checksummed release channel
+29-#      (update-node-manager.sh; NODE_MANAGER_CHANNEL or NODE_MANAGER_TAG), or —
+--
+141-  [ -d "$storage_target" ] || fail "$storage_target is missing; migrate encrypted storage before bootstrap"
+142-  storage_source="$(findmnt -n -o SOURCE -T "$storage_target")"
+143-  storage_source="${storage_source%%\[*}"
+144-  lsblk -s -n -o TYPE "$storage_source" 2>/dev/null | grep -qx crypt \
+145-    || fail "$storage_target is not backed by dm-crypt; run encrypt-node-storage.sh first"
+146-done
+147-log "verified dm-crypt backing for VM data and node credentials"
+148-
+149:log "persisting IPv6 forwarding + proxy_ndp sysctls"
+150:cat > /etc/sysctl.d/99-ascii-baremetal.conf <<EOF
+151:net.ipv6.conf.all.forwarding=1
+152:net.ipv6.conf.default.forwarding=1
+153:net.ipv6.conf.$PUBLIC_INTERFACE.proxy_ndp=1
+154-EOF
+155:sysctl -p /etc/sysctl.d/99-ascii-baremetal.conf >/dev/null
+156-
+157-if virsh net-info "$NETWORK_NAME" >/dev/null 2>&1; then
+158-  log "libvirt network $NETWORK_NAME already defined"
+159-else
+160:  log "defining routed libvirt network $NETWORK_NAME (bridge $BRIDGE_NAME)"
+161-  tmp_xml="$(mktemp)"
+162-  cat > "$tmp_xml" <<EOF
+163-<network>
+164-  <name>$NETWORK_NAME</name>
+165:  <forward mode='route' dev='$PUBLIC_INTERFACE'/>
+166:  <bridge name='$BRIDGE_NAME' stp='on' delay='0'/>
+167-  <ip family='ipv6' address='$HOST_BRIDGE_IP' prefix='80'/>
+168-</network>
+169-EOF
+170-  virsh net-define "$tmp_xml" >/dev/null
+171-  rm -f "$tmp_xml"
+172-fi
+173-virsh net-start "$NETWORK_NAME" >/dev/null 2>&1 || true
+174-virsh net-autostart "$NETWORK_NAME" >/dev/null
+--
+317-    [ -n "$ip" ] && ufw allow from "$ip" to any port "$PORT" proto tcp >/dev/null
+318-  done
+319-else
+320-  log "configuring UFW (22 open, $PORT open to any caller — HMAC is the gate)"
+321-  ufw allow "$PORT"/tcp >/dev/null
+322-fi
+323-ufw --force enable >/dev/null
+324-
+325:# Restart once more now that UFW is settled: ExecStartPre restores forwarding
+326-# rules and migrates existing domains.
+327-systemctl restart ascii-node-manager.service
+328-
+329-sleep 1
+330-timestamp="$(date +%s)"
+331-nonce="bootstrap-$(openssl rand -hex 8)"
+332-body_hash="$(printf '' | sha256sum | awk '{print $1}')"
+333-canonical="$(printf 'GET\n/health\n%s\n%s\n%s' "$timestamp" "$nonce" "$body_hash")"
