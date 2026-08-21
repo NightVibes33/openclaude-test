@@ -1,0 +1,93 @@
+name: Box guest route auth fingerprint
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  fingerprint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe exact public guest binary locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/garf && mkdir -p /tmp/garf/work
+          tag=agent-server-v0.0.49-ascii-prod29
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-agents-server-linux-x64" -o /tmp/garf/agent
+          chmod +x /tmp/garf/agent
+          export MACHINE_ID=box-node-route-auth-test
+          export SHARED_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          export WORK_DIR=/tmp/garf/work ASCII_PORT=18911 IS_SANDBOX=1 HOME=/tmp/garf/work
+          export BACKEND_URL=http://127.0.0.1:9 BOX_CLI_API_URL=http://127.0.0.1:9
+          /tmp/garf/agent >/tmp/garf/server.log 2>&1 & echo $! >/tmp/garf/pid
+          trap 'kill "$(cat /tmp/garf/pid)" 2>/dev/null || true' EXIT
+          for i in $(seq 1 80); do
+            curl -sS --max-time 1 http://127.0.0.1:18911/health >/dev/null 2>&1 && break
+            kill -0 "$(cat /tmp/garf/pid)" 2>/dev/null || break
+            sleep .25
+          done
+          O=box-guest-route-auth-fingerprint.txt
+          {
+            echo "TAG=$tag"
+            echo "SHA256=$(sha256sum /tmp/garf/agent | awk '{print $1}')"
+            echo 'Expected protected fingerprint: HTTP 400 mentioning encrypted data/authentication.'
+            echo 'Any route-specific validation, 2xx, or subsystem error on {} is an auth-audit candidate.'
+            echo '=== startup ==='
+            cat /tmp/garf/server.log || true
+            echo '=== probes ==='
+          } > "$O"
+
+          probe() {
+            local method="$1" path="$2"
+            : >/tmp/garf/body
+            local code
+            if [ "$method" = POST ]; then
+              code=$(curl -sS --path-as-is --max-time 4 -o /tmp/garf/body -w '%{http_code}' \
+                -X POST -H 'Content-Type: application/json' --data-binary '{}' \
+                "http://127.0.0.1:18911$path" 2>/dev/null || printf 000)
+            else
+              code=$(curl -sS --path-as-is --max-time 4 -o /tmp/garf/body -w '%{http_code}' \
+                -X GET "http://127.0.0.1:18911$path" 2>/dev/null || printf 000)
+            fi
+            printf '%-4s %-38s status=%s body=%s\n' "$method" "$path" "$code" \
+              "$(tr '\n\r' '  ' </tmp/garf/body | head -c 500)" >> "$O"
+          }
+
+          routes=(
+            /start /claude-state /conversations /prompt /interrupt /reset
+            /export-state /restore-state /switch-conversation /git-state /git-status
+            /git-reset /git-push /git-history /provider-usage /sshkey
+            /upload-project-chunk /upload-project-finalize /ports /port-visibility
+            /generate-branch-name /generate-task-summary /rename-branch-from-prompt
+            /update-credentials /update-secrets /update-environment /prepare-box-tools
+            /update-github-token /generate-ssh-keypair /authorize-ssh-key
+            /deploy-ssh-identity /report-routine-event /poll-routine-events
+            /git-hook-event /poll-context-events /execute-routines /stop-routine
+            /write-routine-logs /restore-snapshot /create-incremental-snapshot
+            /restore-incremental-snapshot /desktop /desktop-vnc /screenshot
+            /update-one-token /update-backend-url /ralph-mode-setup /ralph-mode-check-lock
+            /clone-repo /remove-repo /update-repo-branch /receive-merge-files
+            /apply-merge-diffs /logs /box-direct /render-report /list-skills
+            /render-figures /shield-check /subscription /spokesperson/cycle
+            /spokesperson/interrupt /spokesperson/switch-conversation
+            /spokesperson/cli-output /service-preview
+          )
+          for p in "${routes[@]}"; do probe POST "$p"; done
+
+          # Known nested Workshop GETs were recovered from the packed binary and
+          # intentionally get a separate no-token check.
+          probe GET /workshop/logs/system
+          probe GET /workshop/logs/script
+          probe GET /health
+
+          echo '=== server tail ===' >> "$O"
+          tail -n 300 /tmp/garf/server.log >> "$O" || true
+          cat "$O"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box-guest-route-auth-fingerprint
+          path: box-guest-route-auth-fingerprint.txt
+          if-no-files-found: warn
