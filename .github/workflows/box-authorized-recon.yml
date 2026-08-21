@@ -17,94 +17,82 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Diff production and staging CLI plus public wallet route
+      - name: Probe staging control-plane hosts from publicly downloadable CLI
         shell: bash
         run: |
           set -uo pipefail
           mkdir -p box-research-results
-          OUT=box-research-results/deep-recon-2.txt
+          OUT=box-research-results/deep-recon-3.txt
           exec > >(tee "$OUT") 2>&1
           date -u
 
           base='https://ascii.dev/api/box/cli/download'
-          for channel in ascii-prod staging; do
-            echo "=== download $channel ==="
-            curl -fsSL --max-time 45 "$base?platform=linux-x64&channel=$channel" -o "/tmp/box-$channel" || true
-            file "/tmp/box-$channel" || true
-            sha256sum "/tmp/box-$channel" || true
-            chmod +x "/tmp/box-$channel" || true
-            "/tmp/box-$channel" --version || true
-            "/tmp/box-$channel" --help | head -n 180 || true
+          curl -fsSL --max-time 45 "$base?platform=linux-x64&channel=staging" -o /tmp/box-staging || true
+          chmod +x /tmp/box-staging || true
+          /tmp/box-staging --version || true
+
+          echo '=== staging CLI signed-out status against its defaults ==='
+          HOME=/tmp/boxhome /tmp/box-staging --json status 2>&1 | head -c 12000 || true
+          echo
+
+          probe_host() {
+            h="$1"
+            echo "========== HOST $h =========="
+            for p in \
+              '/' \
+              '/health' \
+              '/status' \
+              '/api/health' \
+              '/api/box/status' \
+              '/api/box/v1/me' \
+              '/api/box/v1/boxes' \
+              '/api/box/v1/snapshots' \
+              '/api/box/v1/named-snapshots' \
+              '/api/box/v1/environments' \
+              '/api/box/v1/limits' \
+              '/api/box/v1/teams' \
+              '/api/box/v1/orgs' \
+              '/api/box/v1/api-keys' \
+              '/api/box/v1/webhooks' \
+              '/openapi.json' \
+              '/api/box/v1/openapi.json' \
+              '/.well-known/security.txt'; do
+              echo "--- GET $p"
+              curl -sS --max-time 12 -D /tmp/h -o /tmp/b -w 'HTTP=%{http_code} BYTES=%{size_download} TYPE=%{content_type} REDIR=%{redirect_url}\n' "https://$h$p" || true
+              grep -iE '^(HTTP/|location:|www-authenticate:|content-type:|content-length:|set-cookie:|access-control|allow:|x-|server:)' /tmp/h | head -n 80 || true
+              echo '[body-prefix]'
+              head -c 1800 /tmp/b 2>/dev/null | sed -E 's/(token|secret|key)(["=: ]+)[A-Za-z0-9._-]{8,}/\1\2[REDACTED]/Ig' || true
+              echo
+            done
+            echo '--- OPTIONS collection'
+            curl -sS -X OPTIONS --max-time 12 -D /tmp/h -o /tmp/b -w 'HTTP=%{http_code} BYTES=%{size_download}\n' "https://$h/api/box/v1/boxes" || true
+            grep -iE '^(HTTP/|allow:|access-control|www-authenticate:|x-|server:)' /tmp/h | head -n 80 || true
+          }
+
+          probe_host 'staging.ascii.dev'
+          probe_host 'amsterdam.ascii.dev'
+
+          echo '=== signed-out CLI forced against leaked hosts ==='
+          for host in staging.ascii.dev amsterdam.ascii.dev; do
+            echo "--- $host status"
+            HOME=/tmp/boxhome /tmp/box-staging --api-url "https://$host" --json status 2>&1 | head -c 10000 || true
+            echo
+            echo "--- $host org list"
+            HOME=/tmp/boxhome /tmp/box-staging --api-url "https://$host" --json org list 2>&1 | head -c 10000 || true
+            echo
           done
 
-          echo '=== security-relevant strings unique to staging ==='
-          strings -a /tmp/box-ascii-prod | sort -u > /tmp/prod.str || true
-          strings -a /tmp/box-staging | sort -u > /tmp/staging.str || true
-          comm -13 /tmp/prod.str /tmp/staging.str > /tmp/staging-only.str || true
-          grep -Ei 'https?://|wss?://|\.ascii\.dev|\.on\.ascii\.dev|/api/|token|secret|auth|credential|internal|staging|dev|debug|snapshot|desktop|websock|host|environment|wallet|admin|r2|s3|cloudflare|tunnel' /tmp/staging-only.str | head -n 5000 || true
-
-          echo '=== all distinct URLs/domains in staging ==='
-          strings -a /tmp/box-staging | grep -Eo 'https?://[^[:space:]"<>]+' | sort -u | head -n 1000 || true
-          strings -a /tmp/box-staging | grep -Eo '[A-Za-z0-9._-]+\.(ascii\.dev|on\.ascii\.dev)' | sort -u | head -n 1000 || true
-
-          echo '=== command help diff ==='
-          for c in new get list fork snapshot desktop env ssh scp stop resume host onboard auth prompt; do
-            echo "--- $c"
-            /tmp/box-ascii-prod "$c" --help > "/tmp/p-$c" 2>&1 || true
-            /tmp/box-staging "$c" --help > "/tmp/s-$c" 2>&1 || true
-            diff -u "/tmp/p-$c" "/tmp/s-$c" | head -n 500 || true
+          echo '=== TLS certificate identities ==='
+          for host in staging.ascii.dev amsterdam.ascii.dev; do
+            echo | openssl s_client -connect "$host:443" -servername "$host" 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName 2>/dev/null || true
           done
-
-          echo '=== public Apple Wallet route ==='
-          curl -sS -L --max-time 30 -D /tmp/wallet.h -o /tmp/wallet.pkpass 'https://box.ascii.dev/wallet/hello-world' || true
-          grep -iE '^(HTTP/|content-type:|content-length:|cache-control:|etag:|set-cookie:|location:|x-|server:)' /tmp/wallet.h | head -n 120 || true
-          file /tmp/wallet.pkpass || true
-          sha256sum /tmp/wallet.pkpass || true
-          unzip -l /tmp/wallet.pkpass || true
-          rm -rf /tmp/wallet && mkdir /tmp/wallet
-          unzip -oq /tmp/wallet.pkpass -d /tmp/wallet || true
-          for f in pass.json manifest.json; do
-            echo "--- $f"; cat "/tmp/wallet/$f" 2>/dev/null || true; echo
-          done
-          echo '=== pass token/url fields ==='
-          grep -RniE 'authenticationToken|webServiceURL|token|secret|api|url|serialNumber|passTypeIdentifier|teamIdentifier|barcode|nfc|associatedStoreIdentifiers' /tmp/wallet --exclude=signature --exclude='*.png' --exclude='*.jpg' --exclude='*.webp' | head -n 500 || true
-          if [ -f /tmp/wallet/signature ]; then
-            echo '=== pass signing certs ==='
-            openssl pkcs7 -inform DER -in /tmp/wallet/signature -print_certs -noout 2>&1 | head -n 200 || true
-          fi
-
-          echo '=== wallet related public route probes ==='
-          for p in \
-            '/wallet/hello-world' \
-            '/wallet/hello-world/' \
-            '/api/wallet/hello-world' \
-            '/api/box/wallet/hello-world' \
-            '/wallet' \
-            '/wallet/register' \
-            '/wallet/v1/devices/canary/registrations/canary/canary'; do
-            echo "--- $p"
-            curl -sS --max-time 12 -o /tmp/b -D /tmp/h -w 'HTTP=%{http_code} BYTES=%{size_download} TYPE=%{content_type} REDIR=%{redirect_url}\n' "https://box.ascii.dev$p" || true
-            grep -iE '^(HTTP/|allow:|location:|www-authenticate:|content-type:|set-cookie:|x-|server:)' /tmp/h | head -n 50 || true
-            head -c 500 /tmp/b | strings | head -n 20 || true
-          done
-
-          echo '=== staging release metadata via public GitHub ==='
-          curl -sS --max-time 20 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases/tags/box-cli-v0.1.178-staging1' -o /tmp/release.json || true
-          python3 - <<'PY'
-          import json
-          try: d=json.load(open('/tmp/release.json'))
-          except Exception as e: print(e); raise SystemExit
-          for k in ('tag_name','name','draft','prerelease','published_at','html_url','body'):
-              print(f'{k}={d.get(k)!r}')
-          print('assets=', [(a.get('name'),a.get('size'),a.get('browser_download_url')) for a in d.get('assets',[])])
-          PY
 
       - name: Persist text result
         shell: bash
         run: |
           git config user.name 'box-recon-bot'
           git config user.email 'box-recon-bot@users.noreply.github.com'
-          git add -f box-research-results/deep-recon-2.txt
+          git add -f box-research-results/deep-recon-3.txt
           git diff --cached --quiet && exit 0
-          git commit -m 'Record Box staging and wallet recon [skip ci]'
+          git commit -m 'Record Box staging control-plane recon [skip ci]'
           git push origin HEAD:main
