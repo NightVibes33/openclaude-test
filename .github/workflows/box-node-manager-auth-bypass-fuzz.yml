@@ -9,9 +9,10 @@ permissions:
 jobs:
   fuzz:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
-      - name: Run local auth-boundary fuzz against public node-manager binary
+      - name: Run exact-binary auth boundary fuzz
         shell: bash
         run: |
           set -euo pipefail
@@ -24,14 +25,11 @@ jobs:
           tar -xzf /tmp/nmf/nm.tgz -C /tmp/nmf
           bin=/tmp/nmf/bin/ascii-node-manager
           chmod +x "$bin"
-          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
-            -subj '/CN=127.0.0.1' \
-            -keyout /tmp/nmf/tls/key.pem -out /tmp/nmf/tls/cert.pem >/dev/null 2>&1
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=127.0.0.1' -keyout /tmp/nmf/tls/key.pem -out /tmp/nmf/tls/cert.pem >/dev/null 2>&1
           export BAREMETAL_NODE_ID=node-test
           export BAREMETAL_NODE_AGENT_BIND=127.0.0.1
           export BAREMETAL_NODE_AGENT_PORT=18787
           export BAREMETAL_NODE_AGENT_HMAC_SECRET='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-          export BAREMETAL_NODE_AGENT_ALLOWED_IPS='127.0.0.1/32,::1/128'
           export BAREMETAL_NODE_AGENT_TLS_CERT=/tmp/nmf/tls/cert.pem
           export BAREMETAL_NODE_AGENT_TLS_KEY=/tmp/nmf/tls/key.pem
           export BAREMETAL_NODE_AGENT_REPO=/tmp/nmf
@@ -40,129 +38,147 @@ jobs:
           export BAREMETAL_ABUSE_MONITOR=0
           export IPV6_PREFIX='2001:db8:abcd:1'
           export IPV6_PREFIX_LENGTH=80
-          "$bin" >/tmp/nmf/server.log 2>&1 &
-          pid=$!
-          cleanup(){ kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; }
-          trap cleanup EXIT
-          ready=0
-          for i in $(seq 1 50); do
-            if curl -sk --max-time 1 https://127.0.0.1:18787/health -o /dev/null 2>/dev/null; then ready=1; break; fi
-            kill -0 "$pid" 2>/dev/null || break
-            sleep .2
-          done
-          {
-            echo "TAG=$tag"
-            echo "SHA256=$(sha256sum "$bin" | awk '{print $1}')"
-            echo "READY=$ready"
-            echo '=== server startup ==='
-            head -n 100 /tmp/nmf/server.log || true
-          } >> "$O"
-          if [ "$ready" != 1 ]; then
-            echo 'HARNESS_START_FAILED=YES' >> "$O"
-            cat "$O"
-            exit 0
-          fi
 
-          status(){
-            local method="$1" path="$2" data="${3-}"
-            curl -sk --path-as-is --max-time 3 -o /tmp/nmf/body -w '%{http_code}' \
-              -X "$method" "https://127.0.0.1:18787$path" \
-              ${data:+--data-binary "$data"} 2>/dev/null || printf '000'
+          pid=''
+          stop_nm(){
+            if [ -n "${pid:-}" ]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi
+            pid=''
           }
-          probe(){
-            local name="$1" method="$2" path="$3" data="${4-}"
-            local code body
-            code=$(status "$method" "$path" "$data")
-            body=$(tr '\n\r' '  ' </tmp/nmf/body 2>/dev/null | head -c 300 || true)
-            printf '%-42s method=%-7s path=%-42s status=%s body=%s\n' "$name" "$method" "$path" "$code" "$body" >> "$O"
+          start_nm(){
+            local allowed="$1"
+            stop_nm
+            export BAREMETAL_NODE_AGENT_ALLOWED_IPS="$allowed"
+            : >/tmp/nmf/server.log
+            "$bin" >/tmp/nmf/server.log 2>&1 & pid=$!
+            local ready=0
+            for i in $(seq 1 60); do
+              if curl -sk --max-time 1 https://127.0.0.1:18787/health -o /dev/null 2>/dev/null; then ready=1; break; fi
+              kill -0 "$pid" 2>/dev/null || break
+              sleep .2
+            done
+            echo "START allowed=$allowed ready=$ready" >> "$O"
+            head -n 25 /tmp/nmf/server.log >> "$O" || true
+            [ "$ready" = 1 ]
           }
+          trap stop_nm EXIT
 
-          echo '=== unsigned baseline and path-canonicalization probes ===' >> "$O"
-          probe baseline_health GET /health
-          probe health_query GET '/health?x=1'
-          probe health_dot GET '/./health'
-          probe health_double_slash GET '//health'
-          probe health_pct_h GET '/%68ealth'
-          probe health_pct_a GET '/he%61lth'
-          probe health_pct_slash GET '/%2fhealth'
-          probe health_semicolon GET '/health;foo'
-          probe health_trailing GET '/health/'
-
-          # Invalid bodies are deliberate: any 400/422-style application response
-          # instead of 401/403 would prove routing reached a privileged handler
-          # without a valid HMAC, while avoiding real state changes.
-          echo '=== unsigned privileged-route probes ===' >> "$O"
-          probe secret_plain POST /secret '{'
-          probe secret_pct POST '/%73ecret' '{'
-          probe secret_dot POST '/./secret' '{'
-          probe secret_double POST '//secret' '{'
-          probe secret_query POST '/secret?x=1' '{'
-          probe vms_post POST /vms '{'
-          probe vms_pct POST '/%76ms' '{'
-          probe vms_get GET /vms
-          probe maintenance POST /maintenance '{'
-          probe delete_guess DELETE '/vms/box-node0-deadbeef?ownershipId=AAAAAAAA' ''
-
-          echo '=== duplicate/malformed auth-header probes ===' >> "$O"
-          for variant in dup empty junk stale future nonceonly sigonly; do
-            case "$variant" in
-              dup)
-                code=$(curl -sk --path-as-is --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health \
-                  -H 'X-Baremetal-Signature:' -H 'X-Baremetal-Signature: deadbeef' \
-                  -H "X-Baremetal-Timestamp: $(date +%s)" -H 'X-Baremetal-Nonce: dupnonce' || true) ;;
-              empty)
-                code=$(curl -sk --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health \
-                  -H 'X-Baremetal-Signature:' -H 'X-Baremetal-Timestamp:' -H 'X-Baremetal-Nonce:' || true) ;;
-              junk)
-                code=$(curl -sk --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health \
-                  -H 'X-Baremetal-Signature: zz' -H 'X-Baremetal-Timestamp: nope' -H 'X-Baremetal-Nonce: junk' || true) ;;
-              stale)
-                code=$(curl -sk --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health \
-                  -H 'X-Baremetal-Signature: 00' -H 'X-Baremetal-Timestamp: 1' -H 'X-Baremetal-Nonce: stale' || true) ;;
-              future)
-                code=$(curl -sk --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health \
-                  -H 'X-Baremetal-Signature: 00' -H 'X-Baremetal-Timestamp: 9999999999' -H 'X-Baremetal-Nonce: future' || true) ;;
-              nonceonly)
-                code=$(curl -sk --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health -H 'X-Baremetal-Nonce: only' || true) ;;
-              sigonly)
-                code=$(curl -sk --max-time 3 -o /tmp/nmf/body -w '%{http_code}' https://127.0.0.1:18787/health -H 'X-Baremetal-Signature: 00' || true) ;;
-            esac
-            body=$(tr '\n\r' '  ' </tmp/nmf/body 2>/dev/null | head -c 300 || true)
-            echo "AUTH_HEADER_VARIANT=$variant status=$code body=$body" >> "$O"
-          done
-
-          echo '=== signed-control probes ===' >> "$O"
-          sign_and_call(){
-            local method="$1" path="$2" body="${3-}" nonce="n$(openssl rand -hex 8)" ts hash canon sig code
-            ts=$(date +%s)
-            hash=$(printf '%s' "$body" | sha256sum | awk '{print $1}')
+          body_hash(){ printf '%s' "$1" | sha256sum | awk '{print $1}'; }
+          make_sig(){
+            local method="$1" path="$2" ts="$3" nonce="$4" body="$5" hash canon
+            hash=$(body_hash "$body")
             canon=$(printf '%s\n%s\n%s\n%s\n%s' "$method" "$path" "$ts" "$nonce" "$hash")
-            sig=$(printf '%s' "$canon" | openssl dgst -sha256 -hmac "$BAREMETAL_NODE_AGENT_HMAC_SECRET" -hex | awk '{print $2}')
-            code=$(curl -sk --path-as-is --max-time 3 -o /tmp/nmf/body -w '%{http_code}' -X "$method" \
-              "https://127.0.0.1:18787$path" \
-              -H "X-Baremetal-Timestamp: $ts" -H "X-Baremetal-Nonce: $nonce" -H "X-Baremetal-Signature: $sig" \
-              ${body:+--data-binary "$body"} || true)
-            printf 'SIGNED method=%s path=%s status=%s body=%s\n' "$method" "$path" "$code" "$(tr '\n\r' '  ' </tmp/nmf/body | head -c 300)" >> "$O"
+            printf '%s' "$canon" | openssl dgst -sha256 -hmac "$BAREMETAL_NODE_AGENT_HMAC_SECRET" -hex | awk '{print $2}'
           }
-          sign_and_call GET /health ''
-          sign_and_call GET '/%68ealth' ''
-          sign_and_call GET '/health?x=1' ''
-          sign_and_call POST /secret '{'
+          request(){
+            local label="$1" method="$2" path="$3" body="$4" ts="$5" nonce="$6" sig="$7" extra_kind="${8-}"
+            : >/tmp/nmf/body
+            args=(-sk --path-as-is --max-time 4 -o /tmp/nmf/body -w '%{http_code}' -X "$method" "https://127.0.0.1:18787$path")
+            [ -n "$ts" ] && args+=(-H "X-Baremetal-Timestamp: $ts")
+            [ -n "$nonce" ] && args+=(-H "X-Baremetal-Nonce: $nonce")
+            [ -n "$sig" ] && args+=(-H "X-Baremetal-Signature: $sig")
+            case "$extra_kind" in
+              xff) args+=(-H 'X-Forwarded-For: 203.0.113.7') ;;
+              xreal) args+=(-H 'X-Real-IP: 203.0.113.7') ;;
+              forwarded) args+=(-H 'Forwarded: for=203.0.113.7') ;;
+              allforward) args+=(-H 'X-Forwarded-For: 203.0.113.7' -H 'X-Real-IP: 203.0.113.7' -H 'Forwarded: for=203.0.113.7') ;;
+            esac
+            [ -n "$body" ] && args+=(--data-binary "$body")
+            code=$(curl "${args[@]}" 2>/dev/null || printf 000)
+            resp=$(tr '\n\r' '  ' </tmp/nmf/body 2>/dev/null | head -c 320 || true)
+            printf '%-34s status=%s body=%s\n' "$label" "$code" "$resp" >> "$O"
+            printf '%s' "$code"
+          }
+          signed_request(){
+            local label="$1" method="$2" actual_path="$3" signed_path="$4" body="$5" extra="${6-}" ts nonce sig
+            ts=$(date +%s); nonce="n$(openssl rand -hex 8)"; sig=$(make_sig "$method" "$signed_path" "$ts" "$nonce" "$body")
+            request "$label" "$method" "$actual_path" "$body" "$ts" "$nonce" "$sig" "$extra" >/dev/null
+          }
+
+          echo "TAG=$tag" >> "$O"
+          echo "SHA256=$(sha256sum "$bin" | awk '{print $1}')" >> "$O"
+          echo '=== phase 1: normal allowlist ===' >> "$O"
+          start_nm '127.0.0.1/32,::1/128'
+
+          echo '=== unsigned privileged requests ===' >> "$O"
+          for spec in \
+            'secret|POST|/secret' \
+            'secret_pct|POST|/%73ecret' \
+            'secret_dot|POST|/./secret' \
+            'secret_double|POST|//secret' \
+            'secret_query|POST|/secret?x=1' \
+            'vms|POST|/vms' \
+            'vms_pct|POST|/%76ms' \
+            'maintenance|POST|/maintenance' \
+            'traversal|POST|/foo/../secret' \
+            'pct_traversal|POST|/foo/%2e%2e/secret' \
+            'encoded_slash|POST|/x%2f..%2fsecret'; do
+            IFS='|' read -r n m p <<<"$spec"
+            request "unsigned_$n" "$m" "$p" '{' '' '' '' >/dev/null
+          done
+
+          echo '=== complete but invalid HMAC tuples ===' >> "$O"
+          now=$(date +%s)
+          zeros=$(printf '0%.0s' {1..64})
+          request invalid_sig POST /secret '{' "$now" invalidnonce "$zeros" >/dev/null
+          request invalid_sig_xff POST /secret '{' "$now" invalidnonce2 "$zeros" xff >/dev/null
+          request stale_invalid POST /secret '{' 1 stale "$zeros" >/dev/null
+          request future_invalid POST /secret '{' 9999999999 future "$zeros" >/dev/null
+
+          echo '=== valid HMAC control + replay ===' >> "$O"
+          ts=$(date +%s); nonce='replay-fixed-nonce'; body='{'; sig=$(make_sig POST /secret "$ts" "$nonce" "$body")
+          first=$(request replay_first POST /secret "$body" "$ts" "$nonce" "$sig")
+          second=$(request replay_second POST /secret "$body" "$ts" "$nonce" "$sig")
+          echo "REPLAY_CODES=$first,$second" >> "$O"
+
+          echo '=== timestamp enforcement with otherwise valid HMAC ===' >> "$O"
+          ts=1; nonce=stalevalid; sig=$(make_sig POST /secret "$ts" "$nonce" '{'); request stale_valid_sig POST /secret '{' "$ts" "$nonce" "$sig" >/dev/null
+          ts=9999999999; nonce=futurevalid; sig=$(make_sig POST /secret "$ts" "$nonce" '{'); request future_valid_sig POST /secret '{' "$ts" "$nonce" "$sig" >/dev/null
+
+          echo '=== signature/path parser differential ===' >> "$O"
+          signed_request signed_exact POST /secret /secret '{'
+          signed_request sign_plain_call_pct POST '/%73ecret' /secret '{'
+          signed_request sign_plain_call_dot POST '/./secret' /secret '{'
+          signed_request sign_plain_call_double POST '//secret' /secret '{'
+          signed_request sign_plain_call_query POST '/secret?x=1' /secret '{'
+          signed_request sign_pct_call_plain POST /secret '/%73ecret' '{'
+
+          echo '=== phase 2: disallow socket peer, try spoofable forwarding headers ===' >> "$O"
+          start_nm '203.0.113.7/32'
+          signed_request disallowed_peer POST /secret /secret '{'
+          signed_request spoof_xff POST /secret /secret '{' xff
+          signed_request spoof_xreal POST /secret /secret '{' xreal
+          signed_request spoof_forwarded POST /secret /secret '{' forwarded
+          signed_request spoof_all_forward POST /secret /secret '{' allforward
 
           python3 - "$O" <<'PY'
 import re,sys
 p=sys.argv[1]
 s=open(p,encoding='utf-8').read()
-# On privileged unsigned probes, 400/409/422/5xx is more interesting than
-# 401/403/404 because it can indicate handler reachability past auth.
-interesting=[]
+rows={}
 for line in s.splitlines():
-    if re.search(r'^(secret_|vms_|maintenance|delete_guess)', line):
-        m=re.search(r'status=(\d+)',line)
-        if m and m.group(1) not in {'401','403','404','405'}:
-            interesting.append(line)
-print('AUTH_BYPASS_SIGNAL=' + ('YES' if interesting else 'NO'))
-for x in interesting: print('INTERESTING=' + x)
+    m=re.match(r'([A-Za-z0-9_]+)\s+status=(\d+)', line)
+    if m: rows[m.group(1)]=int(m.group(2))
+findings=[]
+# Unsigned or invalid-signature requests must never reach an application handler.
+for k,v in rows.items():
+    if (k.startswith('unsigned_') or k.startswith('invalid_sig')) and v not in {401,403,404,405}:
+        findings.append(f'AUTH_BYPASS {k}={v}')
+# With peer 127.0.0.1 excluded, forwarding headers must not restore access.
+base=rows.get('disallowed_peer')
+for k in ('spoof_xff','spoof_xreal','spoof_forwarded','spoof_all_forward'):
+    v=rows.get(k)
+    if base in {401,403} and v is not None and v not in {401,403}:
+        findings.append(f'IP_SPOOF {k}={v} baseline={base}')
+# Replay: first valid signed malformed-body request should reach parser; second should be rejected.
+a=rows.get('replay_first'); b=rows.get('replay_second')
+if a not in {None,401,403,404,405} and b not in {401,403}:
+    findings.append(f'NONCE_REPLAY first={a} second={b}')
+print('SECURITY_SIGNAL=' + ('YES' if findings else 'NO'))
+for x in findings: print('SIGNAL=' + x)
+with open(p,'a',encoding='utf-8') as f:
+    f.write('\n=== classifier ===\n')
+    f.write('SECURITY_SIGNAL=' + ('YES' if findings else 'NO') + '\n')
+    for x in findings: f.write('SIGNAL=' + x + '\n')
 PY
           cat "$O"
       - name: Commit fuzz result
