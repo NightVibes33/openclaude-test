@@ -1,0 +1,43 @@
+name: Capture Box Authorization Post
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/box-auth-post-evidence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch public post representations
+        shell: bash
+        run: |
+          set -uo pipefail
+          OUT=box-authorization-post.txt
+          : > "$OUT"
+          for u in \
+            'https://publish.twitter.com/oembed?url=https://twitter.com/anic_dev/status/2089806388134371339' \
+            'https://cdn.syndication.twimg.com/tweet-result?id=2089806388134371339&lang=en' \
+            'https://x.com/anic_dev/status/2089806388134371339'; do
+            echo "===== $u =====" >> "$OUT"
+            curl -L --max-time 20 -sS -A 'Mozilla/5.0' -D /tmp/h "$u" -o /tmp/b || true
+            grep -iE '^(HTTP/|content-type:|location:|date:|etag:|last-modified:)' /tmp/h >> "$OUT" || true
+            head -c 20000 /tmp/b >> "$OUT" || true
+            echo >> "$OUT"
+          done
+      - name: Persist
+        shell: bash
+        run: |
+          git config user.name 'box-recon-bot'
+          git config user.email 'box-recon-bot@users.noreply.github.com'
+          git add -f box-authorization-post.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record public Box pentest authorization post [skip ci]'
+          git push origin HEAD:main
