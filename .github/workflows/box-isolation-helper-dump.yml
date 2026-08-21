@@ -1,0 +1,40 @@
+name: Box isolation helper dump
+on:
+  push:
+    paths:
+      - '.github/workflows/box-isolation-helper-dump.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nm && mkdir -p /tmp/nm
+          curl -fsSL 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=30' -o /tmp/nm/r.json
+          url=$(jq -r 'sort_by(.published_at)|last|.assets[]|select(.name=="ascii-node-manager-linux-x64.tar.gz")|.browser_download_url' /tmp/nm/r.json)
+          curl -fL "$url" -o /tmp/nm/a.tgz
+          tar -xzf /tmp/nm/a.tgz -C /tmp/nm
+          {
+            echo '===== isolate_domain_network.py ====='
+            cat /tmp/nm/bare-metal-node/lib/isolate_domain_network.py
+            echo
+            echo '===== ensure-tenant-isolation.sh ====='
+            cat /tmp/nm/bare-metal-node/ensure-tenant-isolation.sh
+            echo
+            echo '===== domain/network persistence references ====='
+            grep -RInE -C 8 "isolated|portgroup|<port|link state|bridge link|virsh define|domif-setlink|nwfilter" /tmp/nm/bare-metal-node || true
+          } > box-isolation-helper-dump.txt
+      - shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-isolation-helper-dump.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: record Box isolation helper implementation'
+          git push
