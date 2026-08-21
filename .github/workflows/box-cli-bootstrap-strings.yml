@@ -1,0 +1,44 @@
+name: Box CLI Bootstrap Strings
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/box-cli-bootstrap-strings.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect public CLI strings
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=box-cli-bootstrap-strings.txt
+          curl -fsSL 'https://ascii.dev/api/box/cli/download?platform=linux-x64&channel=ascii-prod' -o /tmp/box
+          strings -a /tmp/box > /tmp/all.str
+          {
+            echo '=== version ==='
+            chmod +x /tmp/box
+            /tmp/box --version || true
+            echo '=== exact high-signal matches with context ==='
+            for p in 'BOX_CLI_TOKEN' 'SERVICE_PREVIEW_TOKEN' 'scoped token' 'metadata' 'cloud-init' 'user-data' 'userdata' '169.254' 'Hetzner' 'hcloud' 'bootstrap' '/var/lib/cloud' 'authorized_keys' 'ssh-key' 'desktop' 'hostPort' 'noEnv'; do
+              echo "--- $p"
+              grep -i -n -B2 -A3 -F "$p" /tmp/all.str | head -n 160 || true
+            done
+          } > "$OUT"
+      - name: Persist public-binary evidence
+        shell: bash
+        run: |
+          git config user.name 'box-recon-bot'
+          git config user.email 'box-recon-bot@users.noreply.github.com'
+          git add -f box-cli-bootstrap-strings.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record Box CLI bootstrap string evidence [skip ci]'
+          git push origin HEAD:main
