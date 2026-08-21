@@ -1,0 +1,85 @@
+name: Box node-manager host sink audit
+on:
+  push:
+    paths:
+      - '.github/workflows/box-node-manager-host-sink-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Download and extract latest public node-manager
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nm && mkdir -p /tmp/nm
+          curl -fsSL 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=30' -o /tmp/nm/releases.json
+          url=$(jq -r 'sort_by(.published_at)|last|.assets[]|select(.name=="ascii-node-manager-linux-x64.tar.gz")|.browser_download_url' /tmp/nm/releases.json)
+          curl -fL "$url" -o /tmp/nm/a.tgz
+          tar -xzf /tmp/nm/a.tgz -C /tmp/nm
+      - name: Audit host-side sinks and validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          R=/tmp/nm/bare-metal-node
+          OUT=box-node-manager-host-sink-audit.txt
+          {
+            echo '=== binary metadata ==='
+            file /tmp/nm/bin/ascii-node-manager
+            readelf -h /tmp/nm/bin/ascii-node-manager | grep -E 'Type:|Machine:|Entry point' || true
+            echo
+            echo '=== manager symbols relevant to auth/routes/provisioning ==='
+            nm -C /tmp/nm/bin/ascii-node-manager 2>/dev/null | grep -Eai 'auth|hmac|nonce|signature|request|secret|provision|delete|ownership|route|handler|gateway|capabil|allow|inventory' | head -n 2000 || true
+            echo
+            echo '=== manager route/auth strings ==='
+            strings -a -n 3 /tmp/nm/bin/ascii-node-manager | grep -Eai -C 5 '(/health|/inventory|/provision|/delete|/secret|x-ascii|signature|nonce|ownershipId|gatewayCapability|remote address not allowed|stale request|missing signature)' | head -n 3000 || true
+            echo
+            echo '=== scripts: eval/source/shell interpreters and variable command sinks ==='
+            grep -RInE -C 4 '(^|[^A-Za-z])(eval|source|bash -c|sh -c|xargs|ssh|scp|curl|wget|virsh|qemu|qemu-img|iptables|nft|ip |mount|umount|systemctl|sed -i|tee )' "$R" --include='*.sh' --include='*.py' | head -n 12000 || true
+            echo
+            echo '=== scripts: input validators / ownership / gateway fields ==='
+            grep -RInE -C 6 'VM_NAME|MACHINE_NAME|MACHINE_ID|OWNERSHIP_ID|VM_IPV6|GATEWAY_|BASE_IMAGE|AGENT.*TAG|BOX_CLI|validate|valid_|regex|=~|ownership|capability' "$R" --include='*.sh' --include='*.py' | head -n 12000 || true
+            echo
+            echo '=== shellcheck security-relevant findings ==='
+          } > "$OUT"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck >/dev/null
+          shellcheck -S warning "$R"/*.sh "$R"/lib/*.sh >> "$OUT" 2>&1 || true
+          {
+            echo
+            echo '=== Python 3.14 bytecode disassembly route/auth excerpts ==='
+            python - <<'PY'
+import marshal, dis, types, pathlib, re
+p=pathlib.Path('/tmp/nm/bare-metal-node/__pycache__/node-agent.cpython-314.pyc')
+data=p.read_bytes()
+code=marshal.loads(data[16:])
+for co in [c for c in code.co_consts if isinstance(c, types.CodeType)]:
+    pass
+# recursive disassembly text
+import io
+buf=io.StringIO(); dis.dis(code, file=buf)
+text=buf.getvalue().splitlines()
+pat=re.compile(r'auth|hmac|nonce|signature|secret|provision|delete|ownership|gateway|capabil|allow|route|request|8787|tls', re.I)
+for i,line in enumerate(text):
+    if pat.search(line):
+        lo=max(0,i-5); hi=min(len(text),i+6)
+        print('\n'.join(text[lo:hi])); print('---')
+PY
+          } >> "$OUT" 2>&1 || true
+          echo "Generated $(wc -l < "$OUT") lines"
+      - name: Commit audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-node-manager-host-sink-audit.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: record Box node-manager host sink audit'
+          git push
