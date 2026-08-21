@@ -1,4 +1,4 @@
-name: Box agent release strings
+name: Box release patch diff
 on:
   push:
     paths:
@@ -9,57 +9,104 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect latest public node-manager release
+      - name: Diff recent public Box release artifacts
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf /tmp/box-agent && mkdir -p /tmp/box-agent/assets /tmp/box-agent/extract
+          root=/tmp/box-release-diff
+          rm -rf "$root" && mkdir -p "$root/releases" "$root/extract" "$root/strings"
           curl -fsSL -H 'Accept: application/vnd.github+json' \
-            'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=30' \
-            -o /tmp/box-agent/releases.json
-          jq 'sort_by(.published_at) | last' /tmp/box-agent/releases.json > /tmp/box-agent/latest.json
+            'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=100' \
+            -o "$root/releases.json"
+
+          report=box-release-patch-diff.txt
+          : > "$report"
           {
-            echo '=== latest public release ==='
-            jq -r '[.tag_name,.published_at,(.assets|length)] | @tsv' /tmp/box-agent/latest.json
-            echo '=== assets ==='
-            jq -r '.assets[]? | [.name,.size,.browser_download_url] | @tsv' /tmp/box-agent/latest.json
-          } > box-agent-release-strings.txt
-          mapfile -t urls < <(jq -r '.assets[]?.browser_download_url' /tmp/box-agent/latest.json)
-          for url in "${urls[@]}"; do
-            name=$(basename "${url%%\?*}")
-            out="/tmp/box-agent/assets/$name"
-            curl -fL --retry 2 "$url" -o "$out" || continue
-            case "$name" in
-              *.tar.gz|*.tgz) tar -xzf "$out" -C /tmp/box-agent/extract ;;
-              *.zip) unzip -q "$out" -d /tmp/box-agent/extract ;;
-              *) cp "$out" "/tmp/box-agent/extract/$name" ;;
-            esac
+            echo '=== recent release chronology ==='
+            jq -r 'sort_by(.published_at)[] | select(.published_at >= "2026-08-20T00:00:00Z") | [.published_at,.tag_name,([.assets[].name]|join(","))] | @tsv' "$root/releases.json"
+            echo
+            echo '=== latest node-manager releases ==='
+            jq -r '[.[] | select(.tag_name|startswith("node-manager-v"))] | sort_by(.published_at) | reverse | .[:12][] | [.published_at,.tag_name] | @tsv' "$root/releases.json"
+            echo
+            echo '=== latest agent-server releases ==='
+            jq -r '[.[] | select(.tag_name|startswith("agent-server-v"))] | sort_by(.published_at) | reverse | .[:12][] | [.published_at,.tag_name] | @tsv' "$root/releases.json"
+          } >> "$report"
+
+          mapfile -t nmtags < <(jq -r '[.[] | select(.tag_name|startswith("node-manager-v"))] | sort_by(.published_at) | reverse | .[:8] | reverse[] | .tag_name' "$root/releases.json")
+          for tag in "${nmtags[@]}"; do
+            url=$(jq -r --arg t "$tag" '.[] | select(.tag_name==$t) | .assets[]? | select(.name=="ascii-node-manager-linux-x64.tar.gz") | .browser_download_url' "$root/releases.json" | head -1)
+            [ -n "$url" ] || continue
+            mkdir -p "$root/extract/$tag"
+            curl -fL --retry 2 "$url" -o "$root/releases/$tag.tgz"
+            tar -xzf "$root/releases/$tag.tgz" -C "$root/extract/$tag"
+            sha256sum "$root/releases/$tag.tgz" >> "$root/node-manager-sha256.txt"
+            if [ -x "$root/extract/$tag/bin/ascii-node-manager" ]; then
+              strings -a -n 5 "$root/extract/$tag/bin/ascii-node-manager" | sort -u > "$root/strings/$tag.txt"
+            fi
+          done
+
+          {
+            echo
+            echo '=== node-manager artifact sha256 ==='
+            cat "$root/node-manager-sha256.txt" 2>/dev/null || true
+          } >> "$report"
+
+          for ((i=1; i<${#nmtags[@]}; i++)); do
+            prev=${nmtags[$((i-1))]}; curr=${nmtags[$i]}
+            [ -d "$root/extract/$prev" ] && [ -d "$root/extract/$curr" ] || continue
+            {
+              echo
+              echo "=== SCRIPT DIFF $prev -> $curr ==="
+              diff -ruN \
+                --exclude='ascii-node-manager' --exclude='*.pyc' --exclude='manifest.json' --exclude='SHA256SUMS' \
+                "$root/extract/$prev" "$root/extract/$curr" || true
+              if [ -f "$root/strings/$prev.txt" ] && [ -f "$root/strings/$curr.txt" ]; then
+                echo
+                echo "=== NEW HIGH-SIGNAL BINARY STRINGS $prev -> $curr ==="
+                comm -13 "$root/strings/$prev.txt" "$root/strings/$curr.txt" \
+                  | grep -Eai 'auth|hmac|owner|tenant|isolation|bridge|firewall|network|ip|route|path|travers|image|snapshot|credential|secret|token|key|scope|provision|delete|vm|domain|symlink|realpath|canonical|shell|exec|command|header|forwarded|request|signature|nonce|timestamp' \
+                  | head -n 5000 || true
+              fi
+            } >> "$report"
+          done
+
+          # Guest-agent releases are single binaries. Diff high-signal strings for the
+          # newest consecutive Linux x64 artifacts that are publicly downloadable.
+          mapfile -t gatags < <(jq -r '[.[] | select(.tag_name|startswith("agent-server-v"))] | sort_by(.published_at) | reverse | .[:6] | reverse[] | .tag_name' "$root/releases.json")
+          for tag in "${gatags[@]}"; do
+            url=$(jq -r --arg t "$tag" '.[] | select(.tag_name==$t) | .assets[]? | select(.name|test("(ascii|ariana)-agents-server-linux-x64$")) | .browser_download_url' "$root/releases.json" | head -1)
+            [ -n "$url" ] || continue
+            curl -fL --retry 2 "$url" -o "$root/releases/$tag-agent"
+            strings -a -n 5 "$root/releases/$tag-agent" | sort -u > "$root/strings/$tag-agent.txt"
+            sha256sum "$root/releases/$tag-agent" >> "$root/agent-sha256.txt"
           done
           {
             echo
-            echo '=== extracted files ==='
-            find /tmp/box-agent/extract -maxdepth 4 -type f -printf '%p\t%s bytes\n' | sort
-          } >> box-agent-release-strings.txt
-          n=0
-          while IFS= read -r f; do
-            n=$((n+1))
-            strings -a -n 5 "$f" > "/tmp/box-agent/strings-$n.txt" || true
+            echo '=== guest-agent artifact sha256 ==='
+            cat "$root/agent-sha256.txt" 2>/dev/null || true
+          } >> "$report"
+          for ((i=1; i<${#gatags[@]}; i++)); do
+            prev=${gatags[$((i-1))]}; curr=${gatags[$i]}
+            [ -f "$root/strings/$prev-agent.txt" ] && [ -f "$root/strings/$curr-agent.txt" ] || continue
             {
               echo
-              echo "=== $(basename "$f") high-signal strings ==="
-              grep -Eai -C 4 'BOX_CLI_TOKEN|SERVICE_PREVIEW_TOKEN|ASCII_TOKEN|ASCII_API_URL|BOX_ID|169\.254|metadata|userdata|user-data|cloud-init|snapshot|signed.?url|desktop|host(port)?|scope|scoped|token|credential|authorization|bearer|api/box|localhost|127\.0\.0\.1|unix|socket|vsock|fuse|mount|ssh|agent|bootstrap|internal|node.?token|ownership|provision|control.?plane|callback|websocket|wss://|https://' "/tmp/box-agent/strings-$n.txt" | head -n 8000 || true
-            } >> box-agent-release-strings.txt
-          done < <(find /tmp/box-agent/extract -type f -size +1k -print)
-          echo "Generated $(wc -l < box-agent-release-strings.txt) lines"
+              echo "=== NEW HIGH-SIGNAL GUEST STRINGS $prev -> $curr ==="
+              comm -13 "$root/strings/$prev-agent.txt" "$root/strings/$curr-agent.txt" \
+                | grep -Eai 'auth|owner|tenant|network|host|desktop|vnc|file|path|snapshot|credential|secret|token|key|scope|box|machine|command|exec|shell|upload|download|websocket|origin|header|forwarded|request' \
+                | head -n 5000 || true
+            } >> "$report"
+          done
+          echo "Generated $(wc -l < "$report") lines"
       - name: Commit result
         shell: bash
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add box-agent-release-strings.txt
+          git add box-release-patch-diff.txt
           git diff --cached --quiet && exit 0
-          git commit -m 'research: capture extracted Box node-manager strings'
+          git commit -m 'research: capture recent Box release patch diff'
           git push
