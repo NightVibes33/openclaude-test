@@ -1,0 +1,104 @@
+name: Box guest-agent auth fuzz
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and start public Box guest agent locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/gaf && mkdir -p /tmp/gaf/work
+          TAG=agent-server-v0.0.49-ascii-prod29
+          URL="https://github.com/ariana-dot-dev/agent-server/releases/download/$TAG/ascii-agents-server-linux-x64"
+          curl -fL "$URL" -o /tmp/gaf/agent
+          chmod +x /tmp/gaf/agent
+          export MACHINE_ID=box-node-test-authfuzz
+          export SHARED_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          export WORK_DIR=/tmp/gaf/work
+          export ASCII_PORT=18911
+          export IS_SANDBOX=1
+          export BACKEND_URL=http://127.0.0.1:9
+          export BOX_CLI_API_URL=http://127.0.0.1:9
+          export HOME=/tmp/gaf/work
+          /tmp/gaf/agent >/tmp/gaf/server.log 2>&1 &
+          echo $! >/tmp/gaf/pid
+          for i in $(seq 1 80); do
+            curl -sS --max-time 1 http://127.0.0.1:18911/health -o /tmp/gaf/health 2>/dev/null && exit 0
+            kill -0 "$(cat /tmp/gaf/pid)" 2>/dev/null || break
+            sleep .25
+          done
+          echo 'agent did not become ready' >&2
+          cat /tmp/gaf/server.log >&2 || true
+          exit 1
+      - name: Map routes and authentication behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          O=box-guest-agent-auth-fuzz.txt
+          {
+            echo '=== artifact ==='
+            sha256sum /tmp/gaf/agent
+            file /tmp/gaf/agent
+            echo '=== startup ==='
+            cat /tmp/gaf/server.log || true
+            echo '=== listeners ==='
+            ss -lntp || true
+            echo '=== auth/route strings ==='
+            strings -a -n 4 /tmp/gaf/agent | grep -Eai -C 2 'SHARED_KEY|shared.?key|unauthori|forbidden|bearer|authorization|x-[a-z0-9-]*(key|token|auth)|websocket|terminal|shell|command|execute|process|pty|upload|download|snapshot|filesystem|/health|/api|/ws|/terminal|/exec|/files|/shell' | tail -n 7000 || true
+          } > "$O"
+
+          req(){
+            name="$1"; method="$2"; path="$3"; header="${4-}"; data="${5-}"
+            : >/tmp/gaf/body
+            args=(-sS --path-as-is --max-time 3 -o /tmp/gaf/body -w '%{http_code}' -X "$method" "http://127.0.0.1:18911$path")
+            [ -n "$header" ] && args+=(-H "$header")
+            [ -n "$data" ] && args+=(--data-binary "$data")
+            code=$(curl "${args[@]}" 2>/dev/null || printf 000)
+            printf 'PROBE name=%-24s method=%-7s path=%-28s status=%s body=%s\n' "$name" "$method" "$path" "$code" "$(tr '\n\r' '  ' </tmp/gaf/body | head -c 300)" >> "$O"
+          }
+
+          echo '=== unauthenticated route map ===' >> "$O"
+          for p in / /health /status /api /api/health /ws /terminal /shell /exec /execute /command /commands /files /file /upload /download /snapshot /snapshots /process /processes /pty; do
+            req "route-${p//\//_}" GET "$p"
+          done
+          echo '=== method map with invalid bodies ===' >> "$O"
+          for p in /exec /execute /command /commands /shell /files /file /upload /download /snapshot /snapshots /process /pty /api/exec /api/files /api/shell; do
+            req "post-${p//\//_}" POST "$p" '' '{'
+          done
+
+          echo '=== common auth header guesses against high-signal paths ===' >> "$O"
+          for h in \
+            'Authorization: Bearer 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
+            'Authorization: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
+            'X-Shared-Key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
+            'X-API-Key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
+            'X-Ascii-Key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'; do
+            req auth-health GET /health "$h"
+            req auth-root GET / "$h"
+            req auth-exec POST /exec "$h" '{'
+          done
+
+          echo '=== websocket upgrade probes ===' >> "$O"
+          for p in /ws /terminal /shell /pty /api/ws /api/terminal; do
+            key=$(openssl rand -base64 16)
+            code=$(curl -sS --path-as-is --http1.1 --max-time 3 -o /tmp/gaf/body -w '%{http_code}' \
+              -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H "Sec-WebSocket-Key: $key" \
+              "http://127.0.0.1:18911$p" 2>/dev/null || printf 000)
+            printf 'WS path=%-24s status=%s body=%s\n' "$p" "$code" "$(tr '\n\r' '  ' </tmp/gaf/body | head -c 300)" >> "$O"
+          done
+          cat "$O"
+      - name: Upload research result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: box-guest-agent-auth-fuzz
+          path: box-guest-agent-auth-fuzz.txt
+          if-no-files-found: warn
