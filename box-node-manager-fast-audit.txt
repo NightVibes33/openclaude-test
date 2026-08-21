@@ -1,0 +1,3779 @@
+
+===== provision-vm.sh =====
+--- validators / user-or-backend supplied fields ---
+12-
+13-# shellcheck source=lib/vm-cpu.sh
+14-source "$SCRIPT_DIR/lib/vm-cpu.sh"
+15-# shellcheck source=lib/ssh-identity.sh
+16-source "$SCRIPT_DIR/lib/ssh-identity.sh"
+17-# shellcheck source=lib/vm-io.sh
+18-source "$SCRIPT_DIR/lib/vm-io.sh"
+19-
+20-NODE_ID="${NODE_ID:-node0}"
+21-VM_PREFIX="${VM_PREFIX:-box-$NODE_ID}"
+22:VM_NAME="${VM_NAME:-}"
+23:VM_INDEX="${VM_INDEX:-}"
+24:VM_IPV6="${VM_IPV6:-}"
+25:OWNERSHIP_ID="${OWNERSHIP_ID:-}"
+26:MACHINE_SUBDOMAIN="${MACHINE_SUBDOMAIN:-}"
+27-
+28:BASE_IMAGE="${BASE_IMAGE:-}"
+29-VM_ROOT="${VM_ROOT:-/var/lib/ascii/vms}"
+30-STATE_DIR="${STATE_DIR:-/var/lib/ascii/baremetal}"
+31-LEASE_DIR="$STATE_DIR/leases"
+32-
+33-IPV6_PREFIX="${IPV6_PREFIX:-2001:41d0:1004:38a5:100}"
+34-IPV6_PREFIX_LENGTH="${IPV6_PREFIX_LENGTH:-80}"
+35-GUEST_IPV6_GATEWAY="${GUEST_IPV6_GATEWAY:-$IPV6_PREFIX::1}"
+36-PUBLIC_INTERFACE="${PUBLIC_INTERFACE:-enp6s0}"
+37-PUBLIC_NETWORK="${PUBLIC_NETWORK:-libvirt-$NODE_ID}"
+38-NAT_NETWORK="${NAT_NETWORK:-default}"
+--
+41-
+42-VCPUS="${VCPUS:-4}"
+43-VCPU_TOPOLOGY_SPEC=""
+44-MEMORY_MB="${MEMORY_MB:-8192}"
+45-DISK_SIZE="${DISK_SIZE:-70G}"
+46-OS_VARIANT="${OS_VARIANT:-ubuntu24.04}"
+47-CPU_SHARES="${CPU_SHARES:-1024}"
+48-
+49-# IPv4 doorway (DNAT): guests are IPv6-only on the public side, so v4-only
+50-# clients reach them through the node's public IPv4. Ports derive from
+51:# VM_INDEX (unique per node, lowest-free-reused by the lease allocator):
+52-#   ssh    tcp NODE_V4:(19000+index)            -> guest NAT v4 :22
+53-#   webrtc udp NODE_V4:(20000+index*8, 8 ports) -> guest NAT v4 same ports
+54-# The guest's NAT-bridge IPv4 is pinned to 192.168.122.<index> via a dnsmasq
+55-# DHCP reservation so the DNAT target is stable. Rules are tagged
+56-# "ascii:<vm-name>" for exact cleanup; they live in kernel memory only (VMs
+57-# don't survive node reboots either).
+58-NODE_PUBLIC_IPV4="${NODE_PUBLIC_IPV4:-}"
+59-NAT_BRIDGE_V4_PREFIX="${NAT_BRIDGE_V4_PREFIX:-192.168.122}"
+60-SSH_FWD_PORT_BASE="${SSH_FWD_PORT_BASE:-19000}"
+61-WEBRTC_PORT_BASE="${WEBRTC_PORT_BASE:-20000}"
+--
+66-SSH_AUTHORIZED_KEYS_FILE="${SSH_AUTHORIZED_KEYS_FILE:-}"
+67-SSH_PRIVATE_KEY_FILE="${SSH_PRIVATE_KEY_FILE:-}"
+68-PROVISION_PUBLIC_KEY_FILE=""
+69-REMOTE_SETUP_DIR="${REMOTE_SETUP_DIR:-/tmp/ascii-baremetal-setup}"
+70-
+71-GUEST_RUNTIME_SCRIPT="$SCRIPT_DIR/guest-runtime-setup.sh"
+72-NETWORK_ISOLATION_HELPER="$SCRIPT_DIR/lib/isolate_domain_network.py"
+73-TENANT_ISOLATION_SCRIPT="$SCRIPT_DIR/ensure-tenant-isolation.sh"
+74-
+75-AGENT_DOWNLOAD_URL="${AGENT_DOWNLOAD_URL:-}"
+76:AGENT_SERVER_TAG="${AGENT_SERVER_TAG:-}"
+77-AGENTS_SERVER_CHANNEL="${AGENTS_SERVER_CHANNEL:-}"
+78-AGENT_PORT="${AGENT_PORT:-8911}"
+79-BACKEND_URL="${BACKEND_URL:-https://ascii.dev}"
+80:BOX_CLI_API_URL="${BOX_CLI_API_URL:-$BACKEND_URL}"
+81:BOX_CLI_CHANNEL="${BOX_CLI_CHANNEL:-prod}"
+82:BOX_CLI_MODE="${BOX_CLI_MODE:-box}"
+83:BOX_CLI_TAG="${BOX_CLI_TAG:-}"
+84-ENABLE_AGENT_V6_PROXY="${ENABLE_AGENT_V6_PROXY:-1}"
+85-
+86:GATEWAY_PROXY_URL="${GATEWAY_PROXY_URL:-}"
+87:GATEWAY_CAPABILITY="${GATEWAY_CAPABILITY:-}"
+88:GATEWAY_EXPIRES="${GATEWAY_EXPIRES:-}"
+89:GATEWAY_TARGET_IP=""
+90-SKIP_CERT_GATEWAY="${SKIP_CERT_GATEWAY:-0}"
+91-REGISTER_TEST_PORT="${REGISTER_TEST_PORT:-0}"
+92-TEST_PORT="${TEST_PORT:-8081}"
+93-
+94-SKIP_RUNTIME_SETUP="${SKIP_RUNTIME_SETUP:-0}"
+95-CLEANUP_ON_FAILURE="${CLEANUP_ON_FAILURE:-1}"
+96-
+97-LEASE_CREATED=0
+98-VM_CREATED=0
+99-EPHEMERAL_PROVISION_KEY=0
+--
+117-  --name NAME              VM name; default box-node0-<random>
+118-  --index N                Allocation index; default first free from $ALLOCATE_START_INDEX..$ALLOCATE_END_INDEX
+119-  --ipv6 ADDR              Explicit guest IPv6; index is derived from final hextet if --index is absent
+120-  --subdomain NAME         cert-gateway subdomain; default VM name
+121-  --skip-runtime-setup     Skip agent/desktop runtime setup
+122-  --skip-cert-gateway      Skip cert-gateway route registration
+123-  --cleanup-on-failure     Destroy VM and remove files if provisioning fails (default)
+124-  -h, --help               Show this help
+125-
+126-Important env vars:
+127:  BASE_IMAGE               required exact checksummed qcow2 base-image path
+128:  GATEWAY_PROXY_URL        backend proxy; requires VM-scoped capability fields
+129:  AGENT_SERVER_TAG         exact release tag, e.g. agent-server-v0.0.49-ascii-prod29
+130:  AGENTS_SERVER_CHANNEL    resolves latest channel tag when AGENT_SERVER_TAG is unset
+131-  SSH_AUTHORIZED_KEYS_FILE dev only: standing guest root keys; skips the post-setup root SSH lockdown (never set for customer boxes)
+132-  CLEANUP_ON_FAILURE      defaults to 1; set to 0 only to retain failed artifacts for debugging
+133-EOF
+134-}
+135-
+136-while [ $# -gt 0 ]; do
+137-  case "$1" in
+138:    --name) VM_NAME="$2"; shift 2 ;;
+139:    --index) VM_INDEX="$2"; shift 2 ;;
+140:    --ipv6) VM_IPV6="$2"; shift 2 ;;
+141:    --subdomain) MACHINE_SUBDOMAIN="$2"; shift 2 ;;
+142-    --skip-runtime-setup) SKIP_RUNTIME_SETUP=1; shift ;;
+143-    --skip-cert-gateway) SKIP_CERT_GATEWAY=1; shift ;;
+144-    --cleanup-on-failure) CLEANUP_ON_FAILURE=1; shift ;;
+145-    -h|--help) usage; exit 0 ;;
+146-    *) printf 'Unknown argument: %s\n' "$1" >&2; usage; exit 1 ;;
+147-  esac
+148-done
+149-
+150-log() {
+151-  printf '[baremetal-provision] %s\n' "$*"
+--
+178-  local rc=$? domain_gone route_name
+179-  if [ "$rc" -eq 0 ]; then
+180-    return
+181-  fi
+182-
+183-  printf '[baremetal-provision] failed with exit code %s\n' "$rc" >&2
+184-  if [ "$CLEANUP_ON_FAILURE" = "1" ]; then
+185-    log "cleanup-on-failure enabled; removing partial VM artifacts"
+186-    domain_gone=1
+187-    if [ "$DOMAIN_NAME_OWNED" = 1 ]; then
+188:      virsh destroy "$VM_NAME" >/dev/null 2>&1 || true
+189:      virsh undefine "$VM_NAME" --nvram >/dev/null 2>&1 || virsh undefine "$VM_NAME" >/dev/null 2>&1 || true
+190:      if virsh dominfo "$VM_NAME" >/dev/null 2>&1; then
+191-        domain_gone=0
+192-        log "ERROR: partial domain still exists; preserving its ownership metadata and host state"
+193-      else
+194-        cleanup_vm_filters
+195-      fi
+196-    fi
+197-    if [ "$domain_gone" = 1 ]; then
+198:      if [ -n "$VM_IPV6" ]; then
+199:        ip -6 neigh del proxy "$VM_IPV6" dev "$PUBLIC_INTERFACE" >/dev/null 2>&1 || true
+200-      fi
+201-      remove_ipv4_doorway
+202:      if [ -n "$VM_NAME" ] && [ -n "$GATEWAY_PROXY_URL" ] && [ -n "$GATEWAY_CAPABILITY" ]; then
+203:        for route_name in "$VM_NAME" "$VM_NAME-desktop" "$VM_NAME-$TEST_PORT"; do
+204-          gateway_request unregister-route "$(jq -nc --arg machineName "$route_name" '{machineName: $machineName}')" >/dev/null 2>&1 || true
+205-        done
+206:        gateway_request unregister-wireguard "$(jq -nc --arg machineName "$VM_NAME" '{machineName: $machineName}')" >/dev/null 2>&1 || true
+207-      fi
+208-      if [ "$VM_DIR_CREATED" = 1 ] && [ -n "$VM_DIR" ] && [ -d "$VM_DIR" ]; then
+209-        rm -rf "$VM_DIR"
+210-      fi
+211-      if [ "$LEASE_CREATED" = "1" ] && [ -n "$LEASE_FILE" ]; then
+212-        rm -f "$LEASE_FILE"
+213-      fi
+214-    fi
+215-  else
+216-    if [ "$LEASE_CREATED" = "1" ] && [ "$VM_CREATED" != "1" ] && [ -n "$LEASE_FILE" ]; then
+--
+221-}
+222-trap cleanup_failure EXIT
+223-
+224-require_root() {
+225-  if [ "$(id -u)" -ne 0 ]; then
+226-    fail "run this on the bare-metal node as root, usually with sudo"
+227-  fi
+228-}
+229-
+230-find_base_image() {
+231:  [ -n "$BASE_IMAGE" ] || fail "BASE_IMAGE must pin a promoted image; newest-image fallback is forbidden"
+232:  [ -f "$BASE_IMAGE" ] || fail "BASE_IMAGE does not exist: $BASE_IMAGE"
+233:  [ -f "$BASE_IMAGE.sha256" ] || fail "BASE_IMAGE checksum is missing: $BASE_IMAGE.sha256"
+234-  local expected actual
+235:  expected="$(awk '{print $1}' "$BASE_IMAGE.sha256")"
+236:  actual="$(sha256sum "$BASE_IMAGE" | awk '{print $1}')"
+237:  [ "$expected" = "$actual" ] || fail "BASE_IMAGE checksum mismatch: $BASE_IMAGE"
+238-}
+239-
+240-random_suffix() {
+241-  openssl rand -hex 3
+242-}
+243-
+244-derive_index_from_ipv6() {
+245:  local last_hextet="${VM_IPV6##*:}"
+246-  if [ -z "$last_hextet" ]; then
+247:    fail "cannot derive VM_INDEX from VM_IPV6=$VM_IPV6; pass --index"
+248-  fi
+249:  VM_INDEX="$((16#$last_hextet))"
+250-}
+251-
+252:validate_requested_network() {
+253:  [ -n "$VM_IPV6" ] || return 0
+254:  python3 - "$VM_IPV6" "$IPV6_PREFIX" "$IPV6_PREFIX_LENGTH" "$VM_INDEX" <<'PY'
+255-import ipaddress
+256-import sys
+257-
+258-address = ipaddress.IPv6Address(sys.argv[1])
+259-prefix = sys.argv[2].rstrip(':') + '::'
+260-network = ipaddress.IPv6Network(f'{prefix}/{sys.argv[3]}', strict=False)
+261-if address not in network:
+262-    raise SystemExit(f'IPv6 address {address} is outside {network}')
+263-if sys.argv[4] and int(sys.argv[4]) != int(address.exploded.split(':')[-1], 16):
+264:    raise SystemExit('VM_INDEX does not match the IPv6 final hextet')
+265-PY
+266-}
+267-
+268-allocate_ip() {
+269-  mkdir -p "$LEASE_DIR"
+270-  # Serialize only the lease scan/write. Provisioning remains concurrent, but
+271-  # two creates can never inspect the same free slot and make one fail spuriously.
+272-  exec 8>"$LEASE_DIR/.allocation.lock"
+273-  flock 8
+274-
+275:  if [ -z "$VM_NAME" ]; then
+276:    VM_NAME="$VM_PREFIX-$(random_suffix)"
+277-  fi
+278-
+279:  if [ -n "$VM_IPV6" ] && [ -z "$VM_INDEX" ]; then
+280-    derive_index_from_ipv6
+281-  fi
+282-
+283:  if [ -n "$VM_INDEX" ]; then
+284:    if ! [[ "$VM_INDEX" =~ ^[0-9]+$ ]]; then
+285:      fail "VM_INDEX must be numeric: $VM_INDEX"
+286-    fi
+287:    if [ -z "$VM_IPV6" ]; then
+288:      VM_IPV6="$IPV6_PREFIX::$(printf '%x' "$VM_INDEX")"
+289-    fi
+290-  else
+291-    local idx hex candidate lease
+292-    for idx in $(seq "$ALLOCATE_START_INDEX" "$ALLOCATE_END_INDEX"); do
+293-      hex="$(printf '%x' "$idx")"
+294-      candidate="$IPV6_PREFIX::$hex"
+295-      lease="$LEASE_DIR/$idx"
+296-      [ -e "$lease" ] && continue
+297-      if ip -6 neigh show proxy | grep -Fq "$candidate "; then
+298-        continue
+299-      fi
+300:      VM_INDEX="$idx"
+301:      VM_IPV6="$candidate"
+302-      break
+303-    done
+304:    [ -n "$VM_INDEX" ] || fail "no free IPv6 allocation index in $ALLOCATE_START_INDEX..$ALLOCATE_END_INDEX"
+305-  fi
+306-
+307:  if [ "$VM_INDEX" -lt 2 ] || [ "$VM_INDEX" -gt 239 ]; then
+308:    fail "VM_INDEX must be in 2..239 for current MAC generation: $VM_INDEX"
+309-  fi
+310-
+311:  LEASE_FILE="$LEASE_DIR/$VM_INDEX"
+312-  if [ -e "$LEASE_FILE" ]; then
+313:    fail "allocation index already leased: $VM_INDEX ($LEASE_FILE)"
+314-  fi
+315-
+316:  if ! (set -o noclobber; printf 'vm=%s\nipv6=%s\ncreated_at=%s\n' "$VM_NAME" "$VM_IPV6" "$(date -Is)" > "$LEASE_FILE") 2>/dev/null; then
+317-    fail "failed to claim lease: $LEASE_FILE"
+318-  fi
+319-  LEASE_CREATED=1
+320-  flock -u 8
+321-
+322:  MACHINE_SUBDOMAIN="${MACHINE_SUBDOMAIN:-$VM_NAME}"
+323-}
+324-
+325-# Linux interface names are limited to 15 bytes. A deterministic digest keeps
+326-# tap/filter identity stable across libvirt and harness restarts without putting
+327-# the potentially long VM name into a kernel identifier.
+328-derive_network_names() {
+329-  local digest
+330:  digest="$(printf '%s' "$VM_NAME" | sha256sum | cut -c1-10)"
+331-  PUBLIC_TAP="ap${digest}p"
+332-  NAT_TAP="ap${digest}n"
+333-  PUBLIC_FILTER="ascii-${digest}-public"
+334-  NAT_FILTER="ascii-${digest}-nat"
+335-}
+336-
+337-define_vm_filters() {
+338-  local public_xml nat_xml
+339-  public_xml="$(mktemp)"
+340-  nat_xml="$(mktemp)"
+341-
+342-  # Public NIC: its known MAC and assigned public IPv6 are the only permitted
+343-  # guest identities. NDP/ICMPv6 and ordinary IPv6 remain fully functional.
+344-  cat > "$public_xml" <<EOF
+345-<filter name='$PUBLIC_FILTER' chain='root'>
+346-  <filterref filter='no-mac-spoofing'/>
+347-  <filterref filter='no-ipv6-spoofing'>
+348:    <parameter name='IPV6' value='$VM_IPV6'/>
+349-  </filterref>
+350-  <rule action='accept' direction='inout' priority='-500'>
+351-    <mac protocolid='ipv6'/>
+352-  </rule>
+353-  <filterref filter='qemu-announce-self'/>
+354-  <filterref filter='no-other-l2-traffic'/>
+355-</filter>
+356-EOF
+357-
+358-  # NAT NIC: clean-traffic enforces MAC, ARP and the DHCP-reserved IPv4. Its
+--
+374-    fail "failed to define NAT nwfilter $NAT_FILTER"
+375-  fi
+376-  rm -f "$public_xml" "$nat_xml"
+377-}
+378-
+379-cleanup_vm_filters() {
+380-  [ -n "$PUBLIC_FILTER" ] && virsh nwfilter-undefine "$PUBLIC_FILTER" >/dev/null 2>&1 || true
+381-  [ -n "$NAT_FILTER" ] && virsh nwfilter-undefine "$NAT_FILTER" >/dev/null 2>&1 || true
+382-}
+383-
+384:validate_names() {
+385:  [[ "$VM_NAME" =~ ^box-[a-z0-9]+-[a-z0-9-]+$ ]] || fail "VM_NAME must look like box-node0-abc123: $VM_NAME"
+386:  [[ "$OWNERSHIP_ID" =~ ^[A-Za-z0-9_-]{8,128}$ ]] || fail "OWNERSHIP_ID is required and invalid"
+387:  [[ "$MACHINE_SUBDOMAIN" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || fail "invalid subdomain: $MACHINE_SUBDOMAIN"
+388-}
+389-
+390-write_ownership_witness() {
+391-  local tmp="$VM_DIR/.machine-info.provisional"
+392-  {
+393-    printf 'PROVIDER=baremetal\n'
+394-    printf 'NODE_ID=%q\n' "$NODE_ID"
+395:    printf 'MACHINE_NAME=%q\n' "$VM_NAME"
+396:    printf 'MACHINE_ID=%q\n' "$VM_NAME"
+397:    printf 'OWNERSHIP_ID=%q\n' "$OWNERSHIP_ID"
+398:    printf 'MACHINE_IP=%q\n' "$VM_IPV6"
+399:    printf 'MACHINE_IP_TYPE=IPv6\n'
+400:    printf 'MACHINE_SUBDOMAIN=%q\n' "$MACHINE_SUBDOMAIN"
+401:    printf 'VM_INDEX=%q\n' "$VM_INDEX"
+402:    printf 'PUBLIC_MAC=%q\n' "$PUBLIC_MAC"
+403:    printf 'NAT_MAC=%q\n' "$NAT_MAC"
+404-    printf 'NAT_IP=%q\n' "$NAT_IP"
+405-    printf 'PUBLIC_FILTER=%q\n' "$PUBLIC_FILTER"
+406-    printf 'NAT_FILTER=%q\n' "$NAT_FILTER"
+407-    printf 'NAT_NETWORK=%q\n' "$NAT_NETWORK"
+408-  } > "$tmp"
+409-  chmod 600 "$tmp"
+410-  mv "$tmp" "$VM_DIR/machine-info.env"
+411-}
+412-
+413-resolve_ssh_keys() {
+--
+429-  grep -E '^(ssh-|ecdsa-|sk-)' "$out" | sort -u > "$out.filtered" || fail "no public SSH keys found"
+430-  mv "$out.filtered" "$out"
+431-}
+432-
+433-ensure_provision_ssh_key() {
+434-  # Fresh throwaway keypair per VM (ASC-187): it exists only for the setup
+435-  # window and revoke_provision_access removes it from the guest and the node.
+436-  # An explicit SSH_PRIVATE_KEY_FILE is a dev override and is left in place.
+437-  if [ -z "$SSH_PRIVATE_KEY_FILE" ]; then
+438-    SSH_PRIVATE_KEY_FILE="$VM_DIR/provision-key"
+439:    ssh-keygen -t ed25519 -N '' -f "$SSH_PRIVATE_KEY_FILE" -C "ascii-provision-$VM_NAME" >/dev/null
+440-    EPHEMERAL_PROVISION_KEY=1
+441-  fi
+442-
+443-  chmod 600 "$SSH_PRIVATE_KEY_FILE"
+444-  if [ ! -f "$SSH_PRIVATE_KEY_FILE.pub" ]; then
+445-    ssh-keygen -y -f "$SSH_PRIVATE_KEY_FILE" > "$SSH_PRIVATE_KEY_FILE.pub"
+446-  fi
+447-  chmod 644 "$SSH_PRIVATE_KEY_FILE.pub"
+448-  PROVISION_PUBLIC_KEY_FILE="$SSH_PRIVATE_KEY_FILE.pub"
+449-}
+450-
+451-# ASC-186: the guest's SSH host identity is minted here, before first boot,
+452-# seeded into the guest via cloud-init, and pinned on every connection this
+453-# script makes. The setup channel runs as root and carries Box credentials
+454-# back, so it must never reach an sshd we cannot prove is the VM we created.
+455-ensure_vm_host_identity() {
+456-  HOST_KEY_FILE="$VM_DIR/host-key"
+457:  ssh-keygen -t ed25519 -N '' -f "$HOST_KEY_FILE" -C "$VM_NAME" >/dev/null
+458-  SSH_HOST_PUBKEY="$(cut -d' ' -f1,2 < "$HOST_KEY_FILE.pub")"
+459-  KNOWN_HOSTS_FILE="$VM_DIR/known_hosts"
+460:  host_identity_known_hosts_write "$KNOWN_HOSTS_FILE" "$VM_IPV6" "$HOST_KEY_FILE.pub"
+461-}
+462-
+463-write_cloud_init() {
+464-  local mac_byte public_mac nat_mac
+465:  mac_byte="$(printf '%02x' "$VM_INDEX")"
+466:  public_mac="${PUBLIC_MAC:-52:54:00:aa:01:$mac_byte}"
+467:  nat_mac="${NAT_MAC:-52:54:00:aa:02:$mac_byte}"
+468-
+469-  resolve_ssh_keys
+470-
+471-  {
+472:    printf 'instance-id: %s\n' "$VM_NAME"
+473:    printf 'local-hostname: %s\n' "$VM_NAME"
+474-  } > "$VM_DIR/meta-data"
+475-
+476-  # Keys go to root ONLY, and only for the provisioning window: the list is
+477-  # the per-VM throwaway key (plus explicit dev keys, if any), and
+478-  # revoke_provision_access strips it and sets PermitRootLogin no before the
+479-  # box is handed over (ASC-187). The default user gets NO keys here —
+480-  # customer keys are installed later by the agent-server. The runcmd guard
+481-  # clears a lockdown inherited from a snapshot-derived disk so a future
+482-  # re-provision flow can't lock itself out; it runs once per instance, so
+483-  # restarting a parked VM keeps its lockdown.
+484-  {
+485-    printf '#cloud-config\n'
+486:    printf 'hostname: %s\n' "$VM_NAME"
+487-    printf 'manage_etc_hosts: true\n'
+488-    printf 'disable_root: false\n'
+489-    printf 'ssh_pwauth: false\n'
+490-    printf 'users:\n'
+491-    printf '  - default\n'
+492-    printf '  - name: root\n'
+493-    printf '    lock_passwd: true\n'
+494-    printf '    ssh_authorized_keys:\n'
+495-    while IFS= read -r key; do
+496-      printf '      - %s\n' "$key"
+--
+515-  cat > "$VM_DIR/network-config" <<EOF
+516-version: 2
+517-ethernets:
+518-  public0:
+519-    match:
+520-      macaddress: "$public_mac"
+521-    set-name: ens3
+522-    dhcp4: false
+523-    dhcp6: false
+524-    addresses:
+525:      - $VM_IPV6/$IPV6_PREFIX_LENGTH
+526-    routes:
+527-      - to: default
+528-        via: $GUEST_IPV6_GATEWAY
+529-    nameservers:
+530-      addresses:
+531-        - 2606:4700:4700::1111
+532-        - 2001:4860:4860::8888
+533-  nat0:
+534-    match:
+535-      macaddress: "$nat_mac"
+--
+538-    dhcp6: false
+539-EOF
+540-
+541-  cloud-localds --network-config="$VM_DIR/network-config" "$VM_DIR/seed.iso" "$VM_DIR/user-data" "$VM_DIR/meta-data"
+542-  # The seed carries the guest's host private key; qemu reads it as owner
+543-  # (create_vm chowns it to libvirt-qemu), so no world-readable bit needed.
+544-  chmod 640 "$VM_DIR/seed.iso"
+545-  # No loose copy of the guest's private identity on the node beyond the seed.
+546-  rm -f "$HOST_KEY_FILE"
+547-
+548:  PUBLIC_MAC="$public_mac"
+549:  NAT_MAC="$nat_mac"
+550-}
+551-
+552-resolve_node_public_ipv4() {
+553-  if [ -z "$NODE_PUBLIC_IPV4" ]; then
+554-    NODE_PUBLIC_IPV4="$(ip -o -4 addr show "$PUBLIC_INTERFACE" | awk '{print $4}' | cut -d/ -f1 | head -1 || true)"
+555-  fi
+556-  [ -n "$NODE_PUBLIC_IPV4" ] || fail "cannot detect NODE_PUBLIC_IPV4 on $PUBLIC_INTERFACE"
+557:  NAT_IP="$NAT_BRIDGE_V4_PREFIX.$VM_INDEX"
+558:  SSH_FWD_PORT=$((SSH_FWD_PORT_BASE + VM_INDEX))
+559:  WEBRTC_PORT_MIN=$((WEBRTC_PORT_BASE + VM_INDEX * WEBRTC_PORTS_PER_VM))
+560-  WEBRTC_PORT_MAX=$((WEBRTC_PORT_MIN + WEBRTC_PORTS_PER_VM - 1))
+561-  SSH_ENDPOINT="$NODE_PUBLIC_IPV4:$SSH_FWD_PORT"
+562:  AGENT_FWD_PORT=$((AGENT_FWD_PORT_BASE + VM_INDEX))
+563-  AGENT_ENDPOINT="$NODE_PUBLIC_IPV4:$AGENT_FWD_PORT"
+564-}
+565-
+566-# iptables (nft backend) instead of raw nft: ufw and libvirt already manage
+567-# this hook universe through iptables chains, and a DNATed flow must survive
+568-# ALL of them (ufw's FORWARD drop policy, libvirt's virbr0 reject). Speaking
+569-# the same dialect lets us insert the accept at the head of FORWARD.
+570-setup_ipv4_doorway() {
+571-  need_cmd nft
+572-  need_cmd iptables
+573-  need_cmd ip6tables
+574-
+575:  log "pinning guest NAT IPv4 $NAT_IP (dnsmasq reservation for $NAT_MAC)"
+576:  virsh net-update "$NAT_NETWORK" delete ip-dhcp-host "<host mac='$NAT_MAC'/>" --live --config >/dev/null 2>&1 || true
+577:  virsh net-update "$NAT_NETWORK" add-last ip-dhcp-host "<host mac='$NAT_MAC' ip='$NAT_IP'/>" --live --config >/dev/null
+578-
+579-  sysctl -w net.ipv4.ip_forward=1 >/dev/null
+580-
+581-  log "adding IPv4 doorway: ssh $SSH_ENDPOINT, agent $AGENT_ENDPOINT, webrtc udp $WEBRTC_PORT_MIN-$WEBRTC_PORT_MAX"
+582-  iptables -t nat -A PREROUTING -d "$NODE_PUBLIC_IPV4" -p tcp --dport "$SSH_FWD_PORT" \
+583:    -m comment --comment "ascii:$VM_NAME" -j DNAT --to-destination "$NAT_IP:22"
+584-  # Agent-server doorway: the backend's direct machine RPC (health loop, restore
+585-  # verification) targets ip:8911; v4-only backends reach it through this port.
+586-  iptables -t nat -A PREROUTING -d "$NODE_PUBLIC_IPV4" -p tcp --dport "$AGENT_FWD_PORT" \
+587:    -m comment --comment "ascii:$VM_NAME" -j DNAT --to-destination "$NAT_IP:$AGENT_SERVER_PORT"
+588-  iptables -t nat -A PREROUTING -d "$NODE_PUBLIC_IPV4" -p udp --dport "$WEBRTC_PORT_MIN:$WEBRTC_PORT_MAX" \
+589:    -m comment --comment "ascii:$VM_NAME" -j DNAT --to-destination "$NAT_IP"
+590-  # Only traffic entering from the node's public NIC may use the doorway. This
+591-  # prevents a guest from hairpinning through the node IPv4 to reach a peer.
+592-  iptables -I FORWARD 1 -i "$PUBLIC_INTERFACE" -d "$NAT_IP" \
+593:    -m conntrack --ctstate DNAT -m comment --comment "ascii:$VM_NAME" -j ACCEPT
+594-
+595-  # Install these last so they stay ahead of libvirt's same-bridge ACCEPT and
+596-  # all per-VM DNAT accepts. The node-agent runs the same repair at startup.
+597-  "$TENANT_ISOLATION_SCRIPT"
+598-}
+599-
+600-remove_ipv4_doorway() {
+601-  local table
+602-  for table in nat filter; do
+603-    # `|| true`: no matching rules means grep exits 1, and under pipefail that
+604-    # would abort cleanup and leak the half-provisioned VM (ASC-294).
+605:    iptables -t "$table" -S 2>/dev/null | { grep -F -- "ascii:$VM_NAME" || true; } | sed 's/^-[AI] */-D /' \
+606-      | while IFS= read -r rule; do
+607-          # eval: -S quotes the comment argument; plain word-splitting would
+608-          # pass the quotes literally and the delete would not match.
+609-          eval "iptables -t $table $rule" >/dev/null 2>&1 || true
+610-        done
+611-  done
+612:  if [ -n "${NAT_MAC:-}" ]; then
+613:    virsh net-update "$NAT_NETWORK" delete ip-dhcp-host "<host mac='$NAT_MAC'/>" --live --config >/dev/null 2>&1 || true
+614-  fi
+615-}
+616-
+617-ensure_libvirt() {
+618-  virsh net-info "$PUBLIC_NETWORK" >/dev/null 2>&1 || fail "libvirt network missing: $PUBLIC_NETWORK"
+619-  if [ "$(virsh net-info "$PUBLIC_NETWORK" | awk '/^Active:/ { print $2; exit }')" != "yes" ]; then
+620-    virsh net-start "$PUBLIC_NETWORK"
+621-  fi
+622-
+623-  virsh net-info "$NAT_NETWORK" >/dev/null 2>&1 || fail "libvirt NAT network missing: $NAT_NETWORK"
+624-  if [ "$(virsh net-info "$NAT_NETWORK" | awk '/^Active:/ { print $2; exit }')" != "yes" ]; then
+625-    virsh net-start "$NAT_NETWORK"
+626-  fi
+627-
+628:  if virsh dominfo "$VM_NAME" >/dev/null 2>&1; then
+629:    fail "libvirt domain already exists: $VM_NAME"
+630-  fi
+631-}
+632-
+633-create_vm() {
+634-  [ ! -e "$VM_DIR/root.qcow2" ] || fail "VM disk already exists: $VM_DIR/root.qcow2"
+635-
+636:  log "creating qcow2 overlay from $BASE_IMAGE"
+637:  qemu-img create -f qcow2 -F qcow2 -b "$BASE_IMAGE" "$VM_DIR/root.qcow2" "$DISK_SIZE"
+638-  chmod 644 "$VM_DIR/root.qcow2"
+639-  if id -u libvirt-qemu >/dev/null 2>&1; then
+640-    chown libvirt-qemu:kvm "$VM_DIR/root.qcow2" "$VM_DIR/seed.iso"
+641-  fi
+642-
+643:  log "adding proxy NDP for $VM_IPV6 on $PUBLIC_INTERFACE"
+644-  sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+645-  sysctl -w net.ipv6.conf.default.forwarding=1 >/dev/null
+646-  sysctl -w "net.ipv6.conf.$PUBLIC_INTERFACE.proxy_ndp=1" >/dev/null
+647:  ip -6 neigh replace proxy "$VM_IPV6" dev "$PUBLIC_INTERFACE"
+648-
+649-  local domain_xml="$VM_DIR/domain.xml"
+650-
+651:  log "rendering isolated domain XML for $VM_NAME"
+652-  define_vm_filters
+653-  virt-install \
+654-    --import \
+655:    --name "$VM_NAME" \
+656-    --memory "$MEMORY_MB" \
+657-    --vcpus "$VCPU_TOPOLOGY_SPEC" \
+658-    --cpu host-passthrough \
+659-    --disk "path=$VM_DIR/root.qcow2,format=qcow2,bus=virtio,discard=unmap" \
+660-    --disk "path=$VM_DIR/seed.iso,device=cdrom" \
+661-    --os-variant "$OS_VARIANT" \
+662:    --network "network=$PUBLIC_NETWORK,model=virtio,mac=$PUBLIC_MAC,target.dev=$PUBLIC_TAP,filterref.filter=$PUBLIC_FILTER" \
+663:    --network "network=$NAT_NETWORK,model=virtio,mac=$NAT_MAC,target.dev=$NAT_TAP,filterref.filter=$NAT_FILTER" \
+664-    --graphics none \
+665-    --noautoconsole \
+666-    --print-xml \
+667-    --dry-run > "$domain_xml"
+668-
+669-  python3 "$NETWORK_ISOLATION_HELPER" "$domain_xml" \
+670-    --expected-network "$PUBLIC_NETWORK" \
+671-    --expected-network "$NAT_NETWORK"
+672-
+673:  log "defining and starting $VM_NAME"
+674-  virsh define "$domain_xml" >/dev/null
+675-  VM_CREATED=1
+676:  virsh start "$VM_NAME" >/dev/null
+677-
+678-  # Do not impose an absolute disk ceiling on an otherwise idle guest. Apply
+679-  # explicit zeros live and persistently so inherited limits cannot survive.
+680:  virsh schedinfo "$VM_NAME" --set "cpu_shares=$CPU_SHARES" --live --config >/dev/null
+681:  vm_io_apply_policy "$VM_NAME" vda --live --config >/dev/null
+682:  virsh autostart "$VM_NAME" >/dev/null
+683-}
+684-
+685-ssh_base_args() {
+686-  local args=(
+687-    -6
+688-    -o ConnectTimeout=10
+689-    -o ServerAliveInterval=15
+690-    -o ServerAliveCountMax=8
+691-  )
+692-  # ASC-186: every connection is checked against the host key minted at
+--
+696-  args+=("${pin[@]}")
+697-  if [ -n "$SSH_PRIVATE_KEY_FILE" ]; then
+698-    args=(-i "$SSH_PRIVATE_KEY_FILE" "${args[@]}")
+699-  fi
+700-  printf '%s\n' "${args[@]}"
+701-}
+702-
+703-ssh_root() {
+704-  local args=()
+705-  mapfile -t args < <(ssh_base_args)
+706:  ssh "${args[@]}" "root@$VM_IPV6" "$@"
+707-}
+708-
+709-scp_to_guest() {
+710-  local source="$1"
+711-  local destination="$2"
+712-  local args=()
+713-  mapfile -t args < <(ssh_base_args)
+714:  scp "${args[@]}" -r "$source" "root@[$VM_IPV6]:$destination"
+715-}
+716-
+717-wait_for_ssh() {
+718:  log "waiting for SSH on $VM_IPV6 (host identity pinned)"
+719-  local rc=0
+720-  wait_for_verified_ssh 600 2 15 ssh_root "true" || rc=$?
+721-  case "$rc" in
+722-    0) log "SSH ready, host identity verified" ;;
+723:    2) fail "SSH host identity mismatch on $VM_IPV6: whatever is answering is not the VM we created; refusing to provision" ;;
+724-    *) fail "guest did not become SSH-ready within 20 minutes" ;;
+725-  esac
+726-}
+727-
+728-# The base image is a golden qcow2 with all dependencies and product binaries
+729-# baked in (base-image-qemu.pkr.hcl); the guest only needs per-VM runtime setup.
+730-copy_guest_inputs() {
+731-  log "copying guest setup inputs"
+732-  ssh_root "rm -rf $(quote "$REMOTE_SETUP_DIR") && mkdir -p $(quote "$REMOTE_SETUP_DIR")"
+733-  scp_to_guest "$GUEST_RUNTIME_SCRIPT" "$REMOTE_SETUP_DIR/guest-runtime-setup.sh"
+734-}
+735-
+736-resolve_agent_download_url() {
+737:  [[ "$AGENT_SERVER_TAG" =~ ^agent-server-v[A-Za-z0-9._-]+$ ]] \
+738:    || fail "AGENT_SERVER_TAG must pin an agent-server-v* release"
+739:  AGENT_DOWNLOAD_URL="https://github.com/ariana-dot-dev/agent-server/releases/download/$AGENT_SERVER_TAG/ascii-agents-server-linux-x64"
+740-}
+741-
+742-run_guest_setup() {
+743-  if [ "$SKIP_RUNTIME_SETUP" != "1" ]; then
+744-    log "running runtime setup in guest"
+745-    ssh_root "env \
+746:      MACHINE_NAME=$(quote "$VM_NAME") \
+747:      MACHINE_IP=$(quote "$VM_IPV6") \
+748:      MACHINE_SUBDOMAIN=$(quote "$MACHINE_SUBDOMAIN") \
+749-      AGENT_DOWNLOAD_URL=$(quote "$AGENT_DOWNLOAD_URL") \
+750:      AGENT_SERVER_TAG=$(quote "$AGENT_SERVER_TAG") \
+751-      AGENT_PORT=$(quote "$AGENT_PORT") \
+752-      BACKEND_URL=$(quote "$BACKEND_URL") \
+753:      BOX_CLI_API_URL=$(quote "$BOX_CLI_API_URL") \
+754:      BOX_CLI_CHANNEL=$(quote "$BOX_CLI_CHANNEL") \
+755:      BOX_CLI_MODE=$(quote "$BOX_CLI_MODE") \
+756:      BOX_CLI_TAG=$(quote "$BOX_CLI_TAG") \
+757-      AGENTS_SERVER_CHANNEL=$(quote "$AGENTS_SERVER_CHANNEL") \
+758-      ENABLE_AGENT_V6_PROXY=$(quote "$ENABLE_AGENT_V6_PROXY") \
+759-      NODE_PUBLIC_IPV4=$(quote "$NODE_PUBLIC_IPV4") \
+760-      WEBRTC_PORT_MIN=$(quote "$WEBRTC_PORT_MIN") \
+761-      WEBRTC_PORT_MAX=$(quote "$WEBRTC_PORT_MAX") \
+762-      bash $(quote "$REMOTE_SETUP_DIR/guest-runtime-setup.sh")" | tee "$VM_DIR/runtime-setup.log"
+763-    ssh_root "cat /opt/ascii-agent/provision-result.env" > "$VM_DIR/runtime-result.env"
+764-    chmod 600 "$VM_DIR/runtime-result.env"
+765-  else
+766-    log "skipping runtime setup"
+--
+785-  ssh_root "set -e
+786-: > /root/.ssh/authorized_keys
+787-chmod 600 /root/.ssh/authorized_keys
+788-mkdir -p /etc/ssh/sshd_config.d
+789-printf 'PermitRootLogin no\nPasswordAuthentication no\n' > /etc/ssh/sshd_config.d/00-ascii-lockdown.conf
+790-chmod 644 /etc/ssh/sshd_config.d/00-ascii-lockdown.conf
+791-systemctl reload-or-restart ssh 2>/dev/null || systemctl reload-or-restart sshd 2>/dev/null || true"
+792-
+793-  local args=()
+794-  mapfile -t args < <(ssh_base_args)
+795:  if ssh -o BatchMode=yes "${args[@]}" "root@$VM_IPV6" true >/dev/null 2>&1; then
+796-    fail "guest still accepts the provisioning key after revocation"
+797-  fi
+798-  log "guest root SSH closed; provisioning key rejected as expected"
+799-
+800-  rm -f "$SSH_PRIVATE_KEY_FILE" "$SSH_PRIVATE_KEY_FILE.pub"
+801-}
+802-
+803-# Gateway->guest leg rides the cert-gateway's WireGuard mesh, same as Hetzner
+804-# boxes (create.sh): the gateway container has no IPv6 of its own, so proxying
+805-# to the guest's public v6 does NOT work — without a WG peer, boxes get 502s
+806-# through their *.on.ascii.dev URLs. Failure here is deliberately non-fatal
+807-# (the gateway falls back to the public IP), but on this fleet that fallback
+808-# is known-broken, so treat warnings below seriously.
+809-gateway_request() {
+810-  local operation="$1"
+811-  local payload="$2"
+812-  local headers=(
+813-    -H 'Content-Type: application/json'
+814:    -H "X-Baremetal-Machine: $VM_NAME"
+815:    -H "X-Baremetal-Expires: $GATEWAY_EXPIRES"
+816:    -H "X-Baremetal-Capability: $GATEWAY_CAPABILITY"
+817-  )
+818:  [ -n "$GATEWAY_PROXY_URL" ] && [ -n "$GATEWAY_CAPABILITY" ] && [ -n "$GATEWAY_EXPIRES" ] \
+819-    || fail "gateway capability is not configured"
+820:  if [ -n "$GATEWAY_TARGET_IP" ]; then
+821:    headers+=(-H "X-Baremetal-Target: $GATEWAY_TARGET_IP")
+822-  fi
+823:  curl -fsS -X POST "$GATEWAY_PROXY_URL" "${headers[@]}" \
+824-    -d "$(printf '%s' "$payload" | jq -c --arg operation "$operation" '. + {operation: $operation}')"
+825-}
+826-
+827-bind_gateway_target() {
+828-  [ "$SKIP_CERT_GATEWAY" != 1 ] || return 0
+829-  local response target_capability
+830-  response="$(gateway_request bind-target "$(jq -nc \
+831:    --arg machineName "$VM_NAME" --arg targetIp "$VM_IPV6" \
+832-    '{machineName: $machineName, targetIp: $targetIp}')")"
+833-  target_capability="$(jq -er '.targetCapability' <<<"$response")"
+834-  [[ "$target_capability" =~ ^[a-f0-9]{64}$ ]] || fail "backend returned an invalid target-bound gateway capability"
+835:  GATEWAY_TARGET_IP="$VM_IPV6"
+836:  GATEWAY_CAPABILITY="$target_capability"
+837-}
+838-
+839-setup_wireguard() {
+840-  if [ "$SKIP_CERT_GATEWAY" = "1" ]; then
+841-    log "skipping WireGuard mesh registration"
+842-    return 0
+843-  fi
+844-  log "registering guest in the cert-gateway WireGuard mesh"
+845-
+846-  # wireguard-tools is baked into the golden image; install is a fallback for
+--
+850-
+851-  local wg_pubkey wg_response wg_ip wg_server_pubkey wg_endpoint wg_server_ip
+852-  # Keypair is generated on the guest; the private key never leaves it.
+853-  wg_pubkey="$(ssh_root 'umask 077 && mkdir -p /etc/wireguard && wg genkey > /etc/wireguard/box.key && wg pubkey < /etc/wireguard/box.key' || true)"
+854-  if [ -z "$wg_pubkey" ]; then
+855-    log "WARNING: WireGuard keygen failed; gateway will 502 for this box"
+856-    return 0
+857-  fi
+858-
+859-  wg_response="$(gateway_request register-wireguard "$(jq -nc \
+860:    --arg machineName "$VM_NAME" --arg publicKey "$wg_pubkey" --arg publicIp "$VM_IPV6" \
+861-    '{machineName: $machineName, publicKey: $publicKey, publicIp: $publicIp}')" || true)"
+862-  wg_ip="$(jq -r '.wg_ip // empty' <<<"$wg_response" 2>/dev/null || true)"
+863-  wg_server_pubkey="$(jq -r '.server_pubkey // empty' <<<"$wg_response" 2>/dev/null || true)"
+864-  wg_endpoint="$(jq -r '.endpoint // empty' <<<"$wg_response" 2>/dev/null || true)"
+865-  wg_server_ip="$(jq -r '.server_wg_ip // empty' <<<"$wg_response" 2>/dev/null || true)"
+866-  valid_wg_key() {
+867-    local value="$1"
+868-    [[ "$value" =~ ^[A-Za-z0-9+/]{43}=$ ]] \
+869-      && [ "$(printf '%s' "$value" | base64 -d 2>/dev/null | wc -c)" = 32 ]
+870-  }
+--
+872-    local value="$1" octet
+873-    local -a octets=()
+874-    [[ "$value" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+875-    IFS=. read -r -a octets <<<"$value"
+876-    for octet in "${octets[@]}"; do [ "$octet" -le 255 ] || return 1; done
+877-  }
+878-  if ! valid_wg_key "$wg_pubkey" || ! valid_wg_key "$wg_server_pubkey" \
+879-    || ! valid_ipv4 "$wg_ip" || ! valid_ipv4 "$wg_server_ip" \
+880-    || ! [[ "$wg_endpoint" =~ ^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\]):[0-9]{1,5}$ ]]; then
+881-    log "WARNING: WireGuard registration returned invalid configuration"
+882:    gateway_request unregister-wireguard "$(jq -nc --arg machineName "$VM_NAME" '{machineName: $machineName}')" >/dev/null || true
+883-    return 0
+884-  fi
+885-  endpoint_port="${wg_endpoint##*:}"; endpoint_port="${endpoint_port%]}"
+886-  if [ "$endpoint_port" -lt 1 ] || [ "$endpoint_port" -gt 65535 ]; then
+887-    log "WARNING: WireGuard registration returned invalid endpoint port"
+888:    gateway_request unregister-wireguard "$(jq -nc --arg machineName "$VM_NAME" '{machineName: $machineName}')" >/dev/null || true
+889-    return 0
+890-  fi
+891-
+892-  ssh_root "umask 077 && cat > /etc/wireguard/wg0.conf <<WGEOF
+893-[Interface]
+894-PrivateKey = \$(cat /etc/wireguard/box.key)
+895-Address = $wg_ip/16
+896-
+897-[Peer]
+898-PublicKey = $wg_server_pubkey
+--
+902-WGEOF
+903-systemctl enable wg-quick@wg0 >/dev/null 2>&1 && systemctl restart wg-quick@wg0" \
+904-    || { log "WARNING: failed to bring up wg0 in guest"; return 0; }
+905-
+906-  # Confirm the tunnel carries traffic; a dead committed tunnel means 502s, so
+907-  # unregister the peer to restore the (public-IP) fallback path.
+908-  if ssh_root "ping -c 1 -W 5 $wg_server_ip" >/dev/null 2>&1; then
+909-    log "WireGuard tunnel established ($wg_ip -> $wg_server_ip)"
+910-  else
+911-    log "WARNING: WireGuard tunnel did not come up; unregistering peer"
+912:    gateway_request unregister-wireguard "$(jq -nc --arg machineName "$VM_NAME" '{machineName: $machineName}')" >/dev/null || true
+913-  fi
+914-}
+915-
+916-wait_for_http() {
+917-  local name="$1"
+918-  local url="$2"
+919-  log "waiting for $name at $url"
+920-  for _ in $(seq 1 90); do
+921-    if curl -g -fsS --max-time 5 "$url" >/dev/null 2>&1; then
+922-      log "$name ready"
+--
+927-  fail "$name did not become ready: $url"
+928-}
+929-
+930-register_route() {
+931-  local subdomain="$1"
+932-  local port="$2"
+933-  local machine_name="$3"
+934-  local response url
+935-
+936-  response="$(gateway_request register-route "$(jq -nc \
+937:    --arg subdomain "$subdomain" --arg targetIp "$VM_IPV6" --arg machineName "$machine_name" --argjson port "$port" \
+938-    '{subdomain: $subdomain, targetIp: $targetIp, port: $port, machineName: $machineName}')")"
+939-  url="$(printf '%s' "$response" | grep -o '"url":"[^"]*"' | cut -d'"' -f4 || true)"
+940-  if [ -z "$url" ]; then
+941-    fail "cert-gateway registration failed for $subdomain: $response"
+942-  fi
+943-  printf '%s\n' "$url"
+944-}
+945-
+946-register_cert_gateway() {
+947:  MACHINE_URL=""
+948-  DESKTOP_URL=""
+949-  TEST_PORT_URL=""
+950-
+951-  if [ "$SKIP_CERT_GATEWAY" = "1" ]; then
+952-    log "skipping cert-gateway registration"
+953-    return
+954-  fi
+955-
+956-  log "registering cert-gateway routes through scoped backend capability"
+957:  MACHINE_URL="$(register_route "$MACHINE_SUBDOMAIN" "$AGENT_PORT" "$VM_NAME")"
+958:  DESKTOP_URL="$(register_route "$MACHINE_SUBDOMAIN-desktop" 8090 "$VM_NAME-desktop")"
+959-  if [ "$REGISTER_TEST_PORT" = "1" ]; then
+960:    TEST_PORT_URL="$(register_route "$MACHINE_SUBDOMAIN-$TEST_PORT" "$TEST_PORT" "$VM_NAME-$TEST_PORT")"
+961-  fi
+962-}
+963-
+964-write_machine_info() {
+965-  local shared_key streaming_token streaming_host_id streaming_app_id pairing_success info_file
+966-  info_file="$VM_DIR/machine-info.env"
+967-  local result_file="$VM_DIR/runtime-result.env"
+968-
+969-  if [ -f "$result_file" ]; then
+970-    shared_key="$(grep '^SHARED_KEY=' "$result_file" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+--
+976-    shared_key="$(grep '^SHARED_KEY=' "$VM_DIR/runtime-setup.log" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+977-    streaming_token="$(grep '^STREAMING_TOKEN=' "$VM_DIR/runtime-setup.log" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+978-    streaming_host_id="$(grep '^STREAMING_HOST_ID=' "$VM_DIR/runtime-setup.log" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+979-    streaming_app_id="$(grep '^STREAMING_APP_ID=' "$VM_DIR/runtime-setup.log" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+980-    pairing_success="$(grep '^PAIRING_SUCCESS=' "$VM_DIR/runtime-setup.log" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+981-  fi
+982-
+983-  {
+984-    printf 'PROVIDER=baremetal\n'
+985-    printf 'NODE_ID=%q\n' "$NODE_ID"
+986:    printf 'MACHINE_NAME=%q\n' "$VM_NAME"
+987:    printf 'MACHINE_ID=%q\n' "$VM_NAME"
+988:    printf 'OWNERSHIP_ID=%q\n' "$OWNERSHIP_ID"
+989-    printf 'CREATED_AT=%q\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+990:    printf 'MACHINE_IP=%q\n' "$VM_IPV6"
+991:    printf 'MACHINE_IP_TYPE=IPv6\n'
+992:    printf 'MACHINE_SUBDOMAIN=%q\n' "$MACHINE_SUBDOMAIN"
+993:    printf 'MACHINE_URL=%q\n' "${MACHINE_URL:-}"
+994-    printf 'DESKTOP_URL=%q\n' "${DESKTOP_URL:-}"
+995-    printf 'TEST_PORT_URL=%q\n' "${TEST_PORT_URL:-}"
+996-    printf 'SHARED_KEY=%q\n' "$shared_key"
+997-    printf 'STREAMING_TOKEN=%q\n' "$streaming_token"
+998-    printf 'STREAMING_HOST_ID=%q\n' "$streaming_host_id"
+999-    printf 'STREAMING_APP_ID=%q\n' "$streaming_app_id"
+1000-    printf 'PAIRING_SUCCESS=%q\n' "$pairing_success"
+1001:    printf 'VM_INDEX=%q\n' "$VM_INDEX"
+1002:    printf 'PUBLIC_MAC=%q\n' "$PUBLIC_MAC"
+1003:    printf 'NAT_MAC=%q\n' "$NAT_MAC"
+1004-    printf 'NAT_IP=%q\n' "$NAT_IP"
+1005-    printf 'PUBLIC_TAP=%q\n' "$PUBLIC_TAP"
+1006-    printf 'NAT_TAP=%q\n' "$NAT_TAP"
+1007-    printf 'PUBLIC_FILTER=%q\n' "$PUBLIC_FILTER"
+1008-    printf 'NAT_FILTER=%q\n' "$NAT_FILTER"
+1009-    printf 'SSH_ENDPOINT=%q\n' "$SSH_ENDPOINT"
+1010-    printf 'AGENT_ENDPOINT=%q\n' "$AGENT_ENDPOINT"
+1011-    # Quoted, not %q: the value has a space and both node-agents strip
+1012-    # surrounding double quotes but do not unescape backslashes.
+1013-    printf 'SSH_HOST_PUBKEY="%s"\n' "$SSH_HOST_PUBKEY"
+1014-    printf 'WEBRTC_UDP_RANGE=%q\n' "$WEBRTC_PORT_MIN-$WEBRTC_PORT_MAX"
+1015:    printf 'BASE_IMAGE=%q\n' "$BASE_IMAGE"
+1016:    printf 'AGENT_SERVER_TAG=%q\n' "$AGENT_SERVER_TAG"
+1017:    printf 'BOX_CLI_TAG=%q\n' "$BOX_CLI_TAG"
+1018-    printf 'VM_DIR=%q\n' "$VM_DIR"
+1019-  } > "$info_file"
+1020-  chmod 600 "$info_file"
+1021-}
+1022-
+1023-print_summary() {
+1024-  echo ""
+1025:  echo "Name: $VM_NAME"
+1026:  echo "IP: $VM_IPV6"
+1027-  echo "IP_TYPE: IPv6"
+1028-  echo "PROVIDER: baremetal"
+1029:  echo "URL: ${MACHINE_URL:-}"
+1030-  echo "DESKTOP_URL: ${DESKTOP_URL:-}"
+1031-  echo "SSH_ENDPOINT: $SSH_ENDPOINT"
+1032-  echo "SSH_HOST_PUBKEY: $SSH_HOST_PUBKEY"
+1033-  if [ -n "${TEST_PORT_URL:-}" ]; then
+1034-    echo "TEST_PORT_URL: $TEST_PORT_URL"
+1035-  fi
+1036:  echo "MACHINE_INFO_FILE: $VM_DIR/machine-info.env"
+1037-}
+1038-
+1039-main() {
+1040-  require_root
+1041-  VCPU_TOPOLOGY_SPEC="$(vm_vcpu_topology_spec "$VCPUS")" || fail "invalid VCPUS"
+1042-  need_cmd virsh
+1043-  need_cmd virt-install
+1044-  need_cmd python3
+1045-  need_cmd qemu-img
+1046-  need_cmd cloud-localds
+1047-  need_cmd curl
+1048-  need_cmd ssh
+1049-  need_cmd scp
+1050-  need_cmd openssl
+1051-  need_cmd ssh-keygen
+1052-  need_cmd python3
+1053-  need_cmd jq
+1054-  need_cmd flock
+1055-
+1056:  vm_io_validate_policy || fail "invalid VM I/O policy"
+1057-  vm_io_require_policy_support || fail "virsh does not support the VM I/O policy"
+1058-
+1059:  validate_requested_network
+1060-  phase image find_base_image
+1061-  phase allocation allocate_ip
+1062:  validate_names
+1063-  derive_network_names
+1064-
+1065:  VM_DIR="$VM_ROOT/$VM_NAME"
+1066-  if ! mkdir "$VM_DIR"; then
+1067-    fail "VM_DIR already exists or cannot be created: $VM_DIR"
+1068-  fi
+1069-  VM_DIR_CREATED=1
+1070-  chmod 755 "$VM_DIR"
+1071-  ensure_provision_ssh_key
+1072-  ensure_vm_host_identity
+1073-
+1074-  ensure_libvirt
+1075-  # The invocation atomically owns the unique VM directory and has now proven
+--
+1082-  phase gateway-bind bind_gateway_target
+1083-  phase ipv4-doorway setup_ipv4_doorway
+1084-  resolve_agent_download_url
+1085-  phase libvirt create_vm
+1086-  phase boot-to-ssh wait_for_ssh
+1087-  phase wireguard setup_wireguard
+1088-  copy_guest_inputs
+1089-  phase guest-runtime run_guest_setup
+1090-
+1091-  if [ "$SKIP_RUNTIME_SETUP" != "1" ]; then
+1092:    phase agent-ready wait_for_http "agent" "http://[$VM_IPV6]:$AGENT_PORT/health"
+1093:    phase desktop-ready wait_for_http "moonlight-web" "http://[$VM_IPV6]:8090/"
+1094-  fi
+1095-
+1096-  revoke_provision_access
+1097-
+1098-  write_machine_info
+1099-  phase gateway register_cert_gateway
+1100-  write_machine_info
+1101-  print_summary
+1102-}
+1103-
+--- host command / filesystem / parser sinks ---
+4-# Host-side VM provisioner. Runs on a bare-metal node (node0, node1, ...);
+5-# per-node values (NODE_ID, IPV6_PREFIX, PUBLIC_INTERFACE) come from the
+6-# node-agent's env file, defaults below encode node0. It creates a libvirt VM,
+7-# runs guest setup, registers routes through a VM-scoped backend capability, and writes machine-info.env
+8-# next to the VM disk. The node-agent exposes this proven sequence through the
+9-# authenticated backend-only node API.
+10-
+11-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+12-
+13-# shellcheck source=lib/vm-cpu.sh
+14:source "$SCRIPT_DIR/lib/vm-cpu.sh"
+15-# shellcheck source=lib/ssh-identity.sh
+16:source "$SCRIPT_DIR/lib/ssh-identity.sh"
+17-# shellcheck source=lib/vm-io.sh
+18:source "$SCRIPT_DIR/lib/vm-io.sh"
+19-
+20-NODE_ID="${NODE_ID:-node0}"
+21-VM_PREFIX="${VM_PREFIX:-box-$NODE_ID}"
+22-VM_NAME="${VM_NAME:-}"
+23-VM_INDEX="${VM_INDEX:-}"
+24-VM_IPV6="${VM_IPV6:-}"
+25-OWNERSHIP_ID="${OWNERSHIP_ID:-}"
+26-MACHINE_SUBDOMAIN="${MACHINE_SUBDOMAIN:-}"
+27-
+28-BASE_IMAGE="${BASE_IMAGE:-}"
+--
+41-
+42-VCPUS="${VCPUS:-4}"
+43-VCPU_TOPOLOGY_SPEC=""
+44-MEMORY_MB="${MEMORY_MB:-8192}"
+45-DISK_SIZE="${DISK_SIZE:-70G}"
+46-OS_VARIANT="${OS_VARIANT:-ubuntu24.04}"
+47-CPU_SHARES="${CPU_SHARES:-1024}"
+48-
+49-# IPv4 doorway (DNAT): guests are IPv6-only on the public side, so v4-only
+50-# clients reach them through the node's public IPv4. Ports derive from
+51:# VM_INDEX (unique per node, lowest-free-reused by the lease allocator):
+52:#   ssh    tcp NODE_V4:(19000+index)            -> guest NAT v4 :22
+53-#   webrtc udp NODE_V4:(20000+index*8, 8 ports) -> guest NAT v4 same ports
+54-# The guest's NAT-bridge IPv4 is pinned to 192.168.122.<index> via a dnsmasq
+55-# DHCP reservation so the DNAT target is stable. Rules are tagged
+56-# "ascii:<vm-name>" for exact cleanup; they live in kernel memory only (VMs
+57-# don't survive node reboots either).
+58-NODE_PUBLIC_IPV4="${NODE_PUBLIC_IPV4:-}"
+59-NAT_BRIDGE_V4_PREFIX="${NAT_BRIDGE_V4_PREFIX:-192.168.122}"
+60-SSH_FWD_PORT_BASE="${SSH_FWD_PORT_BASE:-19000}"
+61-WEBRTC_PORT_BASE="${WEBRTC_PORT_BASE:-20000}"
+62-WEBRTC_PORTS_PER_VM="${WEBRTC_PORTS_PER_VM:-8}"
+--
+178-  local rc=$? domain_gone route_name
+179-  if [ "$rc" -eq 0 ]; then
+180-    return
+181-  fi
+182-
+183-  printf '[baremetal-provision] failed with exit code %s\n' "$rc" >&2
+184-  if [ "$CLEANUP_ON_FAILURE" = "1" ]; then
+185-    log "cleanup-on-failure enabled; removing partial VM artifacts"
+186-    domain_gone=1
+187-    if [ "$DOMAIN_NAME_OWNED" = 1 ]; then
+188:      virsh destroy "$VM_NAME" >/dev/null 2>&1 || true
+189:      virsh undefine "$VM_NAME" --nvram >/dev/null 2>&1 || virsh undefine "$VM_NAME" >/dev/null 2>&1 || true
+190:      if virsh dominfo "$VM_NAME" >/dev/null 2>&1; then
+191-        domain_gone=0
+192-        log "ERROR: partial domain still exists; preserving its ownership metadata and host state"
+193-      else
+194-        cleanup_vm_filters
+195-      fi
+196-    fi
+197-    if [ "$domain_gone" = 1 ]; then
+198-      if [ -n "$VM_IPV6" ]; then
+199-        ip -6 neigh del proxy "$VM_IPV6" dev "$PUBLIC_INTERFACE" >/dev/null 2>&1 || true
+200-      fi
+201-      remove_ipv4_doorway
+202-      if [ -n "$VM_NAME" ] && [ -n "$GATEWAY_PROXY_URL" ] && [ -n "$GATEWAY_CAPABILITY" ]; then
+203-        for route_name in "$VM_NAME" "$VM_NAME-desktop" "$VM_NAME-$TEST_PORT"; do
+204:          gateway_request unregister-route "$(jq -nc --arg machineName "$route_name" '{machineName: $machineName}')" >/dev/null 2>&1 || true
+205-        done
+206:        gateway_request unregister-wireguard "$(jq -nc --arg machineName "$VM_NAME" '{machineName: $machineName}')" >/dev/null 2>&1 || true
+207-      fi
+208-      if [ "$VM_DIR_CREATED" = 1 ] && [ -n "$VM_DIR" ] && [ -d "$VM_DIR" ]; then
+209:        rm -rf "$VM_DIR"
+210-      fi
+211-      if [ "$LEASE_CREATED" = "1" ] && [ -n "$LEASE_FILE" ]; then
+212-        rm -f "$LEASE_FILE"
+213-      fi
+214-    fi
+215-  else
+216-    if [ "$LEASE_CREATED" = "1" ] && [ "$VM_CREATED" != "1" ] && [ -n "$LEASE_FILE" ]; then
+217-      rm -f "$LEASE_FILE"
+218-    fi
+219-    log "left partial artifacts for debugging; rerun delete-vm.sh to remove them"
+--
+225-  if [ "$(id -u)" -ne 0 ]; then
+226-    fail "run this on the bare-metal node as root, usually with sudo"
+227-  fi
+228-}
+229-
+230-find_base_image() {
+231-  [ -n "$BASE_IMAGE" ] || fail "BASE_IMAGE must pin a promoted image; newest-image fallback is forbidden"
+232-  [ -f "$BASE_IMAGE" ] || fail "BASE_IMAGE does not exist: $BASE_IMAGE"
+233-  [ -f "$BASE_IMAGE.sha256" ] || fail "BASE_IMAGE checksum is missing: $BASE_IMAGE.sha256"
+234-  local expected actual
+235:  expected="$(awk '{print $1}' "$BASE_IMAGE.sha256")"
+236:  actual="$(sha256sum "$BASE_IMAGE" | awk '{print $1}')"
+237-  [ "$expected" = "$actual" ] || fail "BASE_IMAGE checksum mismatch: $BASE_IMAGE"
+238-}
+239-
+240-random_suffix() {
+241-  openssl rand -hex 3
+242-}
+243-
+244-derive_index_from_ipv6() {
+245-  local last_hextet="${VM_IPV6##*:}"
+246-  if [ -z "$last_hextet" ]; then
+247-    fail "cannot derive VM_INDEX from VM_IPV6=$VM_IPV6; pass --index"
+248-  fi
+249-  VM_INDEX="$((16#$last_hextet))"
+250-}
+251-
+252-validate_requested_network() {
+253-  [ -n "$VM_IPV6" ] || return 0
+254:  python3 - "$VM_IPV6" "$IPV6_PREFIX" "$IPV6_PREFIX_LENGTH" "$VM_INDEX" <<'PY'
+255-import ipaddress
+256-import sys
+257-
+258-address = ipaddress.IPv6Address(sys.argv[1])
+259-prefix = sys.argv[2].rstrip(':') + '::'
+260-network = ipaddress.IPv6Network(f'{prefix}/{sys.argv[3]}', strict=False)
+261-if address not in network:
+262-    raise SystemExit(f'IPv6 address {address} is outside {network}')
+263-if sys.argv[4] and int(sys.argv[4]) != int(address.exploded.split(':')[-1], 16):
+264-    raise SystemExit('VM_INDEX does not match the IPv6 final hextet')
+--
+343-  # guest identities. NDP/ICMPv6 and ordinary IPv6 remain fully functional.
+344-  cat > "$public_xml" <<EOF
+345-<filter name='$PUBLIC_FILTER' chain='root'>
+346-  <filterref filter='no-mac-spoofing'/>
+347-  <filterref filter='no-ipv6-spoofing'>
+348-    <parameter name='IPV6' value='$VM_IPV6'/>
+349-  </filterref>
+350-  <rule action='accept' direction='inout' priority='-500'>
+351-    <mac protocolid='ipv6'/>
+352-  </rule>
+353:  <filterref filter='qemu-announce-self'/>
+354-  <filterref filter='no-other-l2-traffic'/>
+355-</filter>
+356-EOF
+357-
+358-  # NAT NIC: clean-traffic enforces MAC, ARP and the DHCP-reserved IPv4. Its
+359-  # stock no-ip-spoofing filter explicitly allows 0.0.0.0 DHCP requests.
+360-  cat > "$nat_xml" <<EOF
+361-<filter name='$NAT_FILTER' chain='root'>
+362-  <filterref filter='clean-traffic'>
+363-    <parameter name='IP' value='$NAT_IP'/>
+364-  </filterref>
+365-</filter>
+366-EOF
+367:  if ! virsh nwfilter-define "$public_xml" >/dev/null; then
+368-    rm -f "$public_xml" "$nat_xml"
+369-    fail "failed to define public nwfilter $PUBLIC_FILTER"
+370-  fi
+371:  if ! virsh nwfilter-define "$nat_xml" >/dev/null; then
+372:    virsh nwfilter-undefine "$PUBLIC_FILTER" >/dev/null 2>&1 || true
+373-    rm -f "$public_xml" "$nat_xml"
+374-    fail "failed to define NAT nwfilter $NAT_FILTER"
+375-  fi
+376-  rm -f "$public_xml" "$nat_xml"
+377-}
+378-
+379-cleanup_vm_filters() {
+380:  [ -n "$PUBLIC_FILTER" ] && virsh nwfilter-undefine "$PUBLIC_FILTER" >/dev/null 2>&1 || true
+381:  [ -n "$NAT_FILTER" ] && virsh nwfilter-undefine "$NAT_FILTER" >/dev/null 2>&1 || true
+382-}
+383-
+384-validate_names() {
+385-  [[ "$VM_NAME" =~ ^box-[a-z0-9]+-[a-z0-9-]+$ ]] || fail "VM_NAME must look like box-node0-abc123: $VM_NAME"
+386-  [[ "$OWNERSHIP_ID" =~ ^[A-Za-z0-9_-]{8,128}$ ]] || fail "OWNERSHIP_ID is required and invalid"
+387-  [[ "$MACHINE_SUBDOMAIN" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || fail "invalid subdomain: $MACHINE_SUBDOMAIN"
+388-}
+389-
+390-write_ownership_witness() {
+391-  local tmp="$VM_DIR/.machine-info.provisional"
+--
+400-    printf 'MACHINE_SUBDOMAIN=%q\n' "$MACHINE_SUBDOMAIN"
+401-    printf 'VM_INDEX=%q\n' "$VM_INDEX"
+402-    printf 'PUBLIC_MAC=%q\n' "$PUBLIC_MAC"
+403-    printf 'NAT_MAC=%q\n' "$NAT_MAC"
+404-    printf 'NAT_IP=%q\n' "$NAT_IP"
+405-    printf 'PUBLIC_FILTER=%q\n' "$PUBLIC_FILTER"
+406-    printf 'NAT_FILTER=%q\n' "$NAT_FILTER"
+407-    printf 'NAT_NETWORK=%q\n' "$NAT_NETWORK"
+408-  } > "$tmp"
+409-  chmod 600 "$tmp"
+410:  mv "$tmp" "$VM_DIR/machine-info.env"
+411-}
+412-
+413-resolve_ssh_keys() {
+414-  local out="$VM_DIR/authorized_keys"
+415-  : > "$out"
+416-
+417-  # Explicit sources only, for dev/debug. There is deliberately NO fallback to
+418-  # the invoking user's ~/.ssh: the node-agent runs as root, and the node's
+419-  # /root/.ssh/authorized_keys must never leak into customer guests (ASC-187).
+420-  if [ -n "${SSH_PUBLIC_KEYS:-}" ]; then
+421-    printf '%s\n' "$SSH_PUBLIC_KEYS" >> "$out"
+422-  elif [ -n "$SSH_AUTHORIZED_KEYS_FILE" ]; then
+423-    [ -f "$SSH_AUTHORIZED_KEYS_FILE" ] || fail "SSH_AUTHORIZED_KEYS_FILE not found: $SSH_AUTHORIZED_KEYS_FILE"
+424-    cat "$SSH_AUTHORIZED_KEYS_FILE" >> "$out"
+425-  fi
+426-
+427-  cat "$PROVISION_PUBLIC_KEY_FILE" >> "$out"
+428-
+429-  grep -E '^(ssh-|ecdsa-|sk-)' "$out" | sort -u > "$out.filtered" || fail "no public SSH keys found"
+430:  mv "$out.filtered" "$out"
+431-}
+432-
+433-ensure_provision_ssh_key() {
+434-  # Fresh throwaway keypair per VM (ASC-187): it exists only for the setup
+435-  # window and revoke_provision_access removes it from the guest and the node.
+436-  # An explicit SSH_PRIVATE_KEY_FILE is a dev override and is left in place.
+437-  if [ -z "$SSH_PRIVATE_KEY_FILE" ]; then
+438-    SSH_PRIVATE_KEY_FILE="$VM_DIR/provision-key"
+439-    ssh-keygen -t ed25519 -N '' -f "$SSH_PRIVATE_KEY_FILE" -C "ascii-provision-$VM_NAME" >/dev/null
+440-    EPHEMERAL_PROVISION_KEY=1
+--
+490-    printf 'users:\n'
+491-    printf '  - default\n'
+492-    printf '  - name: root\n'
+493-    printf '    lock_passwd: true\n'
+494-    printf '    ssh_authorized_keys:\n'
+495-    while IFS= read -r key; do
+496-      printf '      - %s\n' "$key"
+497-    done < "$VM_DIR/authorized_keys"
+498-    printf 'runcmd:\n'
+499-    printf '  - rm -f /etc/ssh/sshd_config.d/00-ascii-lockdown.conf\n'
+500:    printf '  - systemctl reload-or-restart ssh || systemctl reload-or-restart sshd || true\n'
+501-    # The minted host identity (ASC-186): cloud-init writes this pair to
+502:    # /etc/ssh and skips generating any other host keys, so the first sshd
+503-    # to answer on the guest IP with this key is provably our VM. The base
+504:    # image ships no host keys (base-image-qemu.pkr.hcl strips them) and
+505-    # ssh_deletekeys clears any that a snapshot-derived disk carries over.
+506-    printf 'ssh_deletekeys: true\n'
+507-    printf 'ssh_keys:\n'
+508-    printf '  ed25519_private: |\n'
+509:    sed 's/^/    /' "$HOST_KEY_FILE"
+510-    printf '  ed25519_public: %s\n' "$(cat "$HOST_KEY_FILE.pub")"
+511-    printf 'package_update: false\n'
+512-  } > "$VM_DIR/user-data"
+513-  chmod 600 "$VM_DIR/user-data"
+514-
+515-  cat > "$VM_DIR/network-config" <<EOF
+516-version: 2
+517-ethernets:
+518-  public0:
+519-    match:
+--
+532-        - 2001:4860:4860::8888
+533-  nat0:
+534-    match:
+535-      macaddress: "$nat_mac"
+536-    set-name: enp7s0
+537-    dhcp4: true
+538-    dhcp6: false
+539-EOF
+540-
+541-  cloud-localds --network-config="$VM_DIR/network-config" "$VM_DIR/seed.iso" "$VM_DIR/user-data" "$VM_DIR/meta-data"
+542:  # The seed carries the guest's host private key; qemu reads it as owner
+543:  # (create_vm chowns it to libvirt-qemu), so no world-readable bit needed.
+544-  chmod 640 "$VM_DIR/seed.iso"
+545-  # No loose copy of the guest's private identity on the node beyond the seed.
+546-  rm -f "$HOST_KEY_FILE"
+547-
+548-  PUBLIC_MAC="$public_mac"
+549-  NAT_MAC="$nat_mac"
+550-}
+551-
+552-resolve_node_public_ipv4() {
+553-  if [ -z "$NODE_PUBLIC_IPV4" ]; then
+554:    NODE_PUBLIC_IPV4="$(ip -o -4 addr show "$PUBLIC_INTERFACE" | awk '{print $4}' | cut -d/ -f1 | head -1 || true)"
+555-  fi
+556-  [ -n "$NODE_PUBLIC_IPV4" ] || fail "cannot detect NODE_PUBLIC_IPV4 on $PUBLIC_INTERFACE"
+557-  NAT_IP="$NAT_BRIDGE_V4_PREFIX.$VM_INDEX"
+558-  SSH_FWD_PORT=$((SSH_FWD_PORT_BASE + VM_INDEX))
+559-  WEBRTC_PORT_MIN=$((WEBRTC_PORT_BASE + VM_INDEX * WEBRTC_PORTS_PER_VM))
+560-  WEBRTC_PORT_MAX=$((WEBRTC_PORT_MIN + WEBRTC_PORTS_PER_VM - 1))
+561-  SSH_ENDPOINT="$NODE_PUBLIC_IPV4:$SSH_FWD_PORT"
+562-  AGENT_FWD_PORT=$((AGENT_FWD_PORT_BASE + VM_INDEX))
+563-  AGENT_ENDPOINT="$NODE_PUBLIC_IPV4:$AGENT_FWD_PORT"
+564-}
+--
+566-# iptables (nft backend) instead of raw nft: ufw and libvirt already manage
+567-# this hook universe through iptables chains, and a DNATed flow must survive
+568-# ALL of them (ufw's FORWARD drop policy, libvirt's virbr0 reject). Speaking
+569-# the same dialect lets us insert the accept at the head of FORWARD.
+570-setup_ipv4_doorway() {
+571-  need_cmd nft
+572-  need_cmd iptables
+573-  need_cmd ip6tables
+574-
+575-  log "pinning guest NAT IPv4 $NAT_IP (dnsmasq reservation for $NAT_MAC)"
+576:  virsh net-update "$NAT_NETWORK" delete ip-dhcp-host "<host mac='$NAT_MAC'/>" --live --config >/dev/null 2>&1 || true
+577:  virsh net-update "$NAT_NETWORK" add-last ip-dhcp-host "<host mac='$NAT_MAC' ip='$NAT_IP'/>" --live --config >/dev/null
+578-
+579-  sysctl -w net.ipv4.ip_forward=1 >/dev/null
+580-
+581:  log "adding IPv4 doorway: ssh $SSH_ENDPOINT, agent $AGENT_ENDPOINT, webrtc udp $WEBRTC_PORT_MIN-$WEBRTC_PORT_MAX"
+582:  iptables -t nat -A PREROUTING -d "$NODE_PUBLIC_IPV4" -p tcp --dport "$SSH_FWD_PORT" \
+583-    -m comment --comment "ascii:$VM_NAME" -j DNAT --to-destination "$NAT_IP:22"
+584-  # Agent-server doorway: the backend's direct machine RPC (health loop, restore
+585-  # verification) targets ip:8911; v4-only backends reach it through this port.
+586:  iptables -t nat -A PREROUTING -d "$NODE_PUBLIC_IPV4" -p tcp --dport "$AGENT_FWD_PORT" \
+587-    -m comment --comment "ascii:$VM_NAME" -j DNAT --to-destination "$NAT_IP:$AGENT_SERVER_PORT"
+588-  iptables -t nat -A PREROUTING -d "$NODE_PUBLIC_IPV4" -p udp --dport "$WEBRTC_PORT_MIN:$WEBRTC_PORT_MAX" \
+589-    -m comment --comment "ascii:$VM_NAME" -j DNAT --to-destination "$NAT_IP"
+590-  # Only traffic entering from the node's public NIC may use the doorway. This
+591-  # prevents a guest from hairpinning through the node IPv4 to reach a peer.
+592-  iptables -I FORWARD 1 -i "$PUBLIC_INTERFACE" -d "$NAT_IP" \
+593-    -m conntrack --ctstate DNAT -m comment --comment "ascii:$VM_NAME" -j ACCEPT
+594-
+595-  # Install these last so they stay ahead of libvirt's same-bridge ACCEPT and
+596-  # all per-VM DNAT accepts. The node-agent runs the same repair at startup.
+597-  "$TENANT_ISOLATION_SCRIPT"
+598-}
+599-
+600-remove_ipv4_doorway() {
+601-  local table
+602-  for table in nat filter; do
+603-    # `|| true`: no matching rules means grep exits 1, and under pipefail that
+604-    # would abort cleanup and leak the half-provisioned VM (ASC-294).
+605:    iptables -t "$table" -S 2>/dev/null | { grep -F -- "ascii:$VM_NAME" || true; } | sed 's/^-[AI] */-D /' \
+606-      | while IFS= read -r rule; do
+607:          # eval: -S quotes the comment argument; plain word-splitting would
+608-          # pass the quotes literally and the delete would not match.
+609:          eval "iptables -t $table $rule" >/dev/null 2>&1 || true
+610-        done
+611-  done
+612-  if [ -n "${NAT_MAC:-}" ]; then
+613:    virsh net-update "$NAT_NETWORK" delete ip-dhcp-host "<host mac='$NAT_MAC'/>" --live --config >/dev/null 2>&1 || true
+614-  fi
+615-}
+616-
+617-ensure_libvirt() {
+618:  virsh net-info "$PUBLIC_NETWORK" >/dev/null 2>&1 || fail "libvirt network missing: $PUBLIC_NETWORK"
+619:  if [ "$(virsh net-info "$PUBLIC_NETWORK" | awk '/^Active:/ { print $2; exit }')" != "yes" ]; then
+620:    virsh net-start "$PUBLIC_NETWORK"
+621-  fi
+622-
+623:  virsh net-info "$NAT_NETWORK" >/dev/null 2>&1 || fail "libvirt NAT network missing: $NAT_NETWORK"
+624:  if [ "$(virsh net-info "$NAT_NETWORK" | awk '/^Active:/ { print $2; exit }')" != "yes" ]; then
+625:    virsh net-start "$NAT_NETWORK"
+626-  fi
+627-
+628:  if virsh dominfo "$VM_NAME" >/dev/null 2>&1; then
+629-    fail "libvirt domain already exists: $VM_NAME"
+630-  fi
+631-}
+632-
+633-create_vm() {
+634-  [ ! -e "$VM_DIR/root.qcow2" ] || fail "VM disk already exists: $VM_DIR/root.qcow2"
+635-
+636-  log "creating qcow2 overlay from $BASE_IMAGE"
+637:  qemu-img create -f qcow2 -F qcow2 -b "$BASE_IMAGE" "$VM_DIR/root.qcow2" "$DISK_SIZE"
+638-  chmod 644 "$VM_DIR/root.qcow2"
+639:  if id -u libvirt-qemu >/dev/null 2>&1; then
+640:    chown libvirt-qemu:kvm "$VM_DIR/root.qcow2" "$VM_DIR/seed.iso"
+641-  fi
+642-
+643-  log "adding proxy NDP for $VM_IPV6 on $PUBLIC_INTERFACE"
+644-  sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+645-  sysctl -w net.ipv6.conf.default.forwarding=1 >/dev/null
+646-  sysctl -w "net.ipv6.conf.$PUBLIC_INTERFACE.proxy_ndp=1" >/dev/null
+647-  ip -6 neigh replace proxy "$VM_IPV6" dev "$PUBLIC_INTERFACE"
+648-
+649-  local domain_xml="$VM_DIR/domain.xml"
+650-
+651-  log "rendering isolated domain XML for $VM_NAME"
+652-  define_vm_filters
+653:  virt-install \
+654-    --import \
+655-    --name "$VM_NAME" \
+656-    --memory "$MEMORY_MB" \
+657-    --vcpus "$VCPU_TOPOLOGY_SPEC" \
+658-    --cpu host-passthrough \
+659-    --disk "path=$VM_DIR/root.qcow2,format=qcow2,bus=virtio,discard=unmap" \
+660-    --disk "path=$VM_DIR/seed.iso,device=cdrom" \
+661-    --os-variant "$OS_VARIANT" \
+662-    --network "network=$PUBLIC_NETWORK,model=virtio,mac=$PUBLIC_MAC,target.dev=$PUBLIC_TAP,filterref.filter=$PUBLIC_FILTER" \
+663-    --network "network=$NAT_NETWORK,model=virtio,mac=$NAT_MAC,target.dev=$NAT_TAP,filterref.filter=$NAT_FILTER" \
+664-    --graphics none \
+665-    --noautoconsole \
+666-    --print-xml \
+667-    --dry-run > "$domain_xml"
+668-
+669:  python3 "$NETWORK_ISOLATION_HELPER" "$domain_xml" \
+670-    --expected-network "$PUBLIC_NETWORK" \
+671-    --expected-network "$NAT_NETWORK"
+672-
+673-  log "defining and starting $VM_NAME"
+674:  virsh define "$domain_xml" >/dev/null
+675-  VM_CREATED=1
+676:  virsh start "$VM_NAME" >/dev/null
+677-
+678-  # Do not impose an absolute disk ceiling on an otherwise idle guest. Apply
+679-  # explicit zeros live and persistently so inherited limits cannot survive.
+680:  virsh schedinfo "$VM_NAME" --set "cpu_shares=$CPU_SHARES" --live --config >/dev/null
+681-  vm_io_apply_policy "$VM_NAME" vda --live --config >/dev/null
+682:  virsh autostart "$VM_NAME" >/dev/null
+683-}
+684-
+685-ssh_base_args() {
+686-  local args=(
+687-    -6
+688-    -o ConnectTimeout=10
+689-    -o ServerAliveInterval=15
+690-    -o ServerAliveCountMax=8
+691-  )
+692-  # ASC-186: every connection is checked against the host key minted at
+--
+696-  args+=("${pin[@]}")
+697-  if [ -n "$SSH_PRIVATE_KEY_FILE" ]; then
+698-    args=(-i "$SSH_PRIVATE_KEY_FILE" "${args[@]}")
+699-  fi
+700-  printf '%s\n' "${args[@]}"
+701-}
+702-
+703-ssh_root() {
+704-  local args=()
+705-  mapfile -t args < <(ssh_base_args)
+706:  ssh "${args[@]}" "root@$VM_IPV6" "$@"
+707-}
+708-
+709-scp_to_guest() {
+710-  local source="$1"
+711-  local destination="$2"
+712-  local args=()
+713-  mapfile -t args < <(ssh_base_args)
+714:  scp "${args[@]}" -r "$source" "root@[$VM_IPV6]:$destination"
+715-}
+716-
+717-wait_for_ssh() {
+718-  log "waiting for SSH on $VM_IPV6 (host identity pinned)"
+719-  local rc=0
+720:  wait_for_verified_ssh 600 2 15 ssh_root "true" || rc=$?
+721-  case "$rc" in
+722-    0) log "SSH ready, host identity verified" ;;
+723-    2) fail "SSH host identity mismatch on $VM_IPV6: whatever is answering is not the VM we created; refusing to provision" ;;
+724-    *) fail "guest did not become SSH-ready within 20 minutes" ;;
+725-  esac
+726-}
+727-
+728-# The base image is a golden qcow2 with all dependencies and product binaries
+729:# baked in (base-image-qemu.pkr.hcl); the guest only needs per-VM runtime setup.
+730-copy_guest_inputs() {
+731-  log "copying guest setup inputs"
+732:  ssh_root "rm -rf $(quote "$REMOTE_SETUP_DIR") && mkdir -p $(quote "$REMOTE_SETUP_DIR")"
+733-  scp_to_guest "$GUEST_RUNTIME_SCRIPT" "$REMOTE_SETUP_DIR/guest-runtime-setup.sh"
+734-}
+735-
+736-resolve_agent_download_url() {
+737-  [[ "$AGENT_SERVER_TAG" =~ ^agent-server-v[A-Za-z0-9._-]+$ ]] \
+738-    || fail "AGENT_SERVER_TAG must pin an agent-server-v* release"
+739-  AGENT_DOWNLOAD_URL="https://github.com/ariana-dot-dev/agent-server/releases/download/$AGENT_SERVER_TAG/ascii-agents-server-linux-x64"
+740-}
+741-
+742-run_guest_setup() {
+--
+768-}
+769-
+770-# ASC-187: a customer box must leave provisioning with ZERO node/operator
+771-# credentials. Strip the throwaway key from the guest, close root SSH, prove
+772-# the door is shut, then delete the node-side private key. Explicit key
+773-# sources (SSH_PUBLIC_KEYS / SSH_AUTHORIZED_KEYS_FILE / SSH_PRIVATE_KEY_FILE)
+774-# mean the operator asked for standing access, so the lockdown is skipped —
+775-# that combination is for dev boxes only.
+776-revoke_provision_access() {
+777-  if [ -n "${SSH_PUBLIC_KEYS:-}" ] || [ -n "$SSH_AUTHORIZED_KEYS_FILE" ] || [ "$EPHEMERAL_PROVISION_KEY" != "1" ]; then
+778:    log "WARNING: explicit SSH key source set; leaving guest root SSH open (dev mode, never for customer boxes)"
+779-    return 0
+780-  fi
+781-
+782-  log "revoking provisioning access in guest"
+783-  # 00- prefix matters: sshd is first-keyword-wins and Ubuntu ships
+784-  # 50-cloud-init.conf, so this file must sort first to own PermitRootLogin.
+785-  ssh_root "set -e
+786-: > /root/.ssh/authorized_keys
+787-chmod 600 /root/.ssh/authorized_keys
+788-mkdir -p /etc/ssh/sshd_config.d
+789-printf 'PermitRootLogin no\nPasswordAuthentication no\n' > /etc/ssh/sshd_config.d/00-ascii-lockdown.conf
+790-chmod 644 /etc/ssh/sshd_config.d/00-ascii-lockdown.conf
+791:systemctl reload-or-restart ssh 2>/dev/null || systemctl reload-or-restart sshd 2>/dev/null || true"
+792-
+793-  local args=()
+794-  mapfile -t args < <(ssh_base_args)
+795:  if ssh -o BatchMode=yes "${args[@]}" "root@$VM_IPV6" true >/dev/null 2>&1; then
+796-    fail "guest still accepts the provisioning key after revocation"
+797-  fi
+798-  log "guest root SSH closed; provisioning key rejected as expected"
+799-
+800-  rm -f "$SSH_PRIVATE_KEY_FILE" "$SSH_PRIVATE_KEY_FILE.pub"
+801-}
+802-
+803-# Gateway->guest leg rides the cert-gateway's WireGuard mesh, same as Hetzner
+804-# boxes (create.sh): the gateway container has no IPv6 of its own, so proxying
+805-# to the guest's public v6 does NOT work — without a WG peer, boxes get 502s
+--
+813-    -H 'Content-Type: application/json'
+814-    -H "X-Baremetal-Machine: $VM_NAME"
+815-    -H "X-Baremetal-Expires: $GATEWAY_EXPIRES"
+816-    -H "X-Baremetal-Capability: $GATEWAY_CAPABILITY"
+817-  )
+818-  [ -n "$GATEWAY_PROXY_URL" ] && [ -n "$GATEWAY_CAPABILITY" ] && [ -n "$GATEWAY_EXPIRES" ] \
+819-    || fail "gateway capability is not configured"
+820-  if [ -n "$GATEWAY_TARGET_IP" ]; then
+821-    headers+=(-H "X-Baremetal-Target: $GATEWAY_TARGET_IP")
+822-  fi
+823:  curl -fsS -X POST "$GATEWAY_PROXY_URL" "${headers[@]}" \
+824:    -d "$(printf '%s' "$payload" | jq -c --arg operation "$operation" '. + {operation: $operation}')"
+825-}
+826-
+827-bind_gateway_target() {
+828-  [ "$SKIP_CERT_GATEWAY" != 1 ] || return 0
+829-  local response target_capability
+830:  response="$(gateway_request bind-target "$(jq -nc \
+831-    --arg machineName "$VM_NAME" --arg targetIp "$VM_IPV6" \
+832-    '{machineName: $machineName, targetIp: $targetIp}')")"
+833:  target_capability="$(jq -er '.targetCapability' <<<"$response")"
+834-  [[ "$target_capability" =~ ^[a-f0-9]{64}$ ]] || fail "backend returned an invalid target-bound gateway capability"
+835-  GATEWAY_TARGET_IP="$VM_IPV6"
+836-  GATEWAY_CAPABILITY="$target_capability"
+837-}
+838-
+839-setup_wireguard() {
+840-  if [ "$SKIP_CERT_GATEWAY" = "1" ]; then
+841-    log "skipping WireGuard mesh registration"
+842-    return 0
+843-  fi
+--
+849-    || { log "WARNING: wireguard-tools unavailable in guest; gateway will 502 for this box"; return 0; }
+850-
+851-  local wg_pubkey wg_response wg_ip wg_server_pubkey wg_endpoint wg_server_ip
+852-  # Keypair is generated on the guest; the private key never leaves it.
+853-  wg_pubkey="$(ssh_root 'umask 077 && mkdir -p /etc/wireguard && wg genkey > /etc/wireguard/box.key && wg pubkey < /etc/wireguard/box.key' || true)"
+854-  if [ -z "$wg_pubkey" ]; then
+855-    log "WARNING: WireGuard keygen failed; gateway will 502 for this box"
+856-    return 0
+857-  fi
+858-
+859:  wg_response="$(gateway_request register-wireguard "$(jq -nc \
+860-    --arg machineName "$VM_NAME" --arg publicKey "$wg_pubkey" --arg publicIp "$VM_IPV6" \
+861-    '{machineName: $machineName, publicKey: $publicKey, publicIp: $publicIp}')" || true)"
+862:  wg_ip="$(jq -r '.wg_ip // empty' <<<"$wg_response" 2>/dev/null || true)"
+863:  wg_server_pubkey="$(jq -r '.server_pubkey // empty' <<<"$wg_response" 2>/dev/null || true)"
+864:  wg_endpoint="$(jq -r '.endpoint // empty' <<<"$wg_response" 2>/dev/null || true)"
+865:  wg_server_ip="$(jq -r '.server_wg_ip // empty' <<<"$wg_response" 2>/dev/null || true)"
+866-  valid_wg_key() {
+867-    local value="$1"
+868-    [[ "$value" =~ ^[A-Za-z0-9+/]{43}=$ ]] \
+869-      && [ "$(printf '%s' "$value" | base64 -d 2>/dev/null | wc -c)" = 32 ]
+870-  }
+871-  valid_ipv4() {
+872-    local value="$1" octet
+873-    local -a octets=()
+874-    [[ "$value" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+875-    IFS=. read -r -a octets <<<"$value"
+876-    for octet in "${octets[@]}"; do [ "$octet" -le 255 ] || return 1; done
+877-  }
+878-  if ! valid_wg_key "$wg_pubkey" || ! valid_wg_key "$wg_server_pubkey" \
+879-    || ! valid_ipv4 "$wg_ip" || ! valid_ipv4 "$wg_server_ip" \
+880-    || ! [[ "$wg_endpoint" =~ ^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\]):[0-9]{1,5}$ ]]; then
+881-    log "WARNING: WireGuard registration returned invalid configuration"
+882:    gateway_request unregister-wireguard "$(jq -nc --arg machineName "$VM_NAME" '{machineName: $machineName}')" >/dev/null || true
+883-    return 0
+884-  fi
+885-  endpoint_port="${wg_endpoint##*:}"; endpoint_port="${endpoint_port%]}"
+886-  if [ "$endpoint_port" -lt 1 ] || [ "$endpoint_port" -gt 65535 ]; then
+887-    log "WARNING: WireGuard registration returned invalid endpoint port"
+888:    gateway_request unregister-wireguard "$(jq -nc --arg machineName "$VM_NAME" '{machineName: $machineName}')" >/dev/null || true
+889-    return 0
+890-  fi
+891-
+892-  ssh_root "umask 077 && cat > /etc/wireguard/wg0.conf <<WGEOF
+893-[Interface]
+894-PrivateKey = \$(cat /etc/wireguard/box.key)
+895-Address = $wg_ip/16
+896-
+897-[Peer]
+898-PublicKey = $wg_server_pubkey
+--
+902-WGEOF
+903-systemctl enable wg-quick@wg0 >/dev/null 2>&1 && systemctl restart wg-quick@wg0" \
+904-    || { log "WARNING: failed to bring up wg0 in guest"; return 0; }
+905-
+906-  # Confirm the tunnel carries traffic; a dead committed tunnel means 502s, so
+907-  # unregister the peer to restore the (public-IP) fallback path.
+908-  if ssh_root "ping -c 1 -W 5 $wg_server_ip" >/dev/null 2>&1; then
+909-    log "WireGuard tunnel established ($wg_ip -> $wg_server_ip)"
+910-  else
+911-    log "WARNING: WireGuard tunnel did not come up; unregistering peer"
+912:    gateway_request unregister-wireguard "$(jq -nc --arg machineName "$VM_NAME" '{machineName: $machineName}')" >/dev/null || true
+913-  fi
+914-}
+915-
+916-wait_for_http() {
+917-  local name="$1"
+918-  local url="$2"
+919-  log "waiting for $name at $url"
+920-  for _ in $(seq 1 90); do
+921:    if curl -g -fsS --max-time 5 "$url" >/dev/null 2>&1; then
+922-      log "$name ready"
+923-      return
+924-    fi
+925-    sleep 2
+926-  done
+927-  fail "$name did not become ready: $url"
+928-}
+929-
+930-register_route() {
+931-  local subdomain="$1"
+932-  local port="$2"
+933-  local machine_name="$3"
+934-  local response url
+935-
+936:  response="$(gateway_request register-route "$(jq -nc \
+937-    --arg subdomain "$subdomain" --arg targetIp "$VM_IPV6" --arg machineName "$machine_name" --argjson port "$port" \
+938-    '{subdomain: $subdomain, targetIp: $targetIp, port: $port, machineName: $machineName}')")"
+939-  url="$(printf '%s' "$response" | grep -o '"url":"[^"]*"' | cut -d'"' -f4 || true)"
+940-  if [ -z "$url" ]; then
+941-    fail "cert-gateway registration failed for $subdomain: $response"
+942-  fi
+943-  printf '%s\n' "$url"
+944-}
+945-
+946-register_cert_gateway() {
+--
+1032-  echo "SSH_HOST_PUBKEY: $SSH_HOST_PUBKEY"
+1033-  if [ -n "${TEST_PORT_URL:-}" ]; then
+1034-    echo "TEST_PORT_URL: $TEST_PORT_URL"
+1035-  fi
+1036-  echo "MACHINE_INFO_FILE: $VM_DIR/machine-info.env"
+1037-}
+1038-
+1039-main() {
+1040-  require_root
+1041-  VCPU_TOPOLOGY_SPEC="$(vm_vcpu_topology_spec "$VCPUS")" || fail "invalid VCPUS"
+1042:  need_cmd virsh
+1043:  need_cmd virt-install
+1044:  need_cmd python3
+1045:  need_cmd qemu-img
+1046-  need_cmd cloud-localds
+1047-  need_cmd curl
+1048-  need_cmd ssh
+1049-  need_cmd scp
+1050-  need_cmd openssl
+1051-  need_cmd ssh-keygen
+1052:  need_cmd python3
+1053-  need_cmd jq
+1054-  need_cmd flock
+1055-
+1056-  vm_io_validate_policy || fail "invalid VM I/O policy"
+1057:  vm_io_require_policy_support || fail "virsh does not support the VM I/O policy"
+1058-
+1059-  validate_requested_network
+1060-  phase image find_base_image
+1061-  phase allocation allocate_ip
+1062-  validate_names
+1063-  derive_network_names
+1064-
+1065-  VM_DIR="$VM_ROOT/$VM_NAME"
+1066-  if ! mkdir "$VM_DIR"; then
+1067-    fail "VM_DIR already exists or cannot be created: $VM_DIR"
+--
+1076-  # no pre-existing libvirt domain uses the requested name. Only beyond this
+1077-  # point may EXIT cleanup mutate a domain with that name.
+1078-  DOMAIN_NAME_OWNED=1
+1079-  write_cloud_init
+1080-  resolve_node_public_ipv4
+1081-  write_ownership_witness
+1082-  phase gateway-bind bind_gateway_target
+1083-  phase ipv4-doorway setup_ipv4_doorway
+1084-  resolve_agent_download_url
+1085-  phase libvirt create_vm
+1086:  phase boot-to-ssh wait_for_ssh
+1087-  phase wireguard setup_wireguard
+1088-  copy_guest_inputs
+1089-  phase guest-runtime run_guest_setup
+1090-
+1091-  if [ "$SKIP_RUNTIME_SETUP" != "1" ]; then
+1092-    phase agent-ready wait_for_http "agent" "http://[$VM_IPV6]:$AGENT_PORT/health"
+1093-    phase desktop-ready wait_for_http "moonlight-web" "http://[$VM_IPV6]:8090/"
+1094-  fi
+1095-
+1096-  revoke_provision_access
+--- networking / host reachability / isolation ---
+1-#!/usr/bin/env bash
+2-set -euo pipefail
+3-
+4-# Host-side VM provisioner. Runs on a bare-metal node (node0, node1, ...);
+5-# per-node values (NODE_ID, IPV6_PREFIX, PUBLIC_INTERFACE) come from the
+6-# node-agent's env file, defaults below encode node0. It creates a libvirt VM,
+7:# runs guest setup, registers routes through a VM-scoped backend capability, and writes machine-info.env
+8-# next to the VM disk. The node-agent exposes this proven sequence through the
+9-# authenticated backend-only node API.
+10-
+11-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+12-
+13-# shellcheck source=lib/vm-cpu.sh
+14-source "$SCRIPT_DIR/lib/vm-cpu.sh"
+15-# shellcheck source=lib/ssh-identity.sh
+16-source "$SCRIPT_DIR/lib/ssh-identity.sh"
+17-# shellcheck source=lib/vm-io.sh
+--
+42-VCPUS="${VCPUS:-4}"
+43-VCPU_TOPOLOGY_SPEC=""
+44-MEMORY_MB="${MEMORY_MB:-8192}"
+45-DISK_SIZE="${DISK_SIZE:-70G}"
+46-OS_VARIANT="${OS_VARIANT:-ubuntu24.04}"
+47-CPU_SHARES="${CPU_SHARES:-1024}"
+48-
+49-# IPv4 doorway (DNAT): guests are IPv6-only on the public side, so v4-only
+50-# clients reach them through the node's public IPv4. Ports derive from
+51-# VM_INDEX (unique per node, lowest-free-reused by the lease allocator):
+52:#   ssh    tcp NODE_V4:(19000+index)            -> guest NAT v4 :22
+53-#   webrtc udp NODE_V4:(20000+index*8, 8 ports) -> guest NAT v4 same ports
+54:# The guest's NAT-bridge IPv4 is pinned to 192.168.122.<index> via a dnsmasq
+55-# DHCP reservation so the DNAT target is stable. Rules are tagged
+56-# "ascii:<vm-name>" for exact cleanup; they live in kernel memory only (VMs
+57-# don't survive node reboots either).
+58-NODE_PUBLIC_IPV4="${NODE_PUBLIC_IPV4:-}"
+59:NAT_BRIDGE_V4_PREFIX="${NAT_BRIDGE_V4_PREFIX:-192.168.122}"
+60-SSH_FWD_PORT_BASE="${SSH_FWD_PORT_BASE:-19000}"
+61-WEBRTC_PORT_BASE="${WEBRTC_PORT_BASE:-20000}"
+62-WEBRTC_PORTS_PER_VM="${WEBRTC_PORTS_PER_VM:-8}"
+63-AGENT_FWD_PORT_BASE="${AGENT_FWD_PORT_BASE:-21000}"
+64-AGENT_SERVER_PORT="${AGENT_SERVER_PORT:-8911}"
+65-
+66-SSH_AUTHORIZED_KEYS_FILE="${SSH_AUTHORIZED_KEYS_FILE:-}"
+67-SSH_PRIVATE_KEY_FILE="${SSH_PRIVATE_KEY_FILE:-}"
+68-PROVISION_PUBLIC_KEY_FILE=""
+69-REMOTE_SETUP_DIR="${REMOTE_SETUP_DIR:-/tmp/ascii-baremetal-setup}"
+--
+110-NAT_FILTER=""
+111-
+112-usage() {
+113-  cat <<EOF
+114-Usage: sudo ./bare-metal-node/provision-vm.sh [options]
+115-
+116-Options:
+117-  --name NAME              VM name; default box-node0-<random>
+118-  --index N                Allocation index; default first free from $ALLOCATE_START_INDEX..$ALLOCATE_END_INDEX
+119-  --ipv6 ADDR              Explicit guest IPv6; index is derived from final hextet if --index is absent
+120:  --subdomain NAME         cert-gateway subdomain; default VM name
+121-  --skip-runtime-setup     Skip agent/desktop runtime setup
+122:  --skip-cert-gateway      Skip cert-gateway route registration
+123-  --cleanup-on-failure     Destroy VM and remove files if provisioning fails (default)
+124-  -h, --help               Show this help
+125-
+126-Important env vars:
+127-  BASE_IMAGE               required exact checksummed qcow2 base-image path
+128:  GATEWAY_PROXY_URL        backend proxy; requires VM-scoped capability fields
+129-  AGENT_SERVER_TAG         exact release tag, e.g. agent-server-v0.0.49-ascii-prod29
+130-  AGENTS_SERVER_CHANNEL    resolves latest channel tag when AGENT_SERVER_TAG is unset
+131-  SSH_AUTHORIZED_KEYS_FILE dev only: standing guest root keys; skips the post-setup root SSH lockdown (never set for customer boxes)
+132-  CLEANUP_ON_FAILURE      defaults to 1; set to 0 only to retain failed artifacts for debugging
+133-EOF
+134-}
+135-
+136-while [ $# -gt 0 ]; do
+137-  case "$1" in
+138-    --name) VM_NAME="$2"; shift 2 ;;
+139-    --index) VM_INDEX="$2"; shift 2 ;;
+140-    --ipv6) VM_IPV6="$2"; shift 2 ;;
+141-    --subdomain) MACHINE_SUBDOMAIN="$2"; shift 2 ;;
+142-    --skip-runtime-setup) SKIP_RUNTIME_SETUP=1; shift ;;
+143:    --skip-cert-gateway) SKIP_CERT_GATEWAY=1; shift ;;
+144-    --cleanup-on-failure) CLEANUP_ON_FAILURE=1; shift ;;
+145-    -h|--help) usage; exit 0 ;;
+146-    *) printf 'Unknown argument: %s\n' "$1" >&2; usage; exit 1 ;;
+147-  esac
+148-done
+149-
+150-log() {
+151-  printf '[baremetal-provision] %s\n' "$*"
+152-}
+153-
+--
+168-
+169-need_cmd() {
+170-  command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
+171-}
+172-
+173-quote() {
+174-  printf '%q' "$1"
+175-}
+176-
+177-cleanup_failure() {
+178:  local rc=$? domain_gone route_name
+179-  if [ "$rc" -eq 0 ]; then
+180-    return
+181-  fi
+182-
+183-  printf '[baremetal-provision] failed with exit code %s\n' "$rc" >&2
+184-  if [ "$CLEANUP_ON_FAILURE" = "1" ]; then
+185-    log "cleanup-on-failure enabled; removing partial VM artifacts"
+186-    domain_gone=1
+187-    if [ "$DOMAIN_NAME_OWNED" = 1 ]; then
+188-      virsh destroy "$VM_NAME" >/dev/null 2>&1 || true
+189-      virsh undefine "$VM_NAME" --nvram >/dev/null 2>&1 || virsh undefine "$VM_NAME" >/dev/null 2>&1 || true
+190-      if virsh dominfo "$VM_NAME" >/dev/null 2>&1; then
+191-        domain_gone=0
+192:        log "ERROR: partial domain still exists; preserving its ownership metadata and host state"
+193-      else
+194-        cleanup_vm_filters
+195-      fi
+196-    fi
+197-    if [ "$domain_gone" = 1 ]; then
+198-      if [ -n "$VM_IPV6" ]; then
+199:        ip -6 neigh del proxy "$VM_IPV6" dev "$PUBLIC_INTERFACE" >/dev/null 2>&1 || true
+200-      fi
+201-      remove_ipv4_doorway
+202-      if [ -n "$VM_NAME" ] && [ -n "$GATEWAY_PROXY_URL" ] && [ -n "$GATEWAY_CAPABILITY" ]; then
+203:        for route_name in "$VM_NAME" "$VM_NAME-desktop" "$VM_NAME-$TEST_PORT"; do
+204:          gateway_request unregister-route "$(jq -nc --arg machineName "$route_name" '{machineName: $machineName}')" >/dev/null 2>&1 || true
+205-        done
+206:        gateway_request unregister-wireguard "$(jq -nc --arg machineName "$VM_NAME" '{machineName: $machineName}')" >/dev/null 2>&1 || true
+207-      fi
+208-      if [ "$VM_DIR_CREATED" = 1 ] && [ -n "$VM_DIR" ] && [ -d "$VM_DIR" ]; then
+209-        rm -rf "$VM_DIR"
+210-      fi
+211-      if [ "$LEASE_CREATED" = "1" ] && [ -n "$LEASE_FILE" ]; then
+212-        rm -f "$LEASE_FILE"
+213-      fi
+214-    fi
+215-  else
+216-    if [ "$LEASE_CREATED" = "1" ] && [ "$VM_CREATED" != "1" ] && [ -n "$LEASE_FILE" ]; then
+--
+287-    if [ -z "$VM_IPV6" ]; then
+288-      VM_IPV6="$IPV6_PREFIX::$(printf '%x' "$VM_INDEX")"
+289-    fi
+290-  else
+291-    local idx hex candidate lease
+292-    for idx in $(seq "$ALLOCATE_START_INDEX" "$ALLOCATE_END_INDEX"); do
+293-      hex="$(printf '%x' "$idx")"
+294-      candidate="$IPV6_PREFIX::$hex"
+295-      lease="$LEASE_DIR/$idx"
+296-      [ -e "$lease" ] && continue
+297:      if ip -6 neigh show proxy | grep -Fq "$candidate "; then
+298-        continue
+299-      fi
+300-      VM_INDEX="$idx"
+301-      VM_IPV6="$candidate"
+302-      break
+303-    done
+304-    [ -n "$VM_INDEX" ] || fail "no free IPv6 allocation index in $ALLOCATE_START_INDEX..$ALLOCATE_END_INDEX"
+305-  fi
+306-
+307-  if [ "$VM_INDEX" -lt 2 ] || [ "$VM_INDEX" -gt 239 ]; then
+--
+316-  if ! (set -o noclobber; printf 'vm=%s\nipv6=%s\ncreated_at=%s\n' "$VM_NAME" "$VM_IPV6" "$(date -Is)" > "$LEASE_FILE") 2>/dev/null; then
+317-    fail "failed to claim lease: $LEASE_FILE"
+318-  fi
+319-  LEASE_CREATED=1
+320-  flock -u 8
+321-
+322-  MACHINE_SUBDOMAIN="${MACHINE_SUBDOMAIN:-$VM_NAME}"
+323-}
+324-
+325-# Linux interface names are limited to 15 bytes. A deterministic digest keeps
+326:# tap/filter identity stable across libvirt and harness restarts without putting
+327-# the potentially long VM name into a kernel identifier.
+328-derive_network_names() {
+329-  local digest
+330-  digest="$(printf '%s' "$VM_NAME" | sha256sum | cut -c1-10)"
+331-  PUBLIC_TAP="ap${digest}p"
+332-  NAT_TAP="ap${digest}n"
+333-  PUBLIC_FILTER="ascii-${digest}-public"
+334-  NAT_FILTER="ascii-${digest}-nat"
+335-}
+336-
+337-define_vm_filters() {
+338-  local public_xml nat_xml
+339-  public_xml="$(mktemp)"
+340-  nat_xml="$(mktemp)"
+341-
+342-  # Public NIC: its known MAC and assigned public IPv6 are the only permitted
+343-  # guest identities. NDP/ICMPv6 and ordinary IPv6 remain fully functional.
+344-  cat > "$public_xml" <<EOF
+345-<filter name='$PUBLIC_FILTER' chain='root'>
+346:  <filterref filter='no-mac-spoofing'/>
+347:  <filterref filter='no-ipv6-spoofing'>
+348-    <parameter name='IPV6' value='$VM_IPV6'/>
+349-  </filterref>
+350-  <rule action='accept' direction='inout' priority='-500'>
+351:    <mac protocolid='ipv6'/>
+352-  </rule>
+353-  <filterref filter='qemu-announce-self'/>
+354-  <filterref filter='no-other-l2-traffic'/>
+355-</filter>
+356-EOF
+357-
+358-  # NAT NIC: clean-traffic enforces MAC, ARP and the DHCP-reserved IPv4. Its
+359:  # stock no-ip-spoofing filter explicitly allows 0.0.0.0 DHCP requests.
+360-  cat > "$nat_xml" <<EOF
+361-<filter name='$NAT_FILTER' chain='root'>
+362-  <filterref filter='clean-traffic'>
+363-    <parameter name='IP' value='$NAT_IP'/>
+364-  </filterref>
+365-</filter>
+366-EOF
+367:  if ! virsh nwfilter-define "$public_xml" >/dev/null; then
+368-    rm -f "$public_xml" "$nat_xml"
+369:    fail "failed to define public nwfilter $PUBLIC_FILTER"
+370-  fi
+371:  if ! virsh nwfilter-define "$nat_xml" >/dev/null; then
+372:    virsh nwfilter-undefine "$PUBLIC_FILTER" >/dev/null 2>&1 || true
+373-    rm -f "$public_xml" "$nat_xml"
+374:    fail "failed to define NAT nwfilter $NAT_FILTER"
+375-  fi
+376-  rm -f "$public_xml" "$nat_xml"
+377-}
+378-
+379-cleanup_vm_filters() {
+380:  [ -n "$PUBLIC_FILTER" ] && virsh nwfilter-undefine "$PUBLIC_FILTER" >/dev/null 2>&1 || true
+381:  [ -n "$NAT_FILTER" ] && virsh nwfilter-undefine "$NAT_FILTER" >/dev/null 2>&1 || true
+382-}
+383-
+384-validate_names() {
+385-  [[ "$VM_NAME" =~ ^box-[a-z0-9]+-[a-z0-9-]+$ ]] || fail "VM_NAME must look like box-node0-abc123: $VM_NAME"
+386-  [[ "$OWNERSHIP_ID" =~ ^[A-Za-z0-9_-]{8,128}$ ]] || fail "OWNERSHIP_ID is required and invalid"
+387-  [[ "$MACHINE_SUBDOMAIN" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || fail "invalid subdomain: $MACHINE_SUBDOMAIN"
+388-}
+389-
+390-write_ownership_witness() {
+391:  local tmp="$VM_DIR/.machine-info.provisional"
+392-  {
+393-    printf 'PROVIDER=baremetal\n'
+394-    printf 'NODE_ID=%q\n' "$NODE_ID"
+395-    printf 'MACHINE_NAME=%q\n' "$VM_NAME"
+396-    printf 'MACHINE_ID=%q\n' "$VM_NAME"
+397-    printf 'OWNERSHIP_ID=%q\n' "$OWNERSHIP_ID"
+398-    printf 'MACHINE_IP=%q\n' "$VM_IPV6"
+399-    printf 'MACHINE_IP_TYPE=IPv6\n'
+400-    printf 'MACHINE_SUBDOMAIN=%q\n' "$MACHINE_SUBDOMAIN"
+401-    printf 'VM_INDEX=%q\n' "$VM_INDEX"
+402-    printf 'PUBLIC_MAC=%q\n' "$PUBLIC_MAC"
+403-    printf 'NAT_MAC=%q\n' "$NAT_MAC"
+404-    printf 'NAT_IP=%q\n' "$NAT_IP"
+405-    printf 'PUBLIC_FILTER=%q\n' "$PUBLIC_FILTER"
+406-    printf 'NAT_FILTER=%q\n' "$NAT_FILTER"
+407-    printf 'NAT_NETWORK=%q\n' "$NAT_NETWORK"
+408-  } > "$tmp"
+409-  chmod 600 "$tmp"
+410:  mv "$tmp" "$VM_DIR/machine-info.env"
+411-}
+412-
+413-resolve_ssh_keys() {
+414-  local out="$VM_DIR/authorized_keys"
+415-  : > "$out"
+416-
+417-  # Explicit sources only, for dev/debug. There is deliberately NO fallback to
+418-  # the invoking user's ~/.ssh: the node-agent runs as root, and the node's
+419-  # /root/.ssh/authorized_keys must never leak into customer guests (ASC-187).
+420-  if [ -n "${SSH_PUBLIC_KEYS:-}" ]; then
+--
+454-# back, so it must never reach an sshd we cannot prove is the VM we created.
+455-ensure_vm_host_identity() {
+456-  HOST_KEY_FILE="$VM_DIR/host-key"
+457-  ssh-keygen -t ed25519 -N '' -f "$HOST_KEY_FILE" -C "$VM_NAME" >/dev/null
+458-  SSH_HOST_PUBKEY="$(cut -d' ' -f1,2 < "$HOST_KEY_FILE.pub")"
+459-  KNOWN_HOSTS_FILE="$VM_DIR/known_hosts"
+460-  host_identity_known_hosts_write "$KNOWN_HOSTS_FILE" "$VM_IPV6" "$HOST_KEY_FILE.pub"
+461-}
+462-
+463-write_cloud_init() {
+464:  local mac_byte public_mac nat_mac
+465:  mac_byte="$(printf '%02x' "$VM_INDEX")"
+466:  public_mac="${PUBLIC_MAC:-52:54:00:aa:01:$mac_byte}"
+467:  nat_mac="${NAT_MAC:-52:54:00:aa:02:$mac_byte}"
+468-
+469-  resolve_ssh_keys
+470-
+471-  {
+472-    printf 'instance-id: %s\n' "$VM_NAME"
+473-    printf 'local-hostname: %s\n' "$VM_NAME"
+474-  } > "$VM_DIR/meta-data"
+475-
+476-  # Keys go to root ONLY, and only for the provisioning window: the list is
+477-  # the per-VM throwaway key (plus explicit dev keys, if any), and
+--
+510-    printf '  ed25519_public: %s\n' "$(cat "$HOST_KEY_FILE.pub")"
+511-    printf 'package_update: false\n'
+512-  } > "$VM_DIR/user-data"
+513-  chmod 600 "$VM_DIR/user-data"
+514-
+515-  cat > "$VM_DIR/network-config" <<EOF
+516-version: 2
+517-ethernets:
+518-  public0:
+519-    match:
+520:      macaddress: "$public_mac"
+521-    set-name: ens3
+522-    dhcp4: false
+523-    dhcp6: false
+524-    addresses:
+525-      - $VM_IPV6/$IPV6_PREFIX_LENGTH
+526:    routes:
+527-      - to: default
+528-        via: $GUEST_IPV6_GATEWAY
+529-    nameservers:
+530-      addresses:
+531-        - 2606:4700:4700::1111
+532-        - 2001:4860:4860::8888
+533-  nat0:
+534-    match:
+535:      macaddress: "$nat_mac"
+536-    set-name: enp7s0
+537-    dhcp4: true
+538-    dhcp6: false
+539-EOF
+540-
+541-  cloud-localds --network-config="$VM_DIR/network-config" "$VM_DIR/seed.iso" "$VM_DIR/user-data" "$VM_DIR/meta-data"
+542-  # The seed carries the guest's host private key; qemu reads it as owner
+543-  # (create_vm chowns it to libvirt-qemu), so no world-readable bit needed.
+544-  chmod 640 "$VM_DIR/seed.iso"
+545-  # No loose copy of the guest's private identity on the node beyond the seed.
+546-  rm -f "$HOST_KEY_FILE"
+547-
+548:  PUBLIC_MAC="$public_mac"
+549:  NAT_MAC="$nat_mac"
+550-}
+551-
+552-resolve_node_public_ipv4() {
+553-  if [ -z "$NODE_PUBLIC_IPV4" ]; then
+554-    NODE_PUBLIC_IPV4="$(ip -o -4 addr show "$PUBLIC_INTERFACE" | awk '{print $4}' | cut -d/ -f1 | head -1 || true)"
+555-  fi
+556-  [ -n "$NODE_PUBLIC_IPV4" ] || fail "cannot detect NODE_PUBLIC_IPV4 on $PUBLIC_INTERFACE"
+557-  NAT_IP="$NAT_BRIDGE_V4_PREFIX.$VM_INDEX"
+558-  SSH_FWD_PORT=$((SSH_FWD_PORT_BASE + VM_INDEX))
+559-  WEBRTC_PORT_MIN=$((WEBRTC_PORT_BASE + VM_INDEX * WEBRTC_PORTS_PER_VM))
+560-  WEBRTC_PORT_MAX=$((WEBRTC_PORT_MIN + WEBRTC_PORTS_PER_VM - 1))
+561-  SSH_ENDPOINT="$NODE_PUBLIC_IPV4:$SSH_FWD_PORT"
+562-  AGENT_FWD_PORT=$((AGENT_FWD_PORT_BASE + VM_INDEX))
+563-  AGENT_ENDPOINT="$NODE_PUBLIC_IPV4:$AGENT_FWD_PORT"
+564-}
+565-
+566:# iptables (nft backend) instead of raw nft: ufw and libvirt already manage
+567:# this hook universe through iptables chains, and a DNATed flow must survive
+568:# ALL of them (ufw's FORWARD drop policy, libvirt's virbr0 reject). Speaking
+569:# the same dialect lets us insert the accept at the head of FORWARD.
+570-setup_ipv4_doorway() {
+571:  need_cmd nft
+572:  need_cmd iptables
+573-  need_cmd ip6tables
+574-
+575-  log "pinning guest NAT IPv4 $NAT_IP (dnsmasq reservation for $NAT_MAC)"
+576:  virsh net-update "$NAT_NETWORK" delete ip-dhcp-host "<host mac='$NAT_MAC'/>" --live --config >/dev/null 2>&1 || true
+577:  virsh net-update "$NAT_NETWORK" add-last ip-dhcp-host "<host mac='$NAT_MAC' ip='$NAT_IP'/>" --live --config >/dev/null
+578-
+579-  sysctl -w net.ipv4.ip_forward=1 >/dev/null
+580-
+581-  log "adding IPv4 doorway: ssh $SSH_ENDPOINT, agent $AGENT_ENDPOINT, webrtc udp $WEBRTC_PORT_MIN-$WEBRTC_PORT_MAX"
+582:  iptables -t nat -A PREROUTING -d "$NODE_PUBLIC_IPV4" -p tcp --dport "$SSH_FWD_PORT" \
+583:    -m comment --comment "ascii:$VM_NAME" -j DNAT --to-destination "$NAT_IP:22"
+584:  # Agent-server doorway: the backend's direct machine RPC (health loop, restore
+585-  # verification) targets ip:8911; v4-only backends reach it through this port.
+586:  iptables -t nat -A PREROUTING -d "$NODE_PUBLIC_IPV4" -p tcp --dport "$AGENT_FWD_PORT" \
+587-    -m comment --comment "ascii:$VM_NAME" -j DNAT --to-destination "$NAT_IP:$AGENT_SERVER_PORT"
+588:  iptables -t nat -A PREROUTING -d "$NODE_PUBLIC_IPV4" -p udp --dport "$WEBRTC_PORT_MIN:$WEBRTC_PORT_MAX" \
+589-    -m comment --comment "ascii:$VM_NAME" -j DNAT --to-destination "$NAT_IP"
+590-  # Only traffic entering from the node's public NIC may use the doorway. This
+591-  # prevents a guest from hairpinning through the node IPv4 to reach a peer.
+592:  iptables -I FORWARD 1 -i "$PUBLIC_INTERFACE" -d "$NAT_IP" \
+593-    -m conntrack --ctstate DNAT -m comment --comment "ascii:$VM_NAME" -j ACCEPT
+594-
+595:  # Install these last so they stay ahead of libvirt's same-bridge ACCEPT and
+596-  # all per-VM DNAT accepts. The node-agent runs the same repair at startup.
+597-  "$TENANT_ISOLATION_SCRIPT"
+598-}
+599-
+600-remove_ipv4_doorway() {
+601-  local table
+602-  for table in nat filter; do
+603-    # `|| true`: no matching rules means grep exits 1, and under pipefail that
+604-    # would abort cleanup and leak the half-provisioned VM (ASC-294).
+605:    iptables -t "$table" -S 2>/dev/null | { grep -F -- "ascii:$VM_NAME" || true; } | sed 's/^-[AI] */-D /' \
+606-      | while IFS= read -r rule; do
+607-          # eval: -S quotes the comment argument; plain word-splitting would
+608-          # pass the quotes literally and the delete would not match.
+609:          eval "iptables -t $table $rule" >/dev/null 2>&1 || true
+610-        done
+611-  done
+612-  if [ -n "${NAT_MAC:-}" ]; then
+613:    virsh net-update "$NAT_NETWORK" delete ip-dhcp-host "<host mac='$NAT_MAC'/>" --live --config >/dev/null 2>&1 || true
+614-  fi
+615-}
+616-
+617-ensure_libvirt() {
+618-  virsh net-info "$PUBLIC_NETWORK" >/dev/null 2>&1 || fail "libvirt network missing: $PUBLIC_NETWORK"
+619-  if [ "$(virsh net-info "$PUBLIC_NETWORK" | awk '/^Active:/ { print $2; exit }')" != "yes" ]; then
+620-    virsh net-start "$PUBLIC_NETWORK"
+621-  fi
+622-
+623-  virsh net-info "$NAT_NETWORK" >/dev/null 2>&1 || fail "libvirt NAT network missing: $NAT_NETWORK"
+--
+633-create_vm() {
+634-  [ ! -e "$VM_DIR/root.qcow2" ] || fail "VM disk already exists: $VM_DIR/root.qcow2"
+635-
+636-  log "creating qcow2 overlay from $BASE_IMAGE"
+637-  qemu-img create -f qcow2 -F qcow2 -b "$BASE_IMAGE" "$VM_DIR/root.qcow2" "$DISK_SIZE"
+638-  chmod 644 "$VM_DIR/root.qcow2"
+639-  if id -u libvirt-qemu >/dev/null 2>&1; then
+640-    chown libvirt-qemu:kvm "$VM_DIR/root.qcow2" "$VM_DIR/seed.iso"
+641-  fi
+642-
+643:  log "adding proxy NDP for $VM_IPV6 on $PUBLIC_INTERFACE"
+644-  sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+645-  sysctl -w net.ipv6.conf.default.forwarding=1 >/dev/null
+646:  sysctl -w "net.ipv6.conf.$PUBLIC_INTERFACE.proxy_ndp=1" >/dev/null
+647:  ip -6 neigh replace proxy "$VM_IPV6" dev "$PUBLIC_INTERFACE"
+648-
+649-  local domain_xml="$VM_DIR/domain.xml"
+650-
+651-  log "rendering isolated domain XML for $VM_NAME"
+652-  define_vm_filters
+653-  virt-install \
+654-    --import \
+655-    --name "$VM_NAME" \
+656-    --memory "$MEMORY_MB" \
+657-    --vcpus "$VCPU_TOPOLOGY_SPEC" \
+658-    --cpu host-passthrough \
+659-    --disk "path=$VM_DIR/root.qcow2,format=qcow2,bus=virtio,discard=unmap" \
+660-    --disk "path=$VM_DIR/seed.iso,device=cdrom" \
+661-    --os-variant "$OS_VARIANT" \
+662:    --network "network=$PUBLIC_NETWORK,model=virtio,mac=$PUBLIC_MAC,target.dev=$PUBLIC_TAP,filterref.filter=$PUBLIC_FILTER" \
+663:    --network "network=$NAT_NETWORK,model=virtio,mac=$NAT_MAC,target.dev=$NAT_TAP,filterref.filter=$NAT_FILTER" \
+664-    --graphics none \
+665-    --noautoconsole \
+666-    --print-xml \
+667-    --dry-run > "$domain_xml"
+668-
+669-  python3 "$NETWORK_ISOLATION_HELPER" "$domain_xml" \
+670-    --expected-network "$PUBLIC_NETWORK" \
+671-    --expected-network "$NAT_NETWORK"
+672-
+673-  log "defining and starting $VM_NAME"
+--
+793-  local args=()
+794-  mapfile -t args < <(ssh_base_args)
+795-  if ssh -o BatchMode=yes "${args[@]}" "root@$VM_IPV6" true >/dev/null 2>&1; then
+796-    fail "guest still accepts the provisioning key after revocation"
+797-  fi
+798-  log "guest root SSH closed; provisioning key rejected as expected"
+799-
+800-  rm -f "$SSH_PRIVATE_KEY_FILE" "$SSH_PRIVATE_KEY_FILE.pub"
+801-}
+802-
+803:# Gateway->guest leg rides the cert-gateway's WireGuard mesh, same as Hetzner
+804:# boxes (create.sh): the gateway container has no IPv6 of its own, so proxying
+805-# to the guest's public v6 does NOT work — without a WG peer, boxes get 502s
+806-# through their *.on.ascii.dev URLs. Failure here is deliberately non-fatal
+807:# (the gateway falls back to the public IP), but on this fleet that fallback
+808-# is known-broken, so treat warnings below seriously.
+809:gateway_request() {
+810-  local operation="$1"
+811-  local payload="$2"
+812-  local headers=(
+813-    -H 'Content-Type: application/json'
+814-    -H "X-Baremetal-Machine: $VM_NAME"
+815-    -H "X-Baremetal-Expires: $GATEWAY_EXPIRES"
+816-    -H "X-Baremetal-Capability: $GATEWAY_CAPABILITY"
+817-  )
+818-  [ -n "$GATEWAY_PROXY_URL" ] && [ -n "$GATEWAY_CAPABILITY" ] && [ -n "$GATEWAY_EXPIRES" ] \
+819:    || fail "gateway capability is not configured"
+820-  if [ -n "$GATEWAY_TARGET_IP" ]; then
+821-    headers+=(-H "X-Baremetal-Target: $GATEWAY_TARGET_IP")
+822-  fi
+823-  curl -fsS -X POST "$GATEWAY_PROXY_URL" "${headers[@]}" \
+824-    -d "$(printf '%s' "$payload" | jq -c --arg operation "$operation" '. + {operation: $operation}')"
+825-}
+826-
+827:bind_gateway_target() {
+828-  [ "$SKIP_CERT_GATEWAY" != 1 ] || return 0
+829-  local response target_capability
+830:  response="$(gateway_request bind-target "$(jq -nc \
+831:    --arg machineName "$VM_NAME" --arg targetIp "$VM_IPV6" \
+832:    '{machineName: $machineName, targetIp: $targetIp}')")"
+833-  target_capability="$(jq -er '.targetCapability' <<<"$response")"
+834:  [[ "$target_capability" =~ ^[a-f0-9]{64}$ ]] || fail "backend returned an invalid target-bound gateway capability"
+835-  GATEWAY_TARGET_IP="$VM_IPV6"
+836-  GATEWAY_CAPABILITY="$target_capability"
+837-}
+838-
+839-setup_wireguard() {
+840-  if [ "$SKIP_CERT_GATEWAY" = "1" ]; then
+841-    log "skipping WireGuard mesh registration"
+842-    return 0
+843-  fi
+844:  log "registering guest in the cert-gateway WireGuard mesh"
+845-
+846-  # wireguard-tools is baked into the golden image; install is a fallback for
+847-  # stock images only.
+848-  ssh_root "command -v wg >/dev/null 2>&1 || (apt-get update -qq --allow-releaseinfo-change && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq wireguard-tools)" \
+849:    || { log "WARNING: wireguard-tools unavailable in guest; gateway will 502 for this box"; return 0; }
+850-
+851-  local wg_pubkey wg_response wg_ip wg_server_pubkey wg_endpoint wg_server_ip
+852-  # Keypair is generated on the guest; the private key never leaves it.
+853-  wg_pubkey="$(ssh_root 'umask 077 && mkdir -p /etc/wireguard && wg genkey > /etc/wireguard/box.key && wg pubkey < /etc/wireguard/box.key' || true)"
+854-  if [ -z "$wg_pubkey" ]; then
+855:    log "WARNING: WireGuard keygen failed; gateway will 502 for this box"
+856-    return 0
+857-  fi
+858-
+859:  wg_response="$(gateway_request register-wireguard "$(jq -nc \
+860:    --arg machineName "$VM_NAME" --arg publicKey "$wg_pubkey" --arg publicIp "$VM_IPV6" \
+861:    '{machineName: $machineName, publicKey: $publicKey, publicIp: $publicIp}')" || true)"
+862-  wg_ip="$(jq -r '.wg_ip // empty' <<<"$wg_response" 2>/dev/null || true)"
+863-  wg_server_pubkey="$(jq -r '.server_pubkey // empty' <<<"$wg_response" 2>/dev/null || true)"
+864-  wg_endpoint="$(jq -r '.endpoint // empty' <<<"$wg_response" 2>/dev/null || true)"
+865-  wg_server_ip="$(jq -r '.server_wg_ip // empty' <<<"$wg_response" 2>/dev/null || true)"
+866-  valid_wg_key() {
+867-    local value="$1"
+868-    [[ "$value" =~ ^[A-Za-z0-9+/]{43}=$ ]] \
+869-      && [ "$(printf '%s' "$value" | base64 -d 2>/dev/null | wc -c)" = 32 ]
+870-  }
+871-  valid_ipv4() {
+872-    local value="$1" octet
+873-    local -a octets=()
+874-    [[ "$value" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+875-    IFS=. read -r -a octets <<<"$value"
+876-    for octet in "${octets[@]}"; do [ "$octet" -le 255 ] || return 1; done
+877-  }
+878-  if ! valid_wg_key "$wg_pubkey" || ! valid_wg_key "$wg_server_pubkey" \
+879-    || ! valid_ipv4 "$wg_ip" || ! valid_ipv4 "$wg_server_ip" \
+880-    || ! [[ "$wg_endpoint" =~ ^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:]+\]):[0-9]{1,5}$ ]]; then
+881-    log "WARNING: WireGuard registration returned invalid configuration"
+882:    gateway_request unregister-wireguard "$(jq -nc --arg machineName "$VM_NAME" '{machineName: $machineName}')" >/dev/null || true
+883-    return 0
+884-  fi
+885-  endpoint_port="${wg_endpoint##*:}"; endpoint_port="${endpoint_port%]}"
+886:  if [ "$endpoint_port" -lt 1 ] || [ "$endpoint_port" -gt 65535 ]; then
+887-    log "WARNING: WireGuard registration returned invalid endpoint port"
+888:    gateway_request unregister-wireguard "$(jq -nc --arg machineName "$VM_NAME" '{machineName: $machineName}')" >/dev/null || true
+889-    return 0
+890-  fi
+891-
+892-  ssh_root "umask 077 && cat > /etc/wireguard/wg0.conf <<WGEOF
+893-[Interface]
+894-PrivateKey = \$(cat /etc/wireguard/box.key)
+895-Address = $wg_ip/16
+896-
+897-[Peer]
+898-PublicKey = $wg_server_pubkey
+--
+902-WGEOF
+903-systemctl enable wg-quick@wg0 >/dev/null 2>&1 && systemctl restart wg-quick@wg0" \
+904-    || { log "WARNING: failed to bring up wg0 in guest"; return 0; }
+905-
+906-  # Confirm the tunnel carries traffic; a dead committed tunnel means 502s, so
+907-  # unregister the peer to restore the (public-IP) fallback path.
+908-  if ssh_root "ping -c 1 -W 5 $wg_server_ip" >/dev/null 2>&1; then
+909-    log "WireGuard tunnel established ($wg_ip -> $wg_server_ip)"
+910-  else
+911-    log "WARNING: WireGuard tunnel did not come up; unregistering peer"
+912:    gateway_request unregister-wireguard "$(jq -nc --arg machineName "$VM_NAME" '{machineName: $machineName}')" >/dev/null || true
+913-  fi
+914-}
+915-
+916-wait_for_http() {
+917-  local name="$1"
+918-  local url="$2"
+919-  log "waiting for $name at $url"
+920-  for _ in $(seq 1 90); do
+921-    if curl -g -fsS --max-time 5 "$url" >/dev/null 2>&1; then
+922-      log "$name ready"
+923-      return
+924-    fi
+925-    sleep 2
+926-  done
+927-  fail "$name did not become ready: $url"
+928-}
+929-
+930:register_route() {
+931-  local subdomain="$1"
+932-  local port="$2"
+933:  local machine_name="$3"
+934-  local response url
+935-
+936:  response="$(gateway_request register-route "$(jq -nc \
+937:    --arg subdomain "$subdomain" --arg targetIp "$VM_IPV6" --arg machineName "$machine_name" --argjson port "$port" \
+938:    '{subdomain: $subdomain, targetIp: $targetIp, port: $port, machineName: $machineName}')")"
+939-  url="$(printf '%s' "$response" | grep -o '"url":"[^"]*"' | cut -d'"' -f4 || true)"
+940-  if [ -z "$url" ]; then
+941:    fail "cert-gateway registration failed for $subdomain: $response"
+942-  fi
+943-  printf '%s\n' "$url"
+944-}
+945-
+946:register_cert_gateway() {
+947-  MACHINE_URL=""
+948-  DESKTOP_URL=""
+949-  TEST_PORT_URL=""
+950-
+951-  if [ "$SKIP_CERT_GATEWAY" = "1" ]; then
+952:    log "skipping cert-gateway registration"
+953-    return
+954-  fi
+955-
+956:  log "registering cert-gateway routes through scoped backend capability"
+957:  MACHINE_URL="$(register_route "$MACHINE_SUBDOMAIN" "$AGENT_PORT" "$VM_NAME")"
+958:  DESKTOP_URL="$(register_route "$MACHINE_SUBDOMAIN-desktop" 8090 "$VM_NAME-desktop")"
+959-  if [ "$REGISTER_TEST_PORT" = "1" ]; then
+960:    TEST_PORT_URL="$(register_route "$MACHINE_SUBDOMAIN-$TEST_PORT" "$TEST_PORT" "$VM_NAME-$TEST_PORT")"
+961-  fi
+962-}
+963-
+964:write_machine_info() {
+965-  local shared_key streaming_token streaming_host_id streaming_app_id pairing_success info_file
+966:  info_file="$VM_DIR/machine-info.env"
+967-  local result_file="$VM_DIR/runtime-result.env"
+968-
+969-  if [ -f "$result_file" ]; then
+970-    shared_key="$(grep '^SHARED_KEY=' "$result_file" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+971-    streaming_token="$(grep '^STREAMING_TOKEN=' "$result_file" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+972-    streaming_host_id="$(grep '^STREAMING_HOST_ID=' "$result_file" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+973-    streaming_app_id="$(grep '^STREAMING_APP_ID=' "$result_file" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+974-    pairing_success="$(grep '^PAIRING_SUCCESS=' "$result_file" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+975-  else
+976-    shared_key="$(grep '^SHARED_KEY=' "$VM_DIR/runtime-setup.log" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+--
+1026-  echo "IP: $VM_IPV6"
+1027-  echo "IP_TYPE: IPv6"
+1028-  echo "PROVIDER: baremetal"
+1029-  echo "URL: ${MACHINE_URL:-}"
+1030-  echo "DESKTOP_URL: ${DESKTOP_URL:-}"
+1031-  echo "SSH_ENDPOINT: $SSH_ENDPOINT"
+1032-  echo "SSH_HOST_PUBKEY: $SSH_HOST_PUBKEY"
+1033-  if [ -n "${TEST_PORT_URL:-}" ]; then
+1034-    echo "TEST_PORT_URL: $TEST_PORT_URL"
+1035-  fi
+1036:  echo "MACHINE_INFO_FILE: $VM_DIR/machine-info.env"
+1037-}
+1038-
+1039-main() {
+1040-  require_root
+1041-  VCPU_TOPOLOGY_SPEC="$(vm_vcpu_topology_spec "$VCPUS")" || fail "invalid VCPUS"
+1042-  need_cmd virsh
+1043-  need_cmd virt-install
+1044-  need_cmd python3
+1045-  need_cmd qemu-img
+1046-  need_cmd cloud-localds
+--
+1072-  ensure_vm_host_identity
+1073-
+1074-  ensure_libvirt
+1075-  # The invocation atomically owns the unique VM directory and has now proven
+1076-  # no pre-existing libvirt domain uses the requested name. Only beyond this
+1077-  # point may EXIT cleanup mutate a domain with that name.
+1078-  DOMAIN_NAME_OWNED=1
+1079-  write_cloud_init
+1080-  resolve_node_public_ipv4
+1081-  write_ownership_witness
+1082:  phase gateway-bind bind_gateway_target
+1083-  phase ipv4-doorway setup_ipv4_doorway
+1084-  resolve_agent_download_url
+1085-  phase libvirt create_vm
+1086-  phase boot-to-ssh wait_for_ssh
+1087-  phase wireguard setup_wireguard
+1088-  copy_guest_inputs
+1089-  phase guest-runtime run_guest_setup
+1090-
+1091-  if [ "$SKIP_RUNTIME_SETUP" != "1" ]; then
+1092-    phase agent-ready wait_for_http "agent" "http://[$VM_IPV6]:$AGENT_PORT/health"
+1093-    phase desktop-ready wait_for_http "moonlight-web" "http://[$VM_IPV6]:8090/"
+1094-  fi
+1095-
+1096-  revoke_provision_access
+1097-
+1098:  write_machine_info
+1099:  phase gateway register_cert_gateway
+1100:  write_machine_info
+1101-  print_summary
+1102-}
+1103-
+1104-main "$@"
+
+===== delete-vm.sh =====
+--- validators / user-or-backend supplied fields ---
+5-
+6-NODE_ID="${NODE_ID:-node0}"
+7-VM_ROOT="${VM_ROOT:-/var/lib/ascii/vms}"
+8-STATE_DIR="${STATE_DIR:-/var/lib/ascii/baremetal}"
+9-LEASE_DIR="$STATE_DIR/leases"
+10-PUBLIC_INTERFACE="${PUBLIC_INTERFACE:-enp6s0}"
+11-YES="${YES:-0}"
+12-
+13-usage() {
+14-  cat <<EOF
+15:Usage: sudo ./bare-metal-node/delete-vm.sh VM_NAME [--yes]
+16-
+17:Gateway cleanup is performed by the backend after ownership-validated host deletion.
+18-EOF
+19-}
+20-
+21-if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+22-  usage
+23-  exit 0
+24-fi
+25-
+26-if [ $# -lt 1 ]; then
+27-  usage
+28-  exit 1
+29-fi
+30-
+31:VM_NAME="$1"
+32-shift
+33-
+34-while [ $# -gt 0 ]; do
+35-  case "$1" in
+36-    --yes) YES=1; shift ;;
+37-    -h|--help) usage; exit 0 ;;
+38-    *) printf 'Unknown argument: %s\n' "$1" >&2; usage; exit 1 ;;
+39-  esac
+40-done
+41-
+42-if [ "$(id -u)" -ne 0 ]; then
+43-  echo "Run as root, usually with sudo" >&2
+44-  exit 1
+45-fi
+46-
+47-if [ "$YES" != "1" ]; then
+48:  echo "Refusing to delete $VM_NAME without --yes" >&2
+49-  exit 1
+50-fi
+51:[[ "$VM_NAME" =~ ^box-[a-z0-9]+-[a-z0-9-]+$ ]] || { echo "Invalid VM name" >&2; exit 1; }
+52-env_value() {
+53-  local file="$1" key="$2"
+54-  awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$file"
+55-}
+56-
+57:VM_DIR="$VM_ROOT/$VM_NAME"
+58-INFO_FILE="$VM_DIR/machine-info.env"
+59-
+60:MACHINE_IP=""
+61:VM_INDEX=""
+62:MACHINE_SUBDOMAIN="$VM_NAME"
+63-PUBLIC_FILTER=""
+64-NAT_FILTER=""
+65-if [ -f "$INFO_FILE" ]; then
+66:  MACHINE_IP="$(env_value "$INFO_FILE" MACHINE_IP)"
+67:  VM_INDEX="$(env_value "$INFO_FILE" VM_INDEX)"
+68:  MACHINE_SUBDOMAIN="$(env_value "$INFO_FILE" MACHINE_SUBDOMAIN)"
+69-  PUBLIC_FILTER="$(env_value "$INFO_FILE" PUBLIC_FILTER)"
+70-  NAT_FILTER="$(env_value "$INFO_FILE" NAT_FILTER)"
+71:  NAT_MAC="$(env_value "$INFO_FILE" NAT_MAC)"
+72-  NAT_NETWORK="$(env_value "$INFO_FILE" NAT_NETWORK)"
+73:  MACHINE_SUBDOMAIN="${MACHINE_SUBDOMAIN:-$VM_NAME}"
+74-fi
+75-
+76-if [ -z "$PUBLIC_FILTER" ] || [ -z "$NAT_FILTER" ]; then
+77:  FILTER_DIGEST="$(printf '%s' "$VM_NAME" | sha256sum | cut -c1-10)"
+78-  PUBLIC_FILTER="ascii-${FILTER_DIGEST}-public"
+79-  NAT_FILTER="ascii-${FILTER_DIGEST}-nat"
+80-fi
+81-
+82:if [ -z "$VM_INDEX" ] && [ -d "$LEASE_DIR" ]; then
+83:  LEASE_FILE="$(grep -l "^vm=$VM_NAME$" "$LEASE_DIR"/* 2>/dev/null | head -1 || true)"
+84-  if [ -n "$LEASE_FILE" ]; then
+85:    VM_INDEX="$(basename "$LEASE_FILE")"
+86-    ipv6="$(env_value "$LEASE_FILE" ipv6)"
+87:    MACHINE_IP="${MACHINE_IP:-${ipv6:-}}"
+88-  fi
+89-fi
+90-
+91:echo "Destroying libvirt domain $VM_NAME"
+92:virsh destroy "$VM_NAME" >/dev/null 2>&1 || true
+93:if virsh dominfo "$VM_NAME" >/dev/null 2>&1; then
+94:  virsh undefine "$VM_NAME" --nvram >/dev/null 2>&1 || \
+95:    virsh undefine "$VM_NAME" >/dev/null 2>&1 || {
+96:      echo "Failed to undefine libvirt domain $VM_NAME" >&2
+97-      exit 1
+98-    }
+99-fi
+100:if virsh dominfo "$VM_NAME" >/dev/null 2>&1; then
+101:  echo "Refusing to erase ownership metadata: libvirt domain $VM_NAME still exists" >&2
+102-  exit 1
+103-fi
+104-virsh nwfilter-undefine "$PUBLIC_FILTER" >/dev/null 2>&1 || true
+105-virsh nwfilter-undefine "$NAT_FILTER" >/dev/null 2>&1 || true
+106-for filter in "$PUBLIC_FILTER" "$NAT_FILTER"; do
+107-  if virsh nwfilter-info "$filter" >/dev/null 2>&1; then
+108-    echo "Failed to remove libvirt nwfilter $filter" >&2
+109-    exit 1
+110-  fi
+111-done
+112-
+113:if [ -n "$MACHINE_IP" ]; then
+114:  echo "Removing proxy NDP $MACHINE_IP"
+115:  ip -6 neigh del proxy "$MACHINE_IP" dev "$PUBLIC_INTERFACE" >/dev/null 2>&1 || true
+116-fi
+117-
+118-echo "Removing IPv4 doorway (DNAT rules + DHCP reservation)"
+119-for table in nat filter; do
+120-  # `|| true`: a VM with no doorway rules left (already-cleaned zombie) makes
+121-  # grep exit 1, and under pipefail that killed the whole delete (ASC-294).
+122:  iptables -t "$table" -S 2>/dev/null | { grep -F -- "ascii:$VM_NAME" || true; } | sed 's/^-[AI] */-D /' \
+123-    | while IFS= read -r rule; do
+124-        # eval: -S quotes the comment argument; plain word-splitting would
+125-        # pass the quotes literally and the delete would not match.
+126-        eval "iptables -t $table $rule" >/dev/null 2>&1 || true
+127-      done
+128-done
+129-for table in nat filter; do
+130-  rules="$(iptables -t "$table" -S)" || {
+131:    echo "Failed to verify $table rules for $VM_NAME" >&2
+132-    exit 1
+133-  }
+134:  if grep -F -- "ascii:$VM_NAME" <<< "$rules" >/dev/null; then
+135:    echo "Failed to remove all $table rules for $VM_NAME" >&2
+136-    exit 1
+137-  fi
+138-done
+139:NAT_MAC="${NAT_MAC:-}"
+140:if [ -z "$NAT_MAC" ] && [ -n "$VM_INDEX" ]; then
+141:  NAT_MAC="52:54:00:aa:02:$(printf '%02x' "$VM_INDEX")"
+142-fi
+143:if [ -n "$NAT_MAC" ]; then
+144:  virsh net-update "${NAT_NETWORK:-default}" delete ip-dhcp-host "<host mac='$NAT_MAC'/>" --live --config >/dev/null 2>&1 || true
+145-  nat_network_xml="$(virsh net-dumpxml "${NAT_NETWORK:-default}")" || {
+146:    echo "Failed to verify DHCP reservation removal for $NAT_MAC" >&2
+147-    exit 1
+148-  }
+149:  if grep -F "$NAT_MAC" <<< "$nat_network_xml" >/dev/null; then
+150:    echo "Failed to remove DHCP reservation for $NAT_MAC" >&2
+151-    exit 1
+152-  fi
+153-fi
+154-
+155:if [ -n "$VM_INDEX" ]; then
+156:  rm -f "$LEASE_DIR/$VM_INDEX"
+157-elif [ -d "$LEASE_DIR" ]; then
+158-  while IFS= read -r lease_file; do
+159-    rm -f "$lease_file"
+160:  done < <(grep -l "^vm=$VM_NAME$" "$LEASE_DIR"/* 2>/dev/null || true)
+161-fi
+162-
+163-echo "Removing $VM_DIR"
+164-rm -rf "$VM_DIR"
+165-
+166:echo "Deleted $VM_NAME"
+--- host command / filesystem / parser sinks ---
+44-  exit 1
+45-fi
+46-
+47-if [ "$YES" != "1" ]; then
+48-  echo "Refusing to delete $VM_NAME without --yes" >&2
+49-  exit 1
+50-fi
+51-[[ "$VM_NAME" =~ ^box-[a-z0-9]+-[a-z0-9-]+$ ]] || { echo "Invalid VM name" >&2; exit 1; }
+52-env_value() {
+53-  local file="$1" key="$2"
+54:  awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$file"
+55-}
+56-
+57-VM_DIR="$VM_ROOT/$VM_NAME"
+58-INFO_FILE="$VM_DIR/machine-info.env"
+59-
+60-MACHINE_IP=""
+61-VM_INDEX=""
+62-MACHINE_SUBDOMAIN="$VM_NAME"
+63-PUBLIC_FILTER=""
+64-NAT_FILTER=""
+--
+82-if [ -z "$VM_INDEX" ] && [ -d "$LEASE_DIR" ]; then
+83-  LEASE_FILE="$(grep -l "^vm=$VM_NAME$" "$LEASE_DIR"/* 2>/dev/null | head -1 || true)"
+84-  if [ -n "$LEASE_FILE" ]; then
+85-    VM_INDEX="$(basename "$LEASE_FILE")"
+86-    ipv6="$(env_value "$LEASE_FILE" ipv6)"
+87-    MACHINE_IP="${MACHINE_IP:-${ipv6:-}}"
+88-  fi
+89-fi
+90-
+91-echo "Destroying libvirt domain $VM_NAME"
+92:virsh destroy "$VM_NAME" >/dev/null 2>&1 || true
+93:if virsh dominfo "$VM_NAME" >/dev/null 2>&1; then
+94:  virsh undefine "$VM_NAME" --nvram >/dev/null 2>&1 || \
+95:    virsh undefine "$VM_NAME" >/dev/null 2>&1 || {
+96-      echo "Failed to undefine libvirt domain $VM_NAME" >&2
+97-      exit 1
+98-    }
+99-fi
+100:if virsh dominfo "$VM_NAME" >/dev/null 2>&1; then
+101-  echo "Refusing to erase ownership metadata: libvirt domain $VM_NAME still exists" >&2
+102-  exit 1
+103-fi
+104:virsh nwfilter-undefine "$PUBLIC_FILTER" >/dev/null 2>&1 || true
+105:virsh nwfilter-undefine "$NAT_FILTER" >/dev/null 2>&1 || true
+106-for filter in "$PUBLIC_FILTER" "$NAT_FILTER"; do
+107:  if virsh nwfilter-info "$filter" >/dev/null 2>&1; then
+108-    echo "Failed to remove libvirt nwfilter $filter" >&2
+109-    exit 1
+110-  fi
+111-done
+112-
+113-if [ -n "$MACHINE_IP" ]; then
+114-  echo "Removing proxy NDP $MACHINE_IP"
+115-  ip -6 neigh del proxy "$MACHINE_IP" dev "$PUBLIC_INTERFACE" >/dev/null 2>&1 || true
+116-fi
+117-
+118-echo "Removing IPv4 doorway (DNAT rules + DHCP reservation)"
+119-for table in nat filter; do
+120-  # `|| true`: a VM with no doorway rules left (already-cleaned zombie) makes
+121-  # grep exit 1, and under pipefail that killed the whole delete (ASC-294).
+122:  iptables -t "$table" -S 2>/dev/null | { grep -F -- "ascii:$VM_NAME" || true; } | sed 's/^-[AI] */-D /' \
+123-    | while IFS= read -r rule; do
+124:        # eval: -S quotes the comment argument; plain word-splitting would
+125-        # pass the quotes literally and the delete would not match.
+126:        eval "iptables -t $table $rule" >/dev/null 2>&1 || true
+127-      done
+128-done
+129-for table in nat filter; do
+130-  rules="$(iptables -t "$table" -S)" || {
+131-    echo "Failed to verify $table rules for $VM_NAME" >&2
+132-    exit 1
+133-  }
+134-  if grep -F -- "ascii:$VM_NAME" <<< "$rules" >/dev/null; then
+135-    echo "Failed to remove all $table rules for $VM_NAME" >&2
+136-    exit 1
+137-  fi
+138-done
+139-NAT_MAC="${NAT_MAC:-}"
+140-if [ -z "$NAT_MAC" ] && [ -n "$VM_INDEX" ]; then
+141-  NAT_MAC="52:54:00:aa:02:$(printf '%02x' "$VM_INDEX")"
+142-fi
+143-if [ -n "$NAT_MAC" ]; then
+144:  virsh net-update "${NAT_NETWORK:-default}" delete ip-dhcp-host "<host mac='$NAT_MAC'/>" --live --config >/dev/null 2>&1 || true
+145:  nat_network_xml="$(virsh net-dumpxml "${NAT_NETWORK:-default}")" || {
+146-    echo "Failed to verify DHCP reservation removal for $NAT_MAC" >&2
+147-    exit 1
+148-  }
+149-  if grep -F "$NAT_MAC" <<< "$nat_network_xml" >/dev/null; then
+150-    echo "Failed to remove DHCP reservation for $NAT_MAC" >&2
+151-    exit 1
+152-  fi
+153-fi
+154-
+155-if [ -n "$VM_INDEX" ]; then
+156-  rm -f "$LEASE_DIR/$VM_INDEX"
+157-elif [ -d "$LEASE_DIR" ]; then
+158-  while IFS= read -r lease_file; do
+159-    rm -f "$lease_file"
+160-  done < <(grep -l "^vm=$VM_NAME$" "$LEASE_DIR"/* 2>/dev/null || true)
+161-fi
+162-
+163-echo "Removing $VM_DIR"
+164:rm -rf "$VM_DIR"
+165-
+166-echo "Deleted $VM_NAME"
+--- networking / host reachability / isolation ---
+48-  echo "Refusing to delete $VM_NAME without --yes" >&2
+49-  exit 1
+50-fi
+51-[[ "$VM_NAME" =~ ^box-[a-z0-9]+-[a-z0-9-]+$ ]] || { echo "Invalid VM name" >&2; exit 1; }
+52-env_value() {
+53-  local file="$1" key="$2"
+54-  awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$file"
+55-}
+56-
+57-VM_DIR="$VM_ROOT/$VM_NAME"
+58:INFO_FILE="$VM_DIR/machine-info.env"
+59-
+60-MACHINE_IP=""
+61-VM_INDEX=""
+62-MACHINE_SUBDOMAIN="$VM_NAME"
+63-PUBLIC_FILTER=""
+64-NAT_FILTER=""
+65-if [ -f "$INFO_FILE" ]; then
+66-  MACHINE_IP="$(env_value "$INFO_FILE" MACHINE_IP)"
+67-  VM_INDEX="$(env_value "$INFO_FILE" VM_INDEX)"
+68-  MACHINE_SUBDOMAIN="$(env_value "$INFO_FILE" MACHINE_SUBDOMAIN)"
+--
+91-echo "Destroying libvirt domain $VM_NAME"
+92-virsh destroy "$VM_NAME" >/dev/null 2>&1 || true
+93-if virsh dominfo "$VM_NAME" >/dev/null 2>&1; then
+94-  virsh undefine "$VM_NAME" --nvram >/dev/null 2>&1 || \
+95-    virsh undefine "$VM_NAME" >/dev/null 2>&1 || {
+96-      echo "Failed to undefine libvirt domain $VM_NAME" >&2
+97-      exit 1
+98-    }
+99-fi
+100-if virsh dominfo "$VM_NAME" >/dev/null 2>&1; then
+101:  echo "Refusing to erase ownership metadata: libvirt domain $VM_NAME still exists" >&2
+102-  exit 1
+103-fi
+104:virsh nwfilter-undefine "$PUBLIC_FILTER" >/dev/null 2>&1 || true
+105:virsh nwfilter-undefine "$NAT_FILTER" >/dev/null 2>&1 || true
+106-for filter in "$PUBLIC_FILTER" "$NAT_FILTER"; do
+107:  if virsh nwfilter-info "$filter" >/dev/null 2>&1; then
+108:    echo "Failed to remove libvirt nwfilter $filter" >&2
+109-    exit 1
+110-  fi
+111-done
+112-
+113-if [ -n "$MACHINE_IP" ]; then
+114:  echo "Removing proxy NDP $MACHINE_IP"
+115:  ip -6 neigh del proxy "$MACHINE_IP" dev "$PUBLIC_INTERFACE" >/dev/null 2>&1 || true
+116-fi
+117-
+118-echo "Removing IPv4 doorway (DNAT rules + DHCP reservation)"
+119-for table in nat filter; do
+120-  # `|| true`: a VM with no doorway rules left (already-cleaned zombie) makes
+121-  # grep exit 1, and under pipefail that killed the whole delete (ASC-294).
+122:  iptables -t "$table" -S 2>/dev/null | { grep -F -- "ascii:$VM_NAME" || true; } | sed 's/^-[AI] */-D /' \
+123-    | while IFS= read -r rule; do
+124-        # eval: -S quotes the comment argument; plain word-splitting would
+125-        # pass the quotes literally and the delete would not match.
+126:        eval "iptables -t $table $rule" >/dev/null 2>&1 || true
+127-      done
+128-done
+129-for table in nat filter; do
+130:  rules="$(iptables -t "$table" -S)" || {
+131-    echo "Failed to verify $table rules for $VM_NAME" >&2
+132-    exit 1
+133-  }
+134-  if grep -F -- "ascii:$VM_NAME" <<< "$rules" >/dev/null; then
+135-    echo "Failed to remove all $table rules for $VM_NAME" >&2
+136-    exit 1
+137-  fi
+138-done
+139-NAT_MAC="${NAT_MAC:-}"
+140-if [ -z "$NAT_MAC" ] && [ -n "$VM_INDEX" ]; then
+141-  NAT_MAC="52:54:00:aa:02:$(printf '%02x' "$VM_INDEX")"
+142-fi
+143-if [ -n "$NAT_MAC" ]; then
+144:  virsh net-update "${NAT_NETWORK:-default}" delete ip-dhcp-host "<host mac='$NAT_MAC'/>" --live --config >/dev/null 2>&1 || true
+145-  nat_network_xml="$(virsh net-dumpxml "${NAT_NETWORK:-default}")" || {
+146-    echo "Failed to verify DHCP reservation removal for $NAT_MAC" >&2
+147-    exit 1
+148-  }
+149-  if grep -F "$NAT_MAC" <<< "$nat_network_xml" >/dev/null; then
+150-    echo "Failed to remove DHCP reservation for $NAT_MAC" >&2
+151-    exit 1
+152-  fi
+153-fi
+154-
+
+===== guest-runtime-setup.sh =====
+--- validators / user-or-backend supplied fields ---
+7-# Moonlight pairing.
+8-
+9-require_env() {
+10-  local name="$1"
+11-  if [ -z "${!name:-}" ]; then
+12-    printf 'Required environment variable missing: %s\n' "$name" >&2
+13-    exit 1
+14-  fi
+15-}
+16-
+17:require_env MACHINE_NAME
+18:require_env MACHINE_IP
+19:require_env AGENT_SERVER_TAG
+20-
+21:MACHINE_SUBDOMAIN="${MACHINE_SUBDOMAIN:-$MACHINE_NAME}"
+22-INSTALL_DIR="${INSTALL_DIR:-/opt/ascii-agent}"
+23-RESULT_FILE="${RESULT_FILE:-$INSTALL_DIR/provision-result.env}"
+24-AGENT_PORT="${AGENT_PORT:-8911}"
+25-BACKEND_URL="${BACKEND_URL:-https://ascii.dev}"
+26:BOX_CLI_API_URL="${BOX_CLI_API_URL:-$BACKEND_URL}"
+27:BOX_CLI_CHANNEL="${BOX_CLI_CHANNEL:-prod}"
+28:BOX_CLI_MODE="${BOX_CLI_MODE:-box}"
+29:BOX_CLI_TAG="${BOX_CLI_TAG:-}"
+30-AGENTS_SERVER_CHANNEL="${AGENTS_SERVER_CHANNEL:-}"
+31-ENABLE_AGENT_V6_PROXY="${ENABLE_AGENT_V6_PROXY:-1}"
+32-# IPv4 doorway (bare-metal): v4-only clients reach WebRTC through the node's
+33-# public IPv4 + a per-VM DNATed UDP block. When set, the streamer binds that
+34-# block and advertises the node's v4 alongside the guest's v6.
+35-NODE_PUBLIC_IPV4="${NODE_PUBLIC_IPV4:-}"
+36-WEBRTC_PORT_MIN="${WEBRTC_PORT_MIN:-49152}"
+37-WEBRTC_PORT_MAX="${WEBRTC_PORT_MAX:-65535}"
+38-SHARED_KEY="${SHARED_KEY:-$(openssl rand -hex 32)}"
+39-
+40-log() {
+41-  printf '[guest-runtime-setup] %s\n' "$*"
+42-}
+43-
+44:log "runtime setup for $MACHINE_NAME ($MACHINE_IP)"
+45-
+46-if [ "$ENABLE_AGENT_V6_PROXY" = "1" ]; then
+47-  command -v socat >/dev/null || { echo 'golden image is missing socat' >&2; exit 1; }
+48-fi
+49-command -v codex >/dev/null || { echo 'golden image is missing pinned Codex CLI' >&2; exit 1; }
+50-
+51-IMAGE_ASSET_DIR=/opt/ascii-image-assets
+52-IMAGE_ASSET_MANIFEST="$IMAGE_ASSET_DIR/manifest.json"
+53-[ -f "$IMAGE_ASSET_MANIFEST" ] || { echo 'golden image platform manifest is missing' >&2; exit 1; }
+54:[[ "$AGENT_SERVER_TAG" =~ ^agent-server-v[A-Za-z0-9._-]+$ ]] || { echo 'AGENT_SERVER_TAG must pin an agent-server-v* release' >&2; exit 1; }
+55-image_agent_tag="$(jq -er '.agentServer.tag' "$IMAGE_ASSET_MANIFEST")"
+56-expected_agent_sha="$(jq -er '.agentServer.sha256' "$IMAGE_ASSET_MANIFEST")"
+57:[ "$image_agent_tag" = "$AGENT_SERVER_TAG" ] || { echo "image agent tag $image_agent_tag does not match $AGENT_SERVER_TAG" >&2; exit 1; }
+58-[[ "$expected_agent_sha" =~ ^[a-f0-9]{64}$ ]] || { echo 'invalid baked agent checksum' >&2; exit 1; }
+59-printf '%s  %s\n' "$expected_agent_sha" "$IMAGE_ASSET_DIR/ascii-agents-server" | sha256sum -c -
+60-
+61:log "installing agent-server $AGENT_SERVER_TAG from the immutable golden image"
+62-mkdir -p "$INSTALL_DIR"
+63-install -m 0755 "$IMAGE_ASSET_DIR/ascii-agents-server" "$INSTALL_DIR/ascii-agents-server"
+64-chown -R user:user "$INSTALL_DIR"
+65-
+66-mkdir -p /home/user/.ssh
+67-chmod 700 /home/user/.ssh
+68-chown user:user /home/user/.ssh
+69-
+70-cat > /etc/systemd/system/ascii-agent.service <<SERVICEEOF
+71-[Unit]
+--
+103-
+104-[Install]
+105-WantedBy=multi-user.target
+106-SERVICEEOF
+107-else
+108-  rm -f /etc/systemd/system/ascii-agent-v6-proxy.service
+109-fi
+110-
+111-log "using Codex CLI baked into the golden image: $(codex --version)"
+112-
+113:log "installing Box CLI $BOX_CLI_TAG from the immutable golden image"
+114:BOX_CLI_BIN_DIR="/home/user/.ascii/bin"
+115:BOX_CLI_CONFIG_DIR="/home/user/.config/ascii/$BOX_CLI_MODE"
+116:[[ "$BOX_CLI_TAG" =~ ^box-cli-v[A-Za-z0-9._-]+$ ]] || { echo "BOX_CLI_TAG must pin a box-cli-v* release" >&2; exit 1; }
+117-image_box_tag="$(jq -er '.boxCli.tag' "$IMAGE_ASSET_MANIFEST")"
+118-expected_box_sha="$(jq -er '.boxCli.sha256' "$IMAGE_ASSET_MANIFEST")"
+119:[ "$image_box_tag" = "$BOX_CLI_TAG" ] || { echo "image Box CLI tag $image_box_tag does not match $BOX_CLI_TAG" >&2; exit 1; }
+120-[[ "$expected_box_sha" =~ ^[a-f0-9]{64}$ ]] || { echo 'invalid baked Box CLI checksum' >&2; exit 1; }
+121-printf '%s  %s\n' "$expected_box_sha" "$IMAGE_ASSET_DIR/box" | sha256sum -c -
+122:mkdir -p "$BOX_CLI_BIN_DIR" "$BOX_CLI_CONFIG_DIR"
+123:install -m 0755 "$IMAGE_ASSET_DIR/box" "$BOX_CLI_BIN_DIR/$BOX_CLI_MODE"
+124:ln -sf "$BOX_CLI_BIN_DIR/$BOX_CLI_MODE" "/usr/local/bin/$BOX_CLI_MODE"
+125:cat > "$BOX_CLI_CONFIG_DIR/config.json" <<BOXCLICONFIG
+126-{
+127:  "api_url": "$BOX_CLI_API_URL",
+128:  "channel": "$BOX_CLI_CHANNEL"
+129-}
+130-BOXCLICONFIG
+131-chown -R user:user /home/user/.ascii /home/user/.config/ascii
+132-
+133-log "writing agent env"
+134-cat > "$INSTALL_DIR/.env" <<ENVEOF
+135:MACHINE_ID=$MACHINE_NAME
+136-SHARED_KEY=$SHARED_KEY
+137-WORK_DIR=/home/user
+138-BACKEND_URL=$BACKEND_URL
+139:BOX_CLI_API_URL=$BOX_CLI_API_URL
+140:BOX_CLI_CHANNEL=$BOX_CLI_CHANNEL
+141:BOX_CLI_MODE=$BOX_CLI_MODE
+142:BOX_CLI_TAG=$BOX_CLI_TAG
+143-AGENTS_SERVER_CHANNEL=$AGENTS_SERVER_CHANNEL
+144-ASCII_PORT=$AGENT_PORT
+145-CLAUDE_PATH=/usr/local/bin/claude
+146-CODEX_PATH=/usr/local/bin/codex
+147-IS_SANDBOX=1
+148:MACHINE_SUBDOMAIN=$MACHINE_SUBDOMAIN
+149:MACHINE_IP=$MACHINE_IP
+150-ENVEOF
+151-chmod 600 "$INSTALL_DIR/.env"
+152-chown -R user:user "$INSTALL_DIR"
+153-
+154-touch /home/user/.base-image-timestamp
+155-chown user:user /home/user/.base-image-timestamp
+156-dpkg --get-selections | grep -v deinstall | cut -f1 | sort > /home/user/.base-apt-packages.txt
+157-chown user:user /home/user/.base-apt-packages.txt
+158-if command -v snap >/dev/null 2>&1; then
+159-  snap list | tail -n +2 | awk '{print $1}' | sort > /home/user/.base-snap-packages.txt || true
+--
+195-  openssl req -x509 -newkey rsa:4096 -keyout /home/user/.config/sunshine/sunshine.key \
+196-    -out /home/user/.config/sunshine/sunshine.cert -days 3650 -nodes \
+197-    -subj "/CN=sunshine" 2>/dev/null
+198-fi
+199-chown -R user:user /home/user/.config/sunshine
+200-chmod 600 /home/user/.config/sunshine/*.key 2>/dev/null || true
+201-sudo -u user HOME=/home/user sunshine --creds user user 2>&1 || true
+202-
+203-MOONLIGHT_DIR="/opt/moonlight-web"
+204-ADMIN_PASSWORD="$(openssl rand -hex 16)"
+205:NAT_1TO1_IPS_JSON="\"$MACHINE_IP\""
+206-if [ -n "$NODE_PUBLIC_IPV4" ]; then
+207-  NAT_1TO1_IPS_JSON="$NAT_1TO1_IPS_JSON, \"$NODE_PUBLIC_IPV4\""
+208-fi
+209-cat > "$MOONLIGHT_DIR/server/config.json" <<MLCONF
+210-{
+211-    "data_storage": {
+212-        "type": "json",
+213-        "path": "$MOONLIGHT_DIR/server/data.json",
+214-        "session_expiration_check_interval": {"secs": 300, "nanos": 0}
+215-    },
+--- host command / filesystem / parser sinks ---
+45-
+46-if [ "$ENABLE_AGENT_V6_PROXY" = "1" ]; then
+47-  command -v socat >/dev/null || { echo 'golden image is missing socat' >&2; exit 1; }
+48-fi
+49-command -v codex >/dev/null || { echo 'golden image is missing pinned Codex CLI' >&2; exit 1; }
+50-
+51-IMAGE_ASSET_DIR=/opt/ascii-image-assets
+52-IMAGE_ASSET_MANIFEST="$IMAGE_ASSET_DIR/manifest.json"
+53-[ -f "$IMAGE_ASSET_MANIFEST" ] || { echo 'golden image platform manifest is missing' >&2; exit 1; }
+54-[[ "$AGENT_SERVER_TAG" =~ ^agent-server-v[A-Za-z0-9._-]+$ ]] || { echo 'AGENT_SERVER_TAG must pin an agent-server-v* release' >&2; exit 1; }
+55:image_agent_tag="$(jq -er '.agentServer.tag' "$IMAGE_ASSET_MANIFEST")"
+56:expected_agent_sha="$(jq -er '.agentServer.sha256' "$IMAGE_ASSET_MANIFEST")"
+57-[ "$image_agent_tag" = "$AGENT_SERVER_TAG" ] || { echo "image agent tag $image_agent_tag does not match $AGENT_SERVER_TAG" >&2; exit 1; }
+58-[[ "$expected_agent_sha" =~ ^[a-f0-9]{64}$ ]] || { echo 'invalid baked agent checksum' >&2; exit 1; }
+59-printf '%s  %s\n' "$expected_agent_sha" "$IMAGE_ASSET_DIR/ascii-agents-server" | sha256sum -c -
+60-
+61-log "installing agent-server $AGENT_SERVER_TAG from the immutable golden image"
+62-mkdir -p "$INSTALL_DIR"
+63-install -m 0755 "$IMAGE_ASSET_DIR/ascii-agents-server" "$INSTALL_DIR/ascii-agents-server"
+64-chown -R user:user "$INSTALL_DIR"
+65-
+66-mkdir -p /home/user/.ssh
+--
+107-else
+108-  rm -f /etc/systemd/system/ascii-agent-v6-proxy.service
+109-fi
+110-
+111-log "using Codex CLI baked into the golden image: $(codex --version)"
+112-
+113-log "installing Box CLI $BOX_CLI_TAG from the immutable golden image"
+114-BOX_CLI_BIN_DIR="/home/user/.ascii/bin"
+115-BOX_CLI_CONFIG_DIR="/home/user/.config/ascii/$BOX_CLI_MODE"
+116-[[ "$BOX_CLI_TAG" =~ ^box-cli-v[A-Za-z0-9._-]+$ ]] || { echo "BOX_CLI_TAG must pin a box-cli-v* release" >&2; exit 1; }
+117:image_box_tag="$(jq -er '.boxCli.tag' "$IMAGE_ASSET_MANIFEST")"
+118:expected_box_sha="$(jq -er '.boxCli.sha256' "$IMAGE_ASSET_MANIFEST")"
+119-[ "$image_box_tag" = "$BOX_CLI_TAG" ] || { echo "image Box CLI tag $image_box_tag does not match $BOX_CLI_TAG" >&2; exit 1; }
+120-[[ "$expected_box_sha" =~ ^[a-f0-9]{64}$ ]] || { echo 'invalid baked Box CLI checksum' >&2; exit 1; }
+121-printf '%s  %s\n' "$expected_box_sha" "$IMAGE_ASSET_DIR/box" | sha256sum -c -
+122-mkdir -p "$BOX_CLI_BIN_DIR" "$BOX_CLI_CONFIG_DIR"
+123-install -m 0755 "$IMAGE_ASSET_DIR/box" "$BOX_CLI_BIN_DIR/$BOX_CLI_MODE"
+124:ln -sf "$BOX_CLI_BIN_DIR/$BOX_CLI_MODE" "/usr/local/bin/$BOX_CLI_MODE"
+125-cat > "$BOX_CLI_CONFIG_DIR/config.json" <<BOXCLICONFIG
+126-{
+127-  "api_url": "$BOX_CLI_API_URL",
+128-  "channel": "$BOX_CLI_CHANNEL"
+129-}
+130-BOXCLICONFIG
+131-chown -R user:user /home/user/.ascii /home/user/.config/ascii
+132-
+133-log "writing agent env"
+134-cat > "$INSTALL_DIR/.env" <<ENVEOF
+--
+149-MACHINE_IP=$MACHINE_IP
+150-ENVEOF
+151-chmod 600 "$INSTALL_DIR/.env"
+152-chown -R user:user "$INSTALL_DIR"
+153-
+154-touch /home/user/.base-image-timestamp
+155-chown user:user /home/user/.base-image-timestamp
+156-dpkg --get-selections | grep -v deinstall | cut -f1 | sort > /home/user/.base-apt-packages.txt
+157-chown user:user /home/user/.base-apt-packages.txt
+158-if command -v snap >/dev/null 2>&1; then
+159:  snap list | tail -n +2 | awk '{print $1}' | sort > /home/user/.base-snap-packages.txt || true
+160-  chown user:user /home/user/.base-snap-packages.txt 2>/dev/null || true
+161-fi
+162-
+163-log "starting ascii-agent and fswatch"
+164-systemctl daemon-reload
+165-systemctl enable ariana-fswatch.service ascii-agent.service
+166-systemctl restart ariana-fswatch.service
+167-systemctl restart ascii-agent.service
+168-if [ "$ENABLE_AGENT_V6_PROXY" = "1" ]; then
+169-  systemctl enable ascii-agent-v6-proxy.service
+170-  systemctl restart ascii-agent-v6-proxy.service
+171-fi
+172-
+173-log "initializing desktop and streaming"
+174-systemctl restart lightdm
+175-sleep 5
+176-
+177-XAUTH_FILE="$(find /var/run/lightdm -name "*:0" 2>/dev/null | head -1 || true)"
+178-if [ -n "$XAUTH_FILE" ]; then
+179:  cp "$XAUTH_FILE" /home/user/.Xauthority
+180-  chown user:user /home/user/.Xauthority
+181-  chmod 600 /home/user/.Xauthority
+182-fi
+183-
+184-pkill -9 gnome-screensaver 2>/dev/null || true
+185-pkill -f light-locker 2>/dev/null || true
+186-loginctl unlock-sessions 2>/dev/null || true
+187-sudo -u user DISPLAY=:0 xset s off 2>/dev/null || true
+188-sudo -u user DISPLAY=:0 xset -dpms 2>/dev/null || true
+189-sudo -u user DISPLAY=:0 xset s noblank 2>/dev/null || true
+--
+240-chown -R user:user "$MOONLIGHT_DIR"
+241-
+242-pkill -f sunshine 2>/dev/null || true
+243-sleep 2
+244-for _ in $(seq 1 10); do
+245-  if DISPLAY=:0 xset q >/dev/null 2>&1; then break; fi
+246-  sleep 1
+247-done
+248-rm -f /tmp/sunshine.log
+249-sudo -u user HOME=/home/user DISPLAY=:0 XAUTHORITY=/home/user/.Xauthority \
+250:  sh -c 'exec nohup sunshine > /tmp/sunshine.log 2>&1' &
+251-sleep 5
+252-
+253-systemctl daemon-reload
+254-systemctl enable sunshine moonlight-web xdotool-server
+255-systemctl restart moonlight-web xdotool-server
+256-sleep 3
+257-
+258-MOONLIGHT_BASE="http://[::1]:8090"
+259-for _ in $(seq 1 20); do
+260:  if curl -g -s "$MOONLIGHT_BASE/" >/dev/null 2>&1; then break; fi
+261-  sleep 1
+262-done
+263-
+264:LOGIN_RESPONSE="$(curl -g -s -i -X POST "$MOONLIGHT_BASE/api/login" \
+265-  -H "Content-Type: application/json" \
+266-  -d "{\"name\":\"admin\",\"password\":\"$ADMIN_PASSWORD\"}" 2>&1)"
+267:SESSION_TOKEN="$(printf '%s\n' "$LOGIN_RESPONSE" | grep -i 'set-cookie.*mlSession' | sed 's/.*mlSession=\([^;]*\).*/\1/' | tr -d '\r\n' || true)"
+268-
+269-for _ in $(seq 1 10); do
+270:  if curl -s -k -u "user:user" "https://127.0.0.1:47990/api/apps" --connect-timeout 2 2>&1 | grep -q "apps\|env"; then break; fi
+271-  sleep 2
+272-done
+273-
+274:ADD_RESPONSE="$(curl -g -s -X POST "$MOONLIGHT_BASE/api/host" \
+275-  -H "Content-Type: application/json" \
+276-  -H "Cookie: mlSession=$SESSION_TOKEN" \
+277-  -d '{"address":"127.0.0.1","http_port":47989}' 2>&1)"
+278-HOST_ID="$(printf '%s\n' "$ADD_RESPONSE" | grep -o '"host_id":[0-9]*' | head -1 | cut -d: -f2 || true)"
+279-
+280-PAIRING_SUCCESS=false
+281-if [ -n "$HOST_ID" ]; then
+282-  for _ in 1 2 3; do
+283-    PAIR_OUTPUT="/tmp/moonlight-pair-$$"
+284-    rm -f "$PAIR_OUTPUT"
+285:    curl -g -s -N -X POST "$MOONLIGHT_BASE/api/pair" \
+286-      -H "Content-Type: application/json" \
+287-      -H "Cookie: mlSession=$SESSION_TOKEN" \
+288-      -d "{\"host_id\":$HOST_ID}" > "$PAIR_OUTPUT" 2>&1 &
+289-    CURL_PID=$!
+290-    PIN=""
+291-    for _ in $(seq 1 30); do
+292-      if [ -s "$PAIR_OUTPUT" ]; then
+293-        FIRST_LINE="$(head -1 "$PAIR_OUTPUT" 2>/dev/null || true)"
+294-        PIN="$(printf '%s\n' "$FIRST_LINE" | grep -oE '"Pin":"[0-9]+"' | cut -d'"' -f4 || true)"
+295-        [ -z "$PIN" ] && PIN="$(printf '%s\n' "$FIRST_LINE" | grep -oE '[0-9]{4}' | head -1 || true)"
+296-        [ -n "$PIN" ] && break
+297-      fi
+298-      sleep 0.5
+299-    done
+300-    if [ -n "$PIN" ]; then
+301:      curl -s -k -u "user:user" -X POST "https://127.0.0.1:47990/api/pin" \
+302-        -H "Content-Type: application/json" \
+303-        -d "{\"pin\":\"$PIN\",\"name\":\"moonlight-web\"}" \
+304-        --connect-timeout 5 --max-time 10 >/dev/null 2>&1 || true
+305-    fi
+306-    for _ in $(seq 1 20); do
+307-      kill -0 "$CURL_PID" 2>/dev/null || break
+308-      sleep 0.5
+309-    done
+310-    kill "$CURL_PID" 2>/dev/null || true
+311-    wait "$CURL_PID" 2>/dev/null || true
+312-    PAIR_RESULT="$(cat "$PAIR_OUTPUT" 2>/dev/null || true)"
+313-    rm -f "$PAIR_OUTPUT"
+314-    if printf '%s\n' "$PAIR_RESULT" | grep -q "Paired"; then
+315-      PAIRING_SUCCESS=true
+316-      break
+317-    fi
+318:    HOST_STATUS="$(curl -g -s "$MOONLIGHT_BASE/api/host?host_id=$HOST_ID" -H "Cookie: mlSession=$SESSION_TOKEN" 2>&1 || true)"
+319-    if printf '%s\n' "$HOST_STATUS" | grep -q '"paired":"Paired"'; then
+320-      PAIRING_SUCCESS=true
+321-      break
+322-    fi
+323-    sleep 2
+324-  done
+325-fi
+326-
+327-APP_ID=""
+328-if [ -n "$HOST_ID" ]; then
+329:  APPS_RESPONSE="$(curl -g -s "$MOONLIGHT_BASE/api/apps?host_id=$HOST_ID" -H "Cookie: mlSession=$SESSION_TOKEN" 2>&1 || true)"
+330-  APP_ID="$(printf '%s\n' "$APPS_RESPONSE" | grep -o '"app_id":[0-9]*' | head -1 | cut -d: -f2 || true)"
+331-  [ -z "$APP_ID" ] && APP_ID="881448767"
+332-fi
+333-
+334-# SECURITY: the whole bootstrap above ran moonlight-web bound to loopback
+335-# ([::1]:8090) on purpose. moonlight-web starts with an empty user DB and
+336-# first_login_create_admin=true, so between its start and the admin login above
+337:# it will make an ADMIN out of whoever logs in first. bind_address used to be
+338-# [::]:8090 (all interfaces) during that window, so an outsider who reached
+339-# :8090 on the public interface during provisioning — before this box is ever
+340-# assigned to a customer — could win that first login, gain full desktop
+341-# (screen + xdotool keyboard/mouse) control, and plant OS-level persistence that
+342-# survives into whoever the box is later handed to. Binding to loopback for the
+343-# bootstrap makes that window unreachable off-box. Now that a real admin exists
+344-# (first_login can no longer fire), flip the bind to all interfaces for the
+345:# gateway and refresh the session token against the re-exposed instance.
+346:sed -i 's#"bind_address": "\[::1\]:8090"#"bind_address": "[::]:8090"#' "$MOONLIGHT_DIR/server/config.json"
+347-systemctl restart moonlight-web
+348-for _ in $(seq 1 20); do
+349:  if curl -g -s "$MOONLIGHT_BASE/" >/dev/null 2>&1; then break; fi
+350-  sleep 1
+351-done
+352:RELOGIN_RESPONSE="$(curl -g -s -i -X POST "$MOONLIGHT_BASE/api/login" \
+353-  -H "Content-Type: application/json" \
+354-  -d "{\"name\":\"admin\",\"password\":\"$ADMIN_PASSWORD\"}" 2>&1)"
+355:REFRESHED_TOKEN="$(printf '%s\n' "$RELOGIN_RESPONSE" | grep -i 'set-cookie.*mlSession' | sed 's/.*mlSession=\([^;]*\).*/\1/' | tr -d '\r\n' || true)"
+356-[ -n "$REFRESHED_TOKEN" ] && SESSION_TOKEN="$REFRESHED_TOKEN"
+357-
+358-cat > "$MOONLIGHT_DIR/server/streaming-credentials.json" <<CREDEOF
+359-{
+360-  "hostId": ${HOST_ID:-0},
+361-  "appId": ${APP_ID:-881448767},
+362-  "token": "$SESSION_TOKEN",
+363-  "xdotoolPort": 9091
+364-}
+365-CREDEOF
+--
+423-# pristine system baseline after ALL provisioning). Root SSH is revoked on
+424-# bare-metal guests (ASC-187), so the guest does it itself, HERE, after the
+425-# last provisioning write. This is what makes snapshots port across providers:
+426-# everything provisioning added (agent binary, moonlight creds, SHARED_KEY) is
+427-# "base", so captures skip it and restores keep the DESTINATION machine's
+428-# copies. Anything written below this block would instead be captured into
+429-# every box's snapshots — including per-machine secrets. Do not add writes
+430-# after it.
+431-log "regenerating base-image manifest (provision-complete /home/user state)"
+432-if [ -x /usr/local/lib/ascii/generate-base-image-manifest.py ]; then
+433:  python3 /usr/local/lib/ascii/generate-base-image-manifest.py
+434-  chown user:user /home/user/.base-image-manifest.json /home/user/.base-image-version
+435-else
+436-  log "generator missing (pre-ASC-288 image): keeping the Packer-time manifest"
+437-fi
+438-log "writing pristine system baseline"
+439-if ! "$INSTALL_DIR/ascii-agents-server" write-system-baseline; then
+440-  log "agent-server lacks write-system-baseline (pre-ASC-288 build): system roots stay event-sourced"
+441-fi
+442-
+443-echo "SHARED_KEY_PRESENT=yes"
+--- networking / host reachability / isolation ---
+27-BOX_CLI_CHANNEL="${BOX_CLI_CHANNEL:-prod}"
+28-BOX_CLI_MODE="${BOX_CLI_MODE:-box}"
+29-BOX_CLI_TAG="${BOX_CLI_TAG:-}"
+30-AGENTS_SERVER_CHANNEL="${AGENTS_SERVER_CHANNEL:-}"
+31-ENABLE_AGENT_V6_PROXY="${ENABLE_AGENT_V6_PROXY:-1}"
+32-# IPv4 doorway (bare-metal): v4-only clients reach WebRTC through the node's
+33-# public IPv4 + a per-VM DNATed UDP block. When set, the streamer binds that
+34-# block and advertises the node's v4 alongside the guest's v6.
+35-NODE_PUBLIC_IPV4="${NODE_PUBLIC_IPV4:-}"
+36-WEBRTC_PORT_MIN="${WEBRTC_PORT_MIN:-49152}"
+37:WEBRTC_PORT_MAX="${WEBRTC_PORT_MAX:-65535}"
+38-SHARED_KEY="${SHARED_KEY:-$(openssl rand -hex 32)}"
+39-
+40-log() {
+41-  printf '[guest-runtime-setup] %s\n' "$*"
+42-}
+43-
+44-log "runtime setup for $MACHINE_NAME ($MACHINE_IP)"
+45-
+46-if [ "$ENABLE_AGENT_V6_PROXY" = "1" ]; then
+47-  command -v socat >/dev/null || { echo 'golden image is missing socat' >&2; exit 1; }
+--
+82-Restart=always
+83-RestartSec=10
+84-StandardOutput=journal
+85-StandardError=journal
+86-
+87-[Install]
+88-WantedBy=multi-user.target
+89-SERVICEEOF
+90-
+91-if [ "$ENABLE_AGENT_V6_PROXY" = "1" ]; then
+92:  cat > /etc/systemd/system/ascii-agent-v6-proxy.service <<SERVICEEOF
+93-[Unit]
+94:Description=IPv6 proxy for Ascii Agent Server
+95-After=ascii-agent.service
+96-Wants=ascii-agent.service
+97-
+98-[Service]
+99-Type=simple
+100:ExecStart=/usr/bin/socat TCP6-LISTEN:$AGENT_PORT,fork,reuseaddr,ipv6only=1 TCP4:127.0.0.1:$AGENT_PORT
+101-Restart=always
+102-RestartSec=3
+103-
+104-[Install]
+105-WantedBy=multi-user.target
+106-SERVICEEOF
+107-else
+108:  rm -f /etc/systemd/system/ascii-agent-v6-proxy.service
+109-fi
+110-
+111-log "using Codex CLI baked into the golden image: $(codex --version)"
+112-
+113-log "installing Box CLI $BOX_CLI_TAG from the immutable golden image"
+114-BOX_CLI_BIN_DIR="/home/user/.ascii/bin"
+115-BOX_CLI_CONFIG_DIR="/home/user/.config/ascii/$BOX_CLI_MODE"
+116-[[ "$BOX_CLI_TAG" =~ ^box-cli-v[A-Za-z0-9._-]+$ ]] || { echo "BOX_CLI_TAG must pin a box-cli-v* release" >&2; exit 1; }
+117-image_box_tag="$(jq -er '.boxCli.tag' "$IMAGE_ASSET_MANIFEST")"
+118-expected_box_sha="$(jq -er '.boxCli.sha256' "$IMAGE_ASSET_MANIFEST")"
+--
+159-  snap list | tail -n +2 | awk '{print $1}' | sort > /home/user/.base-snap-packages.txt || true
+160-  chown user:user /home/user/.base-snap-packages.txt 2>/dev/null || true
+161-fi
+162-
+163-log "starting ascii-agent and fswatch"
+164-systemctl daemon-reload
+165-systemctl enable ariana-fswatch.service ascii-agent.service
+166-systemctl restart ariana-fswatch.service
+167-systemctl restart ascii-agent.service
+168-if [ "$ENABLE_AGENT_V6_PROXY" = "1" ]; then
+169:  systemctl enable ascii-agent-v6-proxy.service
+170:  systemctl restart ascii-agent-v6-proxy.service
+171-fi
+172-
+173-log "initializing desktop and streaming"
+174-systemctl restart lightdm
+175-sleep 5
+176-
+177-XAUTH_FILE="$(find /var/run/lightdm -name "*:0" 2>/dev/null | head -1 || true)"
+178-if [ -n "$XAUTH_FILE" ]; then
+179-  cp "$XAUTH_FILE" /home/user/.Xauthority
+180-  chown user:user /home/user/.Xauthority
+--
+210-{
+211-    "data_storage": {
+212-        "type": "json",
+213-        "path": "$MOONLIGHT_DIR/server/data.json",
+214-        "session_expiration_check_interval": {"secs": 300, "nanos": 0}
+215-    },
+216-    "web_server": {
+217-        "bind_address": "[::1]:8090",
+218-        "first_login_create_admin": true,
+219-        "first_login_assign_global_hosts": true,
+220:        "session_cookie_expiration": {"secs": 31536000, "nanos": 0}
+221-    },
+222-    "webrtc": {
+223-        "ice_servers": [
+224-            {"urls": ["stun:stun.l.google.com:19302"]}
+225-        ],
+226-        "port_range": {"min": $WEBRTC_PORT_MIN, "max": $WEBRTC_PORT_MAX},
+227-        "nat_1to1": {
+228-            "ips": [$NAT_1TO1_IPS_JSON],
+229-            "ice_candidate_type": "host"
+230-        },
+--
+260-  if curl -g -s "$MOONLIGHT_BASE/" >/dev/null 2>&1; then break; fi
+261-  sleep 1
+262-done
+263-
+264-LOGIN_RESPONSE="$(curl -g -s -i -X POST "$MOONLIGHT_BASE/api/login" \
+265-  -H "Content-Type: application/json" \
+266-  -d "{\"name\":\"admin\",\"password\":\"$ADMIN_PASSWORD\"}" 2>&1)"
+267-SESSION_TOKEN="$(printf '%s\n' "$LOGIN_RESPONSE" | grep -i 'set-cookie.*mlSession' | sed 's/.*mlSession=\([^;]*\).*/\1/' | tr -d '\r\n' || true)"
+268-
+269-for _ in $(seq 1 10); do
+270:  if curl -s -k -u "user:user" "https://127.0.0.1:47990/api/apps" --connect-timeout 2 2>&1 | grep -q "apps\|env"; then break; fi
+271-  sleep 2
+272-done
+273-
+274-ADD_RESPONSE="$(curl -g -s -X POST "$MOONLIGHT_BASE/api/host" \
+275-  -H "Content-Type: application/json" \
+276-  -H "Cookie: mlSession=$SESSION_TOKEN" \
+277:  -d '{"address":"127.0.0.1","http_port":47989}' 2>&1)"
+278-HOST_ID="$(printf '%s\n' "$ADD_RESPONSE" | grep -o '"host_id":[0-9]*' | head -1 | cut -d: -f2 || true)"
+279-
+280-PAIRING_SUCCESS=false
+281-if [ -n "$HOST_ID" ]; then
+282-  for _ in 1 2 3; do
+283:    PAIR_OUTPUT="/tmp/moonlight-pair-$$"
+284:    rm -f "$PAIR_OUTPUT"
+285-    curl -g -s -N -X POST "$MOONLIGHT_BASE/api/pair" \
+286-      -H "Content-Type: application/json" \
+287-      -H "Cookie: mlSession=$SESSION_TOKEN" \
+288:      -d "{\"host_id\":$HOST_ID}" > "$PAIR_OUTPUT" 2>&1 &
+289-    CURL_PID=$!
+290-    PIN=""
+291-    for _ in $(seq 1 30); do
+292:      if [ -s "$PAIR_OUTPUT" ]; then
+293:        FIRST_LINE="$(head -1 "$PAIR_OUTPUT" 2>/dev/null || true)"
+294-        PIN="$(printf '%s\n' "$FIRST_LINE" | grep -oE '"Pin":"[0-9]+"' | cut -d'"' -f4 || true)"
+295-        [ -z "$PIN" ] && PIN="$(printf '%s\n' "$FIRST_LINE" | grep -oE '[0-9]{4}' | head -1 || true)"
+296-        [ -n "$PIN" ] && break
+297-      fi
+298-      sleep 0.5
+299-    done
+300-    if [ -n "$PIN" ]; then
+301:      curl -s -k -u "user:user" -X POST "https://127.0.0.1:47990/api/pin" \
+302-        -H "Content-Type: application/json" \
+303-        -d "{\"pin\":\"$PIN\",\"name\":\"moonlight-web\"}" \
+304-        --connect-timeout 5 --max-time 10 >/dev/null 2>&1 || true
+305-    fi
+306-    for _ in $(seq 1 20); do
+307-      kill -0 "$CURL_PID" 2>/dev/null || break
+308-      sleep 0.5
+309-    done
+310-    kill "$CURL_PID" 2>/dev/null || true
+311-    wait "$CURL_PID" 2>/dev/null || true
+312:    PAIR_RESULT="$(cat "$PAIR_OUTPUT" 2>/dev/null || true)"
+313:    rm -f "$PAIR_OUTPUT"
+314-    if printf '%s\n' "$PAIR_RESULT" | grep -q "Paired"; then
+315-      PAIRING_SUCCESS=true
+316-      break
+317-    fi
+318-    HOST_STATUS="$(curl -g -s "$MOONLIGHT_BASE/api/host?host_id=$HOST_ID" -H "Cookie: mlSession=$SESSION_TOKEN" 2>&1 || true)"
+319-    if printf '%s\n' "$HOST_STATUS" | grep -q '"paired":"Paired"'; then
+320-      PAIRING_SUCCESS=true
+321-      break
+322-    fi
+323-    sleep 2
+--
+335-# ([::1]:8090) on purpose. moonlight-web starts with an empty user DB and
+336-# first_login_create_admin=true, so between its start and the admin login above
+337-# it will make an ADMIN out of whoever logs in first. bind_address used to be
+338-# [::]:8090 (all interfaces) during that window, so an outsider who reached
+339-# :8090 on the public interface during provisioning — before this box is ever
+340-# assigned to a customer — could win that first login, gain full desktop
+341-# (screen + xdotool keyboard/mouse) control, and plant OS-level persistence that
+342-# survives into whoever the box is later handed to. Binding to loopback for the
+343-# bootstrap makes that window unreachable off-box. Now that a real admin exists
+344-# (first_login can no longer fire), flip the bind to all interfaces for the
+345:# gateway and refresh the session token against the re-exposed instance.
+346-sed -i 's#"bind_address": "\[::1\]:8090"#"bind_address": "[::]:8090"#' "$MOONLIGHT_DIR/server/config.json"
+347-systemctl restart moonlight-web
+348-for _ in $(seq 1 20); do
+349-  if curl -g -s "$MOONLIGHT_BASE/" >/dev/null 2>&1; then break; fi
+350-  sleep 1
+351-done
+352-RELOGIN_RESPONSE="$(curl -g -s -i -X POST "$MOONLIGHT_BASE/api/login" \
+353-  -H "Content-Type: application/json" \
+354-  -d "{\"name\":\"admin\",\"password\":\"$ADMIN_PASSWORD\"}" 2>&1)"
+355-REFRESHED_TOKEN="$(printf '%s\n' "$RELOGIN_RESPONSE" | grep -i 'set-cookie.*mlSession' | sed 's/.*mlSession=\([^;]*\).*/\1/' | tr -d '\r\n' || true)"
+--
+368-echo "$HOST_ID" > "$MOONLIGHT_DIR/host.id"
+369-echo "$APP_ID" > "$MOONLIGHT_DIR/app.id"
+370-chmod 600 "$MOONLIGHT_DIR/session.token" "$MOONLIGHT_DIR/admin.password"
+371-chown -R user:user "$MOONLIGHT_DIR"
+372-
+373-pkill -f gnome-screensaver 2>/dev/null || true
+374-loginctl unlock-sessions 2>/dev/null || true
+375-
+376-# --- fswatch baseline: drop provision churn from the pending sets ------------
+377-# Provisioning touches ~100k paths under /; without a drain the system watcher
+378:# carries a ~10MB pending set for the machine's whole parked life. A parked
+379:# machine's first real snapshot is a full base regardless, so the pending list
+380-# holds nothing of value -- wipe it. The system and docker sockets are created
+381-# by the agent-server shortly after it starts; wait briefly for each and skip
+382-# (non-fatal, capture stays correct via events_lost/base) if one never appears.
+383-log "baselining fswatch daemons (drop provision churn)"
+384-for sock in /run/ariana-fswatch.sock /run/ariana-fswatch-system.sock /run/ariana-fswatch-docker.sock; do
+385-  for _ in $(seq 1 30); do [ -S "$sock" ] && break; sleep 2; done
+386-  if [ -S "$sock" ]; then
+387-    resp="$(printf '{"op":"baseline"}\n' | socat -t 10 - "UNIX-CONNECT:$sock" 2>&1 || true)"
+388-    log "baseline $sock -> ${resp:-no-response}"
+389-  else
+--
+411-SHARED_KEY=$SHARED_KEY
+412-STREAMING_TOKEN=$SESSION_TOKEN
+413-STREAMING_HOST_ID=${HOST_ID:-}
+414-STREAMING_APP_ID=${APP_ID:-}
+415-PAIRING_SUCCESS=$PAIRING_SUCCESS
+416-RESULTEOF
+417-chmod 600 "$RESULT_FILE"
+418-chown user:user "$RESULT_FILE"
+419-
+420-# --- base-image contract (ASC-288): stamp provision-COMPLETE state as "base" --
+421:# Hetzner machines get both of these from the park step over root SSH
+422:# (machinePool.service regenerates the /home/user manifest and writes the
+423-# pristine system baseline after ALL provisioning). Root SSH is revoked on
+424-# bare-metal guests (ASC-187), so the guest does it itself, HERE, after the
+425-# last provisioning write. This is what makes snapshots port across providers:
+426-# everything provisioning added (agent binary, moonlight creds, SHARED_KEY) is
+427:# "base", so captures skip it and restores keep the DESTINATION machine's
+428-# copies. Anything written below this block would instead be captured into
+429:# every box's snapshots — including per-machine secrets. Do not add writes
+430-# after it.
+431-log "regenerating base-image manifest (provision-complete /home/user state)"
+432-if [ -x /usr/local/lib/ascii/generate-base-image-manifest.py ]; then
+433-  python3 /usr/local/lib/ascii/generate-base-image-manifest.py
+434-  chown user:user /home/user/.base-image-manifest.json /home/user/.base-image-version
+435-else
+436-  log "generator missing (pre-ASC-288 image): keeping the Packer-time manifest"
+437-fi
+438-log "writing pristine system baseline"
+439-if ! "$INSTALL_DIR/ascii-agents-server" write-system-baseline; then
+
+===== ensure-tenant-isolation.sh =====
+--- validators / user-or-backend supplied fields ---
+--- host command / filesystem / parser sinks ---
+6-fail() { echo "tenant isolation: $*" >&2; exit 1; }
+7-need_cmd() { command -v "$1" >/dev/null 2>&1 || fail "missing command: $1"; }
+8-
+9-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+10-NODE_ID="${NODE_ID:-node0}"
+11-PUBLIC_NETWORK="${PUBLIC_NETWORK:-libvirt-$NODE_ID}"
+12-NAT_NETWORK="${NAT_NETWORK:-default}"
+13-VM_ROOT="${VM_ROOT:-/var/lib/ascii/vms}"
+14-XML_HELPER="$SCRIPT_DIR/lib/isolate_domain_network.py"
+15-
+16:for command in virsh iptables ip6tables bridge python3; do
+17-  need_cmd "$command"
+18-done
+19-[ -f "$XML_HELPER" ] || fail "missing XML helper: $XML_HELPER"
+20-
+21-network_bridge() {
+22-  local network="$1"
+23-  local bridge
+24:  bridge="$(virsh net-info "$network" | awk '/^Bridge:/ { print $2; exit }')"
+25-  [ -n "$bridge" ] || fail "cannot resolve bridge for $network"
+26-  printf '%s\n' "$bridge"
+27-}
+28-
+29-install_forward_drop() {
+30-  local command="$1"
+31-  local bridge="$2"
+32-  local comment="ascii:tenant-isolation:$bridge"
+33-
+34-  while "$command" -C FORWARD -i "$bridge" -o "$bridge" \
+--
+42-
+43-public_bridge="$(network_bridge "$PUBLIC_NETWORK")"
+44-nat_bridge="$(network_bridge "$NAT_NETWORK")"
+45-install_forward_drop ip6tables "$public_bridge"
+46-install_forward_drop iptables "$nat_bridge"
+47-
+48-[ -d "$VM_ROOT" ] || exit 0
+49-while IFS= read -r vm_dir; do
+50-  name="$(basename "$vm_dir")"
+51-  [[ "$name" =~ ^box-[a-z0-9]+-[a-z0-9-]+$ ]] || continue
+52:  virsh dominfo "$name" >/dev/null 2>&1 || continue
+53-
+54-  domain_xml="$(mktemp)"
+55-  trap 'rm -f "${domain_xml:-}"' EXIT
+56:  virsh dumpxml --inactive "$name" > "$domain_xml"
+57:  python3 "$XML_HELPER" "$domain_xml" \
+58-    --expected-network "$PUBLIC_NETWORK" \
+59-    --expected-network "$NAT_NETWORK"
+60:  virsh define "$domain_xml" >/dev/null
+61-  rm -f "$domain_xml"
+62-  trap - EXIT
+63-
+64-  while IFS= read -r tap; do
+65-    [ -e "/sys/class/net/$tap" ] || continue
+66-    bridge link set dev "$tap" isolated on
+67-  done < <(
+68:    virsh domiflist "$name" | awk -v public="$PUBLIC_NETWORK" -v nat="$NAT_NETWORK" \
+69-      'NR > 2 && ($3 == public || $3 == nat) { print $1 }'
+70-  )
+71-done < <(find "$VM_ROOT" -mindepth 1 -maxdepth 1 -type d -print)
+--- networking / host reachability / isolation ---
+6-fail() { echo "tenant isolation: $*" >&2; exit 1; }
+7-need_cmd() { command -v "$1" >/dev/null 2>&1 || fail "missing command: $1"; }
+8-
+9-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+10-NODE_ID="${NODE_ID:-node0}"
+11-PUBLIC_NETWORK="${PUBLIC_NETWORK:-libvirt-$NODE_ID}"
+12-NAT_NETWORK="${NAT_NETWORK:-default}"
+13-VM_ROOT="${VM_ROOT:-/var/lib/ascii/vms}"
+14-XML_HELPER="$SCRIPT_DIR/lib/isolate_domain_network.py"
+15-
+16:for command in virsh iptables ip6tables bridge python3; do
+17-  need_cmd "$command"
+18-done
+19-[ -f "$XML_HELPER" ] || fail "missing XML helper: $XML_HELPER"
+20-
+21:network_bridge() {
+22-  local network="$1"
+23:  local bridge
+24:  bridge="$(virsh net-info "$network" | awk '/^Bridge:/ { print $2; exit }')"
+25:  [ -n "$bridge" ] || fail "cannot resolve bridge for $network"
+26:  printf '%s\n' "$bridge"
+27-}
+28-
+29-install_forward_drop() {
+30-  local command="$1"
+31:  local bridge="$2"
+32:  local comment="ascii:tenant-isolation:$bridge"
+33-
+34:  while "$command" -C FORWARD -i "$bridge" -o "$bridge" \
+35-    -m comment --comment "$comment" -j DROP >/dev/null 2>&1; do
+36:    "$command" -D FORWARD -i "$bridge" -o "$bridge" \
+37-      -m comment --comment "$comment" -j DROP
+38-  done
+39:  "$command" -I FORWARD 1 -i "$bridge" -o "$bridge" \
+40-    -m comment --comment "$comment" -j DROP
+41-}
+42-
+43:public_bridge="$(network_bridge "$PUBLIC_NETWORK")"
+44:nat_bridge="$(network_bridge "$NAT_NETWORK")"
+45:install_forward_drop ip6tables "$public_bridge"
+46:install_forward_drop iptables "$nat_bridge"
+47-
+48-[ -d "$VM_ROOT" ] || exit 0
+49-while IFS= read -r vm_dir; do
+50-  name="$(basename "$vm_dir")"
+51-  [[ "$name" =~ ^box-[a-z0-9]+-[a-z0-9-]+$ ]] || continue
+52-  virsh dominfo "$name" >/dev/null 2>&1 || continue
+53-
+54-  domain_xml="$(mktemp)"
+55-  trap 'rm -f "${domain_xml:-}"' EXIT
+56-  virsh dumpxml --inactive "$name" > "$domain_xml"
+57-  python3 "$XML_HELPER" "$domain_xml" \
+58-    --expected-network "$PUBLIC_NETWORK" \
+59-    --expected-network "$NAT_NETWORK"
+60-  virsh define "$domain_xml" >/dev/null
+61-  rm -f "$domain_xml"
+62-  trap - EXIT
+63-
+64:  while IFS= read -r tap; do
+65:    [ -e "/sys/class/net/$tap" ] || continue
+66:    bridge link set dev "$tap" isolated on
+67-  done < <(
+68-    virsh domiflist "$name" | awk -v public="$PUBLIC_NETWORK" -v nat="$NAT_NETWORK" \
+69-      'NR > 2 && ($3 == public || $3 == nat) { print $1 }'
+70-  )
+71-done < <(find "$VM_ROOT" -mindepth 1 -maxdepth 1 -type d -print)
+
+===== lib/isolate_domain_network.py =====
+--- validators / user-or-backend supplied fields ---
+--- host command / filesystem / parser sinks ---
+1:#!/usr/bin/env python3
+2-"""Atomically isolate the two expected libvirt domain network interfaces."""
+3-
+4-import argparse
+5-from collections import Counter
+6-import os
+7-from pathlib import Path
+8-import tempfile
+9-import xml.etree.ElementTree as ET
+10-
+11-
+--- networking / host reachability / isolation ---
+
+===== lib/ssh-identity.sh =====
+--- validators / user-or-backend supplied fields ---
+--- host command / filesystem / parser sinks ---
+1-#!/usr/bin/env bash
+2-
+3-# SSH host-identity pinning helpers (ASC-186). provision-vm.sh mints each
+4-# guest's host key before first boot and seeds it via cloud-init; these
+5-# helpers pin that key on every connection and classify verification
+6:# failures so provisioning fails closed instead of talking to an impostor.
+7-
+8-host_identity_known_hosts_write() {
+9-  local out="$1" host="$2" pubkey_file="$3" port="${4:-22}"
+10-  local key
+11-  key="$(cut -d' ' -f1,2 < "$pubkey_file")"
+12-  if [ "$port" = "22" ]; then
+13-    printf '%s %s\n' "$host" "$key" > "$out"
+14-  else
+15-    printf '[%s]:%s %s\n' "$host" "$port" "$key" > "$out"
+16-  fi
+--
+27-    -o GlobalKnownHostsFile=/dev/null \
+28-    -o HostKeyAlgorithms=ssh-ed25519 \
+29-    -o UpdateHostKeys=no
+30-}
+31-
+32-ssh_failure_is_identity_mismatch() {
+33-  printf '%s' "$1" | grep -qiE \
+34-    'host key verification failed|remote host identification has changed|no matching host key type'
+35-}
+36-
+37:# wait_for_verified_ssh <attempts> <delay_seconds> <mismatch_limit> <cmd...>
+38-# Retries <cmd> until it succeeds. A guest that is still booting resets the
+39-# mismatch counter; <mismatch_limit> consecutive identity failures mean
+40-# something is answering with the wrong key, and waiting longer must never
+41-# turn into talking to it. Returns 0 on success, 2 on identity mismatch,
+42-# 1 on timeout.
+43-wait_for_verified_ssh() {
+44-  local attempts="$1" delay="$2" mismatch_limit="$3"
+45-  shift 3
+46-  local attempt err mismatches=0
+47-  for attempt in $(seq 1 "$attempts"); do
+--- networking / host reachability / isolation ---
+1-#!/usr/bin/env bash
+2-
+3-# SSH host-identity pinning helpers (ASC-186). provision-vm.sh mints each
+4-# guest's host key before first boot and seeds it via cloud-init; these
+5-# helpers pin that key on every connection and classify verification
+6-# failures so provisioning fails closed instead of talking to an impostor.
+7-
+8-host_identity_known_hosts_write() {
+9:  local out="$1" host="$2" pubkey_file="$3" port="${4:-22}"
+10-  local key
+11-  key="$(cut -d' ' -f1,2 < "$pubkey_file")"
+12:  if [ "$port" = "22" ]; then
+13-    printf '%s %s\n' "$host" "$key" > "$out"
+14-  else
+15-    printf '[%s]:%s %s\n' "$host" "$port" "$key" > "$out"
+16-  fi
+17-  chmod 644 "$out"
+18-}
+19-
+20-# Strict pinning: only the per-VM known_hosts entry counts, only the key type
+21-# we minted is negotiated, and nothing may add or update entries.
+22-host_identity_ssh_args() {
+
+===== sweep-operator-keys.sh =====
+--- validators / user-or-backend supplied fields ---
+105-
+106-mode="apply"
+107-[ "$DRY_RUN" = "1" ] && mode="report"
+108-overall_rc=0
+109-seen=0
+110-
+111-for info in "$VM_ROOT"/*/machine-info.env; do
+112-  [ -f "$info" ] || continue
+113-  seen=$((seen + 1))
+114-  name="$(basename "$(dirname "$info")")"
+115:  ip="$(sed -n 's/^MACHINE_IP=//p' "$info" | tail -1)"
+116-  if [ -z "$ip" ]; then
+117:    log "FAIL $name: no MACHINE_IP in machine-info.env"
+118-    overall_rc=1
+119-    continue
+120-  fi
+121-  if ! virsh domstate "$name" 2>/dev/null | grep -q running; then
+122-    log "SKIP $name: not running (sweep again after it resumes)"
+123-    continue
+124-  fi
+125-
+126-  log "sweeping $name ($ip) [$mode]"
+127-  vm_key=""
+--- host command / filesystem / parser sinks ---
+32-guest_key_for() {
+33-  local vm_dir="$1"
+34-  if [ -f "$vm_dir/provision-key" ]; then printf '%s\n' "$vm_dir/provision-key";
+35-  elif [ -f "$LEGACY_KEY" ]; then printf '%s\n' "$LEGACY_KEY";
+36-  else return 1; fi
+37-}
+38-
+39-guest_ssh() {
+40-  local key="$1" ip="$2"
+41-  shift 2
+42:  ssh -6 -i "$key" -o BatchMode=yes -o ConnectTimeout=10 \
+43-    -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+44-    -o IdentitiesOnly=yes \
+45-    "root@$ip" "$@"
+46-}
+47-
+48-# Every key blob this node trusts or could have leaked into guests: root's
+49-# and all node users' authorized_keys/pubkeys (the old fallback read either,
+50-# depending on SUDO_USER), plus the shared provision key. Blobs (the base64
+51-# field) are matched instead of whole lines so comments/options don't matter.
+52-BLOBS_FILE="$(mktemp)"
+--
+57-  /home/*/.ssh/authorized_keys /home/*/.ssh/*.pub \
+58-  "$LEGACY_KEY.pub"; do
+59-  [ -f "$keyfile" ] || continue
+60-  cat "$keyfile"
+61-done > "$BLOBS_FILE.raw"
+62-# Operator keys can also come from the node env (SSH_PUBLIC_KEYS or an
+63-# authorized-keys file reference) — that is exactly the channel that leaked
+64-# staging-machines into guests on node1. Include them in the strip set.
+65-ENV_FILE="${BAREMETAL_NODE_AGENT_ENV_FILE:-/etc/ascii/baremetal-node-agent.env}"
+66-if [ -f "$ENV_FILE" ]; then
+67:  env_ssh_keys="$(sed -n 's/^SSH_PUBLIC_KEYS=//p' "$ENV_FILE" | tr -d '"' | tr ',' '\n')"
+68-  [ -n "$env_ssh_keys" ] && printf '%s\n' "$env_ssh_keys" >> "$BLOBS_FILE.raw"
+69:  env_keys_file="$(sed -n 's/^SSH_AUTHORIZED_KEYS_FILE=//p' "$ENV_FILE" | tr -d '"')"
+70-  [ -n "$env_keys_file" ] && [ -f "$env_keys_file" ] && cat "$env_keys_file" >> "$BLOBS_FILE.raw"
+71-fi
+72:awk '{for (i = 1; i <= NF; i++) if ($i ~ /^AAAA/) { print $i; break }}' \
+73-  < "$BLOBS_FILE.raw" | sort -u > "$BLOBS_FILE"
+74-rm -f "$BLOBS_FILE.raw"
+75-[ -s "$BLOBS_FILE" ] || fail "no node-side key blobs collected"
+76-log "$(wc -l < "$BLOBS_FILE" | tr -d ' ') node-side key blob(s) to strip"
+77-
+78-GUEST_SCRIPT='
+79-set -eu
+80-mode="$1"
+81-blobs=/run/ascii-sweep.blobs
+82-[ -s "$blobs" ] || { echo "NO_BLOBS"; exit 3; }
+--
+90-  if [ "$mode" = "apply" ]; then
+91-    grep -v -F -f "$blobs" "$f" > "$f.tmp" || true
+92-    cat "$f.tmp" > "$f"
+93-    rm -f "$f.tmp"
+94-  fi
+95-done
+96-if [ "$mode" = "apply" ]; then
+97-  mkdir -p /etc/ssh/sshd_config.d
+98-  printf "PermitRootLogin no\nPasswordAuthentication no\n" > /etc/ssh/sshd_config.d/00-ascii-lockdown.conf
+99-  chmod 644 /etc/ssh/sshd_config.d/00-ascii-lockdown.conf
+100:  systemctl reload-or-restart ssh 2>/dev/null || systemctl reload-or-restart sshd 2>/dev/null || true
+101-fi
+102-rm -f "$blobs"
+103-echo "TOTAL $total"
+104-'
+105-
+106-mode="apply"
+107-[ "$DRY_RUN" = "1" ] && mode="report"
+108-overall_rc=0
+109-seen=0
+110-
+111-for info in "$VM_ROOT"/*/machine-info.env; do
+112-  [ -f "$info" ] || continue
+113-  seen=$((seen + 1))
+114-  name="$(basename "$(dirname "$info")")"
+115:  ip="$(sed -n 's/^MACHINE_IP=//p' "$info" | tail -1)"
+116-  if [ -z "$ip" ]; then
+117-    log "FAIL $name: no MACHINE_IP in machine-info.env"
+118-    overall_rc=1
+119-    continue
+120-  fi
+121:  if ! virsh domstate "$name" 2>/dev/null | grep -q running; then
+122-    log "SKIP $name: not running (sweep again after it resumes)"
+123-    continue
+124-  fi
+125-
+126-  log "sweeping $name ($ip) [$mode]"
+127-  vm_key=""
+128-  if ! vm_key="$(guest_key_for "$(dirname "$info")")"; then
+129-    log "FAIL $name: no usable provision key (per-VM or legacy)"
+130-    overall_rc=1
+131-    continue
+132-  fi
+133-  # Strip the per-VM provision key as well as the fleet-wide blobs.
+134-  vm_blobs="$(mktemp)"
+135-  cat "$BLOBS_FILE" > "$vm_blobs"
+136-  if [ -f "$(dirname "$info")/provision-key.pub" ]; then
+137:    awk '{for (i = 1; i <= NF; i++) if ($i ~ /^AAAA/) { print $i; break }}' \
+138-      "$(dirname "$info")/provision-key.pub" >> "$vm_blobs"
+139-  fi
+140:  if ! guest_ssh "$vm_key" "$ip" 'cat > /run/ascii-sweep.blobs && chmod 600 /run/ascii-sweep.blobs' < "$vm_blobs"; then
+141-    rm -f "$vm_blobs"
+142-    log "FAIL $name: cannot reach guest with any node-side provision key"
+143-    overall_rc=1
+144-    continue
+145-  fi
+146-  rm -f "$vm_blobs"
+147:  if ! guest_ssh "$vm_key" "$ip" "bash -s -- $mode" <<< "$GUEST_SCRIPT"; then
+148-    log "FAIL $name: guest sweep script failed"
+149-    overall_rc=1
+150-    continue
+151-  fi
+152-
+153-  if [ "$mode" = "apply" ]; then
+154:    if guest_ssh "$vm_key" "$ip" true >/dev/null 2>&1; then
+155-      log "FAIL $name: node-side key STILL accepted after sweep"
+156-      overall_rc=1
+157-    else
+158-      log "OK $name: root SSH closed"
+159-      # The key no longer opens anything; destroy the node-side copy too.
+160-      rm -f "$(dirname "$info")/provision-key" "$(dirname "$info")/provision-key.pub"
+161-    fi
+162-  fi
+163-done
+164-
+--- networking / host reachability / isolation ---
+54-# Tolerate missing/unmatched paths: a node without /home users or without
+55-# *.pub files must not die here under pipefail (staging node1 2026-08-17).
+56-for keyfile in /root/.ssh/authorized_keys /root/.ssh/*.pub \
+57-  /home/*/.ssh/authorized_keys /home/*/.ssh/*.pub \
+58-  "$LEGACY_KEY.pub"; do
+59-  [ -f "$keyfile" ] || continue
+60-  cat "$keyfile"
+61-done > "$BLOBS_FILE.raw"
+62-# Operator keys can also come from the node env (SSH_PUBLIC_KEYS or an
+63-# authorized-keys file reference) — that is exactly the channel that leaked
+64:# staging-machines into guests on node1. Include them in the strip set.
+65-ENV_FILE="${BAREMETAL_NODE_AGENT_ENV_FILE:-/etc/ascii/baremetal-node-agent.env}"
+66-if [ -f "$ENV_FILE" ]; then
+67-  env_ssh_keys="$(sed -n 's/^SSH_PUBLIC_KEYS=//p' "$ENV_FILE" | tr -d '"' | tr ',' '\n')"
+68-  [ -n "$env_ssh_keys" ] && printf '%s\n' "$env_ssh_keys" >> "$BLOBS_FILE.raw"
+69-  env_keys_file="$(sed -n 's/^SSH_AUTHORIZED_KEYS_FILE=//p' "$ENV_FILE" | tr -d '"')"
+70-  [ -n "$env_keys_file" ] && [ -f "$env_keys_file" ] && cat "$env_keys_file" >> "$BLOBS_FILE.raw"
+71-fi
+72-awk '{for (i = 1; i <= NF; i++) if ($i ~ /^AAAA/) { print $i; break }}' \
+73-  < "$BLOBS_FILE.raw" | sort -u > "$BLOBS_FILE"
+74-rm -f "$BLOBS_FILE.raw"
+--
+101-fi
+102-rm -f "$blobs"
+103-echo "TOTAL $total"
+104-'
+105-
+106-mode="apply"
+107-[ "$DRY_RUN" = "1" ] && mode="report"
+108-overall_rc=0
+109-seen=0
+110-
+111:for info in "$VM_ROOT"/*/machine-info.env; do
+112-  [ -f "$info" ] || continue
+113-  seen=$((seen + 1))
+114-  name="$(basename "$(dirname "$info")")"
+115-  ip="$(sed -n 's/^MACHINE_IP=//p' "$info" | tail -1)"
+116-  if [ -z "$ip" ]; then
+117:    log "FAIL $name: no MACHINE_IP in machine-info.env"
+118-    overall_rc=1
+119-    continue
+120-  fi
+121-  if ! virsh domstate "$name" 2>/dev/null | grep -q running; then
+122-    log "SKIP $name: not running (sweep again after it resumes)"
+123-    continue
+124-  fi
+125-
+126-  log "sweeping $name ($ip) [$mode]"
+127-  vm_key=""
+
+===== shellcheck warning+ =====
+
+In /tmp/nm/bare-metal-node/update-node-manager.sh line 178:
+  ls -1t "$RELEASES_DIR" 2>/dev/null | grep -v '^\.' | tail -n "+$((KEEP_RELEASES + 1))" \
+  ^-- SC2010 (warning): Don't use ls | grep. Use a glob or a for loop with a condition to allow non-alphanumeric filenames.
+
+
+In /tmp/nm/bare-metal-node/update-node-manager.sh line 242:
+  for i in 1 2 3 4 5 6; do
+  ^-^ SC2034 (warning): i appears unused. Verify use (or export if used externally).
+
+
+In /tmp/nm/bare-metal-node/lib/ssh-identity.sh line 47:
+  for attempt in $(seq 1 "$attempts"); do
+  ^-^ SC2034 (warning): attempt appears unused. Verify use (or export if used externally).
+
+For more information:
+  https://www.shellcheck.net/wiki/SC2010 -- Don't use ls | grep. Use a glob o...
+  https://www.shellcheck.net/wiki/SC2034 -- attempt appears unused. Verify us...
