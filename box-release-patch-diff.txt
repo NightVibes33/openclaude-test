@@ -1,0 +1,550 @@
+=== recent release chronology ===
+2026-08-21T15:57:23Z	node-manager-v0.5.0-staging11	ascii-node-manager-linux-x64.tar.gz,SHA256SUMS,update-node-manager.sh
+2026-08-21T18:58:15Z	node-manager-v0.5.0-staging12	ascii-node-manager-linux-x64.tar.gz,SHA256SUMS,update-node-manager.sh
+
+=== latest node-manager releases ===
+2026-08-21T18:58:15Z	node-manager-v0.5.0-staging12
+2026-08-21T15:57:23Z	node-manager-v0.5.0-staging11
+2026-08-18T20:44:27Z	node-manager-v0.5.0-ascii-prod1
+2026-08-18T14:02:55Z	node-manager-v0.5.0-staging10
+2026-08-17T10:07:45Z	node-manager-v0.5.0-staging9
+2026-08-17T10:04:05Z	node-manager-v0.5.0-staging8
+2026-08-17T10:01:36Z	node-manager-v0.5.0-staging7
+2026-08-16T23:15:33Z	node-manager-v0.5.0-staging6
+2026-08-16T11:09:53Z	node-manager-v0.5.0-staging5
+2026-08-16T10:18:20Z	node-manager-v0.5.0-staging4
+2026-08-15T16:30:41Z	node-manager-v0.5.0-staging3
+2026-08-15T16:19:33Z	node-manager-v0.5.0-staging2
+
+=== latest agent-server releases ===
+
+=== node-manager artifact sha256 ===
+abeead6abc4fc43e2446b4c54dcd0b74e2b83322960ec552a0c96011c10b08c6  /tmp/box-release-diff/releases/node-manager-v0.5.0-staging6.tgz
+c50ef4fdc0d41ea67f9c661371108c493383e416e0a0e035e07ff5c4a09aa96e  /tmp/box-release-diff/releases/node-manager-v0.5.0-staging7.tgz
+bc1b6b265c36d29929f6b5dad37361237a95e9b4b04f92653e36292f3fba1333  /tmp/box-release-diff/releases/node-manager-v0.5.0-staging8.tgz
+f85421bcbcc26ef883b5b1d2a015f0e952c5c9edc7b9138533f52dee86de6ec7  /tmp/box-release-diff/releases/node-manager-v0.5.0-staging9.tgz
+5f86aa6014612eff4be25b08e9aa12db85eb4b6f7a038936de7389bd553e72f1  /tmp/box-release-diff/releases/node-manager-v0.5.0-staging10.tgz
+29db1fa01160caaf390c5c2ca6bb28c2cbf8ebe0bffd9470055cd33272c3e9f8  /tmp/box-release-diff/releases/node-manager-v0.5.0-ascii-prod1.tgz
+5054cbbc72d00cf2431ca4e2f811210c2fbd668e0fdb28e97bc818cb4f90f15d  /tmp/box-release-diff/releases/node-manager-v0.5.0-staging11.tgz
+37e2b2c181878559294096ff10a00e894b56cb4276496ac727d3eed390ca8a38  /tmp/box-release-diff/releases/node-manager-v0.5.0-staging12.tgz
+
+=== SCRIPT DIFF node-manager-v0.5.0-staging6 -> node-manager-v0.5.0-staging7 ===
+diff -ruN '--exclude=ascii-node-manager' '--exclude=*.pyc' '--exclude=manifest.json' '--exclude=SHA256SUMS' /tmp/box-release-diff/extract/node-manager-v0.5.0-staging6/bare-metal-node/sweep-operator-keys.sh /tmp/box-release-diff/extract/node-manager-v0.5.0-staging7/bare-metal-node/sweep-operator-keys.sh
+--- /tmp/box-release-diff/extract/node-manager-v0.5.0-staging6/bare-metal-node/sweep-operator-keys.sh	2026-08-16 23:14:23.000000000 +0000
++++ /tmp/box-release-diff/extract/node-manager-v0.5.0-staging7/bare-metal-node/sweep-operator-keys.sh	2026-08-17 10:00:09.000000000 +0000
+@@ -41,10 +41,14 @@
+ # field) are matched instead of whole lines so comments/options don't matter.
+ BLOBS_FILE="$(mktemp)"
+ trap 'rm -f "$BLOBS_FILE"' EXIT
+-cat /root/.ssh/authorized_keys /root/.ssh/*.pub \
++# Tolerate missing/unmatched paths: a node without /home users or without
++# *.pub files must not die here under pipefail (staging node1 2026-08-17).
++for keyfile in /root/.ssh/authorized_keys /root/.ssh/*.pub \
+   /home/*/.ssh/authorized_keys /home/*/.ssh/*.pub \
+-  "$LEGACY_KEY.pub" 2>/dev/null \
+-  | awk '{for (i = 1; i <= NF; i++) if ($i ~ /^AAAA/) { print $i; break }}' \
++  "$LEGACY_KEY.pub"; do
++  [ -f "$keyfile" ] || continue
++  cat "$keyfile"
++done | awk '{for (i = 1; i <= NF; i++) if ($i ~ /^AAAA/) { print $i; break }}' \
+   | sort -u > "$BLOBS_FILE"
+ [ -s "$BLOBS_FILE" ] || fail "no node-side key blobs collected"
+ log "$(wc -l < "$BLOBS_FILE" | tr -d ' ') node-side key blob(s) to strip"
+
+=== NEW HIGH-SIGNAL BINARY STRINGS node-manager-v0.5.0-staging6 -> node-manager-v0.5.0-staging7 ===
+
+=== SCRIPT DIFF node-manager-v0.5.0-staging7 -> node-manager-v0.5.0-staging8 ===
+diff -ruN '--exclude=ascii-node-manager' '--exclude=*.pyc' '--exclude=manifest.json' '--exclude=SHA256SUMS' /tmp/box-release-diff/extract/node-manager-v0.5.0-staging7/bare-metal-node/sweep-operator-keys.sh /tmp/box-release-diff/extract/node-manager-v0.5.0-staging8/bare-metal-node/sweep-operator-keys.sh
+--- /tmp/box-release-diff/extract/node-manager-v0.5.0-staging7/bare-metal-node/sweep-operator-keys.sh	2026-08-17 10:00:09.000000000 +0000
++++ /tmp/box-release-diff/extract/node-manager-v0.5.0-staging8/bare-metal-node/sweep-operator-keys.sh	2026-08-17 10:02:37.000000000 +0000
+@@ -25,13 +25,23 @@
+ fail() { printf '[sweep-operator-keys] ERROR: %s\n' "$*" >&2; exit 1; }
+ 
+ [ "$(id -u)" -eq 0 ] || fail "run as root on the bare-metal node"
+-[ -f "$LEGACY_KEY" ] || fail "legacy provision key not found: $LEGACY_KEY (needed to reach pre-fix guests)"
++
++# Reach each guest with the best available key: the per-VM provision key left
++# behind when revocation was skipped (dev-mode nodes), else the legacy shared
++# key for pre-ephemeral guests (ASC-186/187 lineage).
++guest_key_for() {
++  local vm_dir="$1"
++  if [ -f "$vm_dir/provision-key" ]; then printf '%s\n' "$vm_dir/provision-key";
++  elif [ -f "$LEGACY_KEY" ]; then printf '%s\n' "$LEGACY_KEY";
++  else return 1; fi
++}
+ 
+ guest_ssh() {
+-  local ip="$1"
+-  shift
+-  ssh -6 -i "$LEGACY_KEY" -o BatchMode=yes -o ConnectTimeout=10 \
++  local key="$1" ip="$2"
++  shift 2
++  ssh -6 -i "$key" -o BatchMode=yes -o ConnectTimeout=10 \
+     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
++    -o IdentitiesOnly=yes \
+     "root@$ip" "$@"
+ }
+ 
+@@ -102,23 +112,40 @@
+   fi
+ 
+   log "sweeping $name ($ip) [$mode]"
+-  if ! guest_ssh "$ip" 'cat > /run/ascii-sweep.blobs && chmod 600 /run/ascii-sweep.blobs' < "$BLOBS_FILE"; then
+-    log "FAIL $name: cannot reach guest with legacy provision key"
++  vm_key=""
++  if ! vm_key="$(guest_key_for "$(dirname "$info")")"; then
++    log "FAIL $name: no usable provision key (per-VM or legacy)"
++    overall_rc=1
++    continue
++  fi
++  # Strip the per-VM provision key as well as the fleet-wide blobs.
++  vm_blobs="$(mktemp)"
++  cat "$BLOBS_FILE" > "$vm_blobs"
++  if [ -f "$(dirname "$info")/provision-key.pub" ]; then
++    awk '{for (i = 1; i <= NF; i++) if ($i ~ /^AAAA/) { print $i; break }}' \
++      "$(dirname "$info")/provision-key.pub" >> "$vm_blobs"
++  fi
++  if ! guest_ssh "$vm_key" "$ip" 'cat > /run/ascii-sweep.blobs && chmod 600 /run/ascii-sweep.blobs' < "$vm_blobs"; then
++    rm -f "$vm_blobs"
++    log "FAIL $name: cannot reach guest with any node-side provision key"
+     overall_rc=1
+     continue
+   fi
+-  if ! guest_ssh "$ip" "bash -s -- $mode" <<< "$GUEST_SCRIPT"; then
++  rm -f "$vm_blobs"
++  if ! guest_ssh "$vm_key" "$ip" "bash -s -- $mode" <<< "$GUEST_SCRIPT"; then
+     log "FAIL $name: guest sweep script failed"
+     overall_rc=1
+     continue
+   fi
+ 
+   if [ "$mode" = "apply" ]; then
+-    if guest_ssh "$ip" true >/dev/null 2>&1; then
+-      log "FAIL $name: legacy key STILL accepted after sweep"
++    if guest_ssh "$vm_key" "$ip" true >/dev/null 2>&1; then
++      log "FAIL $name: node-side key STILL accepted after sweep"
+       overall_rc=1
+     else
+       log "OK $name: root SSH closed"
++      # The key no longer opens anything; destroy the node-side copy too.
++      rm -f "$(dirname "$info")/provision-key" "$(dirname "$info")/provision-key.pub"
+     fi
+   fi
+ done
+
+=== NEW HIGH-SIGNAL BINARY STRINGS node-manager-v0.5.0-staging7 -> node-manager-v0.5.0-staging8 ===
+
+=== SCRIPT DIFF node-manager-v0.5.0-staging8 -> node-manager-v0.5.0-staging9 ===
+diff -ruN '--exclude=ascii-node-manager' '--exclude=*.pyc' '--exclude=manifest.json' '--exclude=SHA256SUMS' /tmp/box-release-diff/extract/node-manager-v0.5.0-staging8/bare-metal-node/sweep-operator-keys.sh /tmp/box-release-diff/extract/node-manager-v0.5.0-staging9/bare-metal-node/sweep-operator-keys.sh
+--- /tmp/box-release-diff/extract/node-manager-v0.5.0-staging8/bare-metal-node/sweep-operator-keys.sh	2026-08-17 10:02:37.000000000 +0000
++++ /tmp/box-release-diff/extract/node-manager-v0.5.0-staging9/bare-metal-node/sweep-operator-keys.sh	2026-08-17 10:06:06.000000000 +0000
+@@ -50,7 +50,7 @@
+ # depending on SUDO_USER), plus the shared provision key. Blobs (the base64
+ # field) are matched instead of whole lines so comments/options don't matter.
+ BLOBS_FILE="$(mktemp)"
+-trap 'rm -f "$BLOBS_FILE"' EXIT
++trap 'rm -f "$BLOBS_FILE" "$BLOBS_FILE.raw"' EXIT
+ # Tolerate missing/unmatched paths: a node without /home users or without
+ # *.pub files must not die here under pipefail (staging node1 2026-08-17).
+ for keyfile in /root/.ssh/authorized_keys /root/.ssh/*.pub \
+@@ -58,8 +58,20 @@
+   "$LEGACY_KEY.pub"; do
+   [ -f "$keyfile" ] || continue
+   cat "$keyfile"
+-done | awk '{for (i = 1; i <= NF; i++) if ($i ~ /^AAAA/) { print $i; break }}' \
+-  | sort -u > "$BLOBS_FILE"
++done > "$BLOBS_FILE.raw"
++# Operator keys can also come from the node env (SSH_PUBLIC_KEYS or an
++# authorized-keys file reference) — that is exactly the channel that leaked
++# staging-machines into guests on node1. Include them in the strip set.
++ENV_FILE="${BAREMETAL_NODE_AGENT_ENV_FILE:-/etc/ascii/baremetal-node-agent.env}"
++if [ -f "$ENV_FILE" ]; then
++  env_ssh_keys="$(sed -n 's/^SSH_PUBLIC_KEYS=//p' "$ENV_FILE" | tr -d '"' | tr ',' '\n')"
++  [ -n "$env_ssh_keys" ] && printf '%s\n' "$env_ssh_keys" >> "$BLOBS_FILE.raw"
++  env_keys_file="$(sed -n 's/^SSH_AUTHORIZED_KEYS_FILE=//p' "$ENV_FILE" | tr -d '"')"
++  [ -n "$env_keys_file" ] && [ -f "$env_keys_file" ] && cat "$env_keys_file" >> "$BLOBS_FILE.raw"
++fi
++awk '{for (i = 1; i <= NF; i++) if ($i ~ /^AAAA/) { print $i; break }}' \
++  < "$BLOBS_FILE.raw" | sort -u > "$BLOBS_FILE"
++rm -f "$BLOBS_FILE.raw"
+ [ -s "$BLOBS_FILE" ] || fail "no node-side key blobs collected"
+ log "$(wc -l < "$BLOBS_FILE" | tr -d ' ') node-side key blob(s) to strip"
+ 
+
+=== NEW HIGH-SIGNAL BINARY STRINGS node-manager-v0.5.0-staging8 -> node-manager-v0.5.0-staging9 ===
+
+=== SCRIPT DIFF node-manager-v0.5.0-staging9 -> node-manager-v0.5.0-staging10 ===
+diff -ruN '--exclude=ascii-node-manager' '--exclude=*.pyc' '--exclude=manifest.json' '--exclude=SHA256SUMS' /tmp/box-release-diff/extract/node-manager-v0.5.0-staging9/bare-metal-node/update-node-manager.sh /tmp/box-release-diff/extract/node-manager-v0.5.0-staging10/bare-metal-node/update-node-manager.sh
+--- /tmp/box-release-diff/extract/node-manager-v0.5.0-staging9/bare-metal-node/update-node-manager.sh	2026-08-17 10:06:06.000000000 +0000
++++ /tmp/box-release-diff/extract/node-manager-v0.5.0-staging10/bare-metal-node/update-node-manager.sh	2026-08-18 14:01:42.000000000 +0000
+@@ -200,10 +200,9 @@
+   retire_legacy_agent
+ 
+   # Atomic flip: build the new symlink next to `current`, then rename over it.
++  # `previous` is rewritten only after the health gate passes: a candidate that
++  # fails the gate must leave the rollback chain exactly as it found it.
+   ln -sfn "$RELEASES_DIR/$tag" "$HOME_DIR/.current-next"
+-  if [ -n "$current" ]; then
+-    ln -sfn "$RELEASES_DIR/$current" "$HOME_DIR/previous"
+-  fi
+   mv -Tf "$HOME_DIR/.current-next" "$HOME_DIR/current"
+ 
+   systemctl enable "$UNIT" >/dev/null 2>&1 || true
+@@ -218,6 +217,11 @@
+   if ! verify_unit_stays_active; then
+     if [ -n "$current" ]; then
+       log "ERROR: $tag failed its post-restart health gate — rolling back to $current"
++      # Full restore, not just the symlink: the candidate's units and helper
++      # scripts are already installed system-wide and must revert with it
++      # (same-release invariant). `previous` was never touched, so the
++      # pre-update rollback target stays reachable.
++      install_system_pieces "$RELEASES_DIR/$current"
+       ln -sfn "$RELEASES_DIR/$current" "$HOME_DIR/.current-next"
+       mv -Tf "$HOME_DIR/.current-next" "$HOME_DIR/current"
+       systemctl restart "$UNIT" || true
+@@ -226,6 +230,9 @@
+     fail "$tag failed its post-restart health gate and no previous release exists"
+   fi
+ 
++  if [ -n "$current" ]; then
++    ln -sfn "$RELEASES_DIR/$current" "$HOME_DIR/previous"
++  fi
+   log "activated $tag (was: ${current:-none})"
+   prune_releases
+ }
+
+=== NEW HIGH-SIGNAL BINARY STRINGS node-manager-v0.5.0-staging9 -> node-manager-v0.5.0-staging10 ===
+
+=== SCRIPT DIFF node-manager-v0.5.0-staging10 -> node-manager-v0.5.0-ascii-prod1 ===
+
+=== NEW HIGH-SIGNAL BINARY STRINGS node-manager-v0.5.0-staging10 -> node-manager-v0.5.0-ascii-prod1 ===
+
+=== SCRIPT DIFF node-manager-v0.5.0-ascii-prod1 -> node-manager-v0.5.0-staging11 ===
+
+=== NEW HIGH-SIGNAL BINARY STRINGS node-manager-v0.5.0-ascii-prod1 -> node-manager-v0.5.0-staging11 ===
+OKCreatedBad RequestUnauthorizedForbiddenNot FoundPayload Too LargeInternal Server ErrorService Unavailableinvalid Content-Lengthfailed to read bodyfailed to spawn threadcreatedAtstruct OwnershipRecord with 4 elementsbpf_map_lookup_elembpf_map_delete_elembpf_map_get_next_keyserialize_value called before serialize_keyreceived plaintext buffer full
+_ZN158_$LT$rustls..server..tls13..ExpectAndSkipRejectedEarlyData$u20$as$u20$rustls..common_state..State$LT$rustls..server..server_conn..ServerConnectionData$GT$$GT$10into_owned17h0f62e5039a6d3b75E.6596
+_ZN4core3ptr54drop_in_place$LT$rustls..error..ExtendedKeyPurpose$GT$17hffe8bd3ca6b97561E.7195
+_ZN4core3ptr62drop_in_place$LT$alloc..vec..Vec$LT$std..path..PathBuf$GT$$GT$17hf621acd3ed2ffd68E.219
+_ZN4core3ptr62drop_in_place$LT$alloc..vec..Vec$LT$std..path..PathBuf$GT$$GT$17hf621acd3ed2ffd68E.390
+_ZN4core3ptr65drop_in_place$LT$ascii_node_manager..abuse_monitor..VmMonitor$GT$17h42474b14680fab3fE.809
+_ZN4core3ptr66drop_in_place$LT$ascii_node_manager..machines..OwnershipRecord$GT$17hcfdc94520f376f9bE.365
+_ZN4core3ptr66drop_in_place$LT$rustls..tls13..key_schedule..KeyScheduleEarly$GT$17he8fa9929c6236d1bE.6464
+_ZN4core3ptr68drop_in_place$LT$rustls..tls13..key_schedule..KeyScheduleTraffic$GT$17ha09711fcdc47cd72E.6559
+_ZN4core3ptr69drop_in_place$LT$rustls..msgs..handshake..ServerKeyExchangeParams$GT$17h27fef82fff120b3cE.6418
+_ZN4core3ptr70drop_in_place$LT$rustls..tls13..key_schedule..KeyScheduleHandshake$GT$17h944290bc0eaa29e1E.5950
+_ZN4core3ptr74drop_in_place$LT$rustls..server..tls13..ExpectAndSkipRejectedEarlyData$GT$17ha70c760b06f4f99fE.6589
+_ZN4core3ptr82drop_in_place$LT$alloc..vec..Vec$LT$rustls..msgs..handshake..KeyShareEntry$GT$$GT$17hd8fc4149bcfe3538E.5522
+_ZN4core3ptr89drop_in_place$LT$alloc..vec..Vec$LT$rustls..msgs..handshake..PresharedKeyIdentity$GT$$GT$17h001c5c94491e2904E.5540
+_ZN4core3ptr91drop_in_place$LT$core..option..Option$LT$rustls..msgs..handshake..PresharedKeyOffer$GT$$GT$17h415d481e012b476fE.6457
+_ZN70_$LT$rustls..error..ExtendedKeyPurpose$u20$as$u20$core..fmt..Debug$GT$3fmt17h4ad18fd9f3db05d9E.7288
+no base image cachedProvisioner scriptsbare-metal-node/run/libvirt/qemu/var/run/libvirt/qemudommemstatdominfotmpBAREMETAL_NODE_AGENT_HMAC_SECRET=BAREMETAL_NODE_AGENT_HMAC_SECRET_PREVIOUS=remote address not allowedinvalid nonceunauthorizedstale requestmissing signature headersBAREMETAL_NODE_AGENT_HMAC_SECRET is not configuredIPv6 address does not match allocation indexIPv6 address is outside this node prefixinvalid node IPv6 prefix lengthinvalid node IPv6 prefixinvalid IPv6 addressPoisonErrorthe program is already loadedthe program is not attachedunexpected program typeproviding an attach cookie is not supportedprogram of this type cannot use helper bpf_prog_loadbpf_prog_detachint
+okinternal errornewSecretnewSecret must match ^[A-Za-z0-9]{32,128}$machineIdttlSecondsinvalid JSON bodyinventoryCompletemonitoringinvalid VM namemachineownershipIdownership witness mismatch; VM quarantined--yesmachine is still provisioning; deletion refusedownership record not found; VM quarantinedvalid ownershipId is requireddelete requires an ownershipIdbaseImageIdVM_NAMEOWNERSHIP_IDindexVM_IPV6gatewayProxyUrlgatewayCapabilitygatewayExpiresvalid gateway capability fields are requiredGATEWAY_PROXY_URLGATEWAY_CAPABILITYGATEWAY_EXPIRESagentServerTagagentServerTag must pin an agent-server-v* releaseboxCliTagboxCliTag must pin a box-cli-v* releaseBOX_CLI_TAGboxCliChannelvalid boxCliChannel is requiredBOX_CLI_CHANNELboxCliModeBOX_CLI_MODEagentsServerChannelAGENTS_SERVER_CHANNELCLEANUP_ON_FAILURElibvirt inventory unavailableBASE_IMAGEtimingsMsinsufficient host resource headroomnode provisioning concurrency limit reachedprovision admission lock poisonedvalid boxCliMode is requiredindex must be an unsigned 16-bit integervalid VM name is requiredbaseImageId is requireddu-sk/proc/meminfoMemAvailable/proc/uptimenodeId0.5.0tlsagentUptimeSecondshostUptimeSecondsadmissionprovisioningMachinesstatevirsh--all--name/proc/statmaxAdditionalMachinescapacityTotalmemoryAvailableMbexistingDiskCommitmentGbmaxVcpuOvercommitvirsh unreachablehypervisor responsive
+
+=== SCRIPT DIFF node-manager-v0.5.0-staging11 -> node-manager-v0.5.0-staging12 ===
+diff -ruN '--exclude=ascii-node-manager' '--exclude=*.pyc' '--exclude=manifest.json' '--exclude=SHA256SUMS' /tmp/box-release-diff/extract/node-manager-v0.5.0-staging11/bare-metal-node/baremetal-node-agent.env.example /tmp/box-release-diff/extract/node-manager-v0.5.0-staging12/bare-metal-node/baremetal-node-agent.env.example
+--- /tmp/box-release-diff/extract/node-manager-v0.5.0-staging11/bare-metal-node/baremetal-node-agent.env.example	2026-08-21 15:55:55.000000000 +0000
++++ /tmp/box-release-diff/extract/node-manager-v0.5.0-staging12/bare-metal-node/baremetal-node-agent.env.example	2026-08-21 18:56:06.000000000 +0000
+@@ -47,3 +47,8 @@
+ BOX_CLI_CHANNEL=prod
+ BOX_CLI_MODE=box
+ CLEANUP_ON_FAILURE=1
++
++# Per-guest vda limits. Zero means unlimited; set measured non-zero limits only
++# when host telemetry demonstrates a noisy-neighbour problem.
++VM_TOTAL_BYTES_SEC=0
++VM_TOTAL_IOPS_SEC=0
+diff -ruN '--exclude=ascii-node-manager' '--exclude=*.pyc' '--exclude=manifest.json' '--exclude=SHA256SUMS' /tmp/box-release-diff/extract/node-manager-v0.5.0-staging11/bare-metal-node/guest-runtime-setup.sh /tmp/box-release-diff/extract/node-manager-v0.5.0-staging12/bare-metal-node/guest-runtime-setup.sh
+--- /tmp/box-release-diff/extract/node-manager-v0.5.0-staging11/bare-metal-node/guest-runtime-setup.sh	2026-08-21 15:55:55.000000000 +0000
++++ /tmp/box-release-diff/extract/node-manager-v0.5.0-staging12/bare-metal-node/guest-runtime-setup.sh	2026-08-21 18:56:06.000000000 +0000
+@@ -214,7 +214,7 @@
+         "session_expiration_check_interval": {"secs": 300, "nanos": 0}
+     },
+     "web_server": {
+-        "bind_address": "[::]:8090",
++        "bind_address": "[::1]:8090",
+         "first_login_create_admin": true,
+         "first_login_assign_global_hosts": true,
+         "session_cookie_expiration": {"secs": 31536000, "nanos": 0}
+@@ -331,6 +331,30 @@
+   [ -z "$APP_ID" ] && APP_ID="881448767"
+ fi
+ 
++# SECURITY: the whole bootstrap above ran moonlight-web bound to loopback
++# ([::1]:8090) on purpose. moonlight-web starts with an empty user DB and
++# first_login_create_admin=true, so between its start and the admin login above
++# it will make an ADMIN out of whoever logs in first. bind_address used to be
++# [::]:8090 (all interfaces) during that window, so an outsider who reached
++# :8090 on the public interface during provisioning — before this box is ever
++# assigned to a customer — could win that first login, gain full desktop
++# (screen + xdotool keyboard/mouse) control, and plant OS-level persistence that
++# survives into whoever the box is later handed to. Binding to loopback for the
++# bootstrap makes that window unreachable off-box. Now that a real admin exists
++# (first_login can no longer fire), flip the bind to all interfaces for the
++# gateway and refresh the session token against the re-exposed instance.
++sed -i 's#"bind_address": "\[::1\]:8090"#"bind_address": "[::]:8090"#' "$MOONLIGHT_DIR/server/config.json"
++systemctl restart moonlight-web
++for _ in $(seq 1 20); do
++  if curl -g -s "$MOONLIGHT_BASE/" >/dev/null 2>&1; then break; fi
++  sleep 1
++done
++RELOGIN_RESPONSE="$(curl -g -s -i -X POST "$MOONLIGHT_BASE/api/login" \
++  -H "Content-Type: application/json" \
++  -d "{\"name\":\"admin\",\"password\":\"$ADMIN_PASSWORD\"}" 2>&1)"
++REFRESHED_TOKEN="$(printf '%s\n' "$RELOGIN_RESPONSE" | grep -i 'set-cookie.*mlSession' | sed 's/.*mlSession=\([^;]*\).*/\1/' | tr -d '\r\n' || true)"
++[ -n "$REFRESHED_TOKEN" ] && SESSION_TOKEN="$REFRESHED_TOKEN"
++
+ cat > "$MOONLIGHT_DIR/server/streaming-credentials.json" <<CREDEOF
+ {
+   "hostId": ${HOST_ID:-0},
+diff -ruN '--exclude=ascii-node-manager' '--exclude=*.pyc' '--exclude=manifest.json' '--exclude=SHA256SUMS' /tmp/box-release-diff/extract/node-manager-v0.5.0-staging11/bare-metal-node/lib/vm-io.sh /tmp/box-release-diff/extract/node-manager-v0.5.0-staging12/bare-metal-node/lib/vm-io.sh
+--- /tmp/box-release-diff/extract/node-manager-v0.5.0-staging11/bare-metal-node/lib/vm-io.sh	1970-01-01 00:00:00.000000000 +0000
++++ /tmp/box-release-diff/extract/node-manager-v0.5.0-staging12/bare-metal-node/lib/vm-io.sh	2026-08-21 18:56:06.000000000 +0000
+@@ -0,0 +1,93 @@
++#!/usr/bin/env bash
++
++VM_TOTAL_BYTES_SEC="${VM_TOTAL_BYTES_SEC:-0}"
++VM_TOTAL_IOPS_SEC="${VM_TOTAL_IOPS_SEC:-0}"
++VM_LEGACY_TOTAL_BYTES_SEC=209715200
++VM_LEGACY_TOTAL_IOPS_SEC=2000
++
++vm_io_error() {
++  printf 'invalid VM I/O policy: %s\n' "$*" >&2
++  return 1
++}
++
++vm_io_require_nonnegative_integer() {
++  local name="$1"
++  local value="$2"
++
++  [[ "$value" =~ ^[0-9]+$ ]] \
++    || vm_io_error "$name must be a non-negative integer, got: $value"
++}
++
++vm_io_validate_policy() {
++  vm_io_require_nonnegative_integer VM_TOTAL_BYTES_SEC "$VM_TOTAL_BYTES_SEC" || return
++  vm_io_require_nonnegative_integer VM_TOTAL_IOPS_SEC "$VM_TOTAL_IOPS_SEC"
++}
++
++vm_io_require_policy_support() {
++  local help_text flag token found
++  local required_flags=(
++    --total-bytes-sec-max
++    --total-bytes-sec-max-length
++    --total-iops-sec-max
++    --total-iops-sec-max-length
++  )
++
++  help_text="$(virsh help blkdeviotune 2>/dev/null)" \
++    || { vm_io_error 'virsh cannot describe blkdeviotune'; return; }
++  for flag in "${required_flags[@]}"; do
++    found=0
++    for token in $help_text; do
++      token="${token#[}"
++      token="${token%]}"
++      token="${token%,}"
++      if [ "$token" = "$flag" ]; then
++        found=1
++        break
++      fi
++    done
++    [ "$found" = 1 ] || { vm_io_error "virsh blkdeviotune lacks $flag"; return; }
++  done
++}
++
++vm_io_policy_args() {
++  printf '%s\n' \
++    --total-bytes-sec "$VM_TOTAL_BYTES_SEC" \
++    --total-bytes-sec-max 0 \
++    --total-bytes-sec-max-length 0 \
++    --total-iops-sec "$VM_TOTAL_IOPS_SEC" \
++    --total-iops-sec-max 0 \
++    --total-iops-sec-max-length 0
++}
++
++vm_io_legacy_policy_args() {
++  printf '%s\n' \
++    --total-bytes-sec "$VM_LEGACY_TOTAL_BYTES_SEC" \
++    --total-bytes-sec-max 0 \
++    --total-bytes-sec-max-length 0 \
++    --total-iops-sec "$VM_LEGACY_TOTAL_IOPS_SEC" \
++    --total-iops-sec-max 0 \
++    --total-iops-sec-max-length 0
++}
++
++vm_io_apply_policy() {
++  local domain="$1"
++  local device="$2"
++  shift 2
++  local policy_args=()
++
++  vm_io_validate_policy || return
++  vm_io_require_policy_support || return
++  mapfile -t policy_args < <(vm_io_policy_args)
++  virsh blkdeviotune "$domain" "$device" "${policy_args[@]}" "$@"
++}
++
++vm_io_apply_legacy_policy() {
++  local domain="$1"
++  local device="$2"
++  shift 2
++  local policy_args=()
++
++  vm_io_require_policy_support || return
++  mapfile -t policy_args < <(vm_io_legacy_policy_args)
++  virsh blkdeviotune "$domain" "$device" "${policy_args[@]}" "$@"
++}
+diff -ruN '--exclude=ascii-node-manager' '--exclude=*.pyc' '--exclude=manifest.json' '--exclude=SHA256SUMS' /tmp/box-release-diff/extract/node-manager-v0.5.0-staging11/bare-metal-node/provision-vm.sh /tmp/box-release-diff/extract/node-manager-v0.5.0-staging12/bare-metal-node/provision-vm.sh
+--- /tmp/box-release-diff/extract/node-manager-v0.5.0-staging11/bare-metal-node/provision-vm.sh	2026-08-21 15:55:55.000000000 +0000
++++ /tmp/box-release-diff/extract/node-manager-v0.5.0-staging12/bare-metal-node/provision-vm.sh	2026-08-21 18:56:06.000000000 +0000
+@@ -14,6 +14,8 @@
+ source "$SCRIPT_DIR/lib/vm-cpu.sh"
+ # shellcheck source=lib/ssh-identity.sh
+ source "$SCRIPT_DIR/lib/ssh-identity.sh"
++# shellcheck source=lib/vm-io.sh
++source "$SCRIPT_DIR/lib/vm-io.sh"
+ 
+ NODE_ID="${NODE_ID:-node0}"
+ VM_PREFIX="${VM_PREFIX:-box-$NODE_ID}"
+@@ -43,8 +45,6 @@
+ DISK_SIZE="${DISK_SIZE:-70G}"
+ OS_VARIANT="${OS_VARIANT:-ubuntu24.04}"
+ CPU_SHARES="${CPU_SHARES:-1024}"
+-VM_TOTAL_IOPS_SEC="${VM_TOTAL_IOPS_SEC:-2000}"
+-VM_TOTAL_BYTES_SEC="${VM_TOTAL_BYTES_SEC:-209715200}"
+ 
+ # IPv4 doorway (DNAT): guests are IPv6-only on the public side, so v4-only
+ # clients reach them through the node's public IPv4. Ports derive from
+@@ -675,13 +675,10 @@
+   VM_CREATED=1
+   virsh start "$VM_NAME" >/dev/null
+ 
+-  # Explicit fair-share CPU and disk ceilings protect peer VMs from a noisy
+-  # tenant. Apply live and persistent policy before reporting success.
++  # Do not impose an absolute disk ceiling on an otherwise idle guest. Apply
++  # explicit zeros live and persistently so inherited limits cannot survive.
+   virsh schedinfo "$VM_NAME" --set "cpu_shares=$CPU_SHARES" --live --config >/dev/null
+-  virsh blkdeviotune "$VM_NAME" vda \
+-    --total-iops-sec "$VM_TOTAL_IOPS_SEC" \
+-    --total-bytes-sec "$VM_TOTAL_BYTES_SEC" \
+-    --live --config >/dev/null
++  vm_io_apply_policy "$VM_NAME" vda --live --config >/dev/null
+   virsh autostart "$VM_NAME" >/dev/null
+ }
+ 
+@@ -1056,6 +1053,9 @@
+   need_cmd jq
+   need_cmd flock
+ 
++  vm_io_validate_policy || fail "invalid VM I/O policy"
++  vm_io_require_policy_support || fail "virsh does not support the VM I/O policy"
++
+   validate_requested_network
+   phase image find_base_image
+   phase allocation allocate_ip
+diff -ruN '--exclude=ascii-node-manager' '--exclude=*.pyc' '--exclude=manifest.json' '--exclude=SHA256SUMS' /tmp/box-release-diff/extract/node-manager-v0.5.0-staging11/bare-metal-node/tune-vm-io.sh /tmp/box-release-diff/extract/node-manager-v0.5.0-staging12/bare-metal-node/tune-vm-io.sh
+--- /tmp/box-release-diff/extract/node-manager-v0.5.0-staging11/bare-metal-node/tune-vm-io.sh	1970-01-01 00:00:00.000000000 +0000
++++ /tmp/box-release-diff/extract/node-manager-v0.5.0-staging12/bare-metal-node/tune-vm-io.sh	2026-08-21 18:56:06.000000000 +0000
+@@ -0,0 +1,98 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
++# shellcheck source=lib/vm-io.sh
++source "$SCRIPT_DIR/lib/vm-io.sh"
++
++usage() {
++  cat <<'EOF'
++Usage: sudo ./bare-metal-node/tune-vm-io.sh [--apply] [--rollback] VM_NAME
++
++Without --apply, prints the current and proposed vda policy without changing it.
++The default policy clears absolute limits. --rollback restores the legacy
++200 MiB/s and 2,000-IOPS limits.
++EOF
++}
++
++fail() {
++  printf '[tune-vm-io] ERROR: %s\n' "$*" >&2
++  exit 1
++}
++
++print_command() {
++  local domain="$1"
++  local rollback="$2"
++  shift 2
++  local policy_args=()
++  local arg
++
++  if [ "$rollback" = 1 ]; then
++    mapfile -t policy_args < <(vm_io_legacy_policy_args)
++  else
++    mapfile -t policy_args < <(vm_io_policy_args)
++  fi
++  printf 'virsh blkdeviotune %q vda' "$domain"
++  for arg in "${policy_args[@]}" "$@"; do
++    printf ' %q' "$arg"
++  done
++  printf '\n'
++}
++
++apply=0
++rollback=0
++domain=''
++while [ "$#" -gt 0 ]; do
++  case "$1" in
++    --apply) apply=1; shift ;;
++    --rollback) rollback=1; shift ;;
++    -h|--help) usage; exit 0 ;;
++    --*) fail "unknown option: $1" ;;
++    *)
++      [ -z "$domain" ] || fail 'exactly one VM_NAME is required'
++      domain="$1"
++      shift
++      ;;
++  esac
++done
++
++[ -n "$domain" ] || { usage >&2; exit 2; }
++[[ "$domain" =~ ^box-[a-z0-9]+-[a-z0-9-]+$ ]] || fail "invalid VM name: $domain"
++command -v virsh >/dev/null 2>&1 || fail 'virsh is required'
++
++state="$(virsh domstate "$domain")" || fail "cannot read domain state: $domain"
++case "$state" in
++  'shut off'|shutoff|crashed)
++    mutation_flags=(--config)
++    query_flags=(--config)
++    ;;
++  *)
++    mutation_flags=(--live --config)
++    query_flags=(--live)
++    ;;
++esac
++
++printf '[tune-vm-io] Current %s/vda policy (%s):\n' "$domain" "$state"
++virsh blkdeviotune "$domain" vda "${query_flags[@]}"
++
++if [ "$rollback" = 1 ]; then
++  printf '[tune-vm-io] Proposed legacy capped policy:\n'
++else
++  vm_io_validate_policy || fail 'I/O policy validation failed'
++  printf '[tune-vm-io] Proposed uncapped policy:\n'
++fi
++print_command "$domain" "$rollback" "${mutation_flags[@]}"
++
++if [ "$apply" != 1 ]; then
++  printf '[tune-vm-io] Dry run. Re-run with --apply to change this one domain.\n'
++  exit 0
++fi
++
++if [ "$rollback" = 1 ]; then
++  vm_io_apply_legacy_policy "$domain" vda "${mutation_flags[@]}" >/dev/null
++else
++  vm_io_apply_policy "$domain" vda "${mutation_flags[@]}" >/dev/null
++fi
++
++printf '[tune-vm-io] Effective %s/vda policy:\n' "$domain"
++virsh blkdeviotune "$domain" vda "${query_flags[@]}"
+
+=== NEW HIGH-SIGNAL BINARY STRINGS node-manager-v0.5.0-staging11 -> node-manager-v0.5.0-staging12 ===
+
+=== guest-agent artifact sha256 ===
