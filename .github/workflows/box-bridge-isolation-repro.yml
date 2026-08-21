@@ -1,0 +1,79 @@
+name: Box bridge isolation prerequisite repro
+on:
+  push:
+    paths:
+      - '.github/workflows/box-bridge-isolation-repro.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  repro:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reproduce same-bridge FORWARD dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          O=box-bridge-isolation-repro.txt
+          : > "$O"
+          cleanup() {
+            sudo ip netns del bxns1 2>/dev/null || true
+            sudo ip netns del bxns2 2>/dev/null || true
+            sudo ip link del bxbr0 2>/dev/null || true
+            sudo ip6tables -D FORWARD -i bxbr0 -o bxbr0 -m comment --comment 'box-repro' -j DROP 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          cleanup
+          sudo modprobe br_netfilter || true
+          echo '=== environment ===' >> "$O"
+          uname -a >> "$O"
+          sysctl net.bridge.bridge-nf-call-ip6tables net.bridge.bridge-nf-call-iptables 2>&1 >> "$O" || true
+          sudo ip netns add bxns1
+          sudo ip netns add bxns2
+          sudo ip link add bxbr0 type bridge
+          sudo ip link add bxv1 type veth peer name bxg1
+          sudo ip link add bxv2 type veth peer name bxg2
+          sudo ip link set bxg1 master bxbr0
+          sudo ip link set bxg2 master bxbr0
+          sudo ip link set bxbr0 up
+          sudo ip link set bxg1 up
+          sudo ip link set bxg2 up
+          sudo ip link set bxv1 netns bxns1
+          sudo ip link set bxv2 netns bxns2
+          sudo ip -n bxns1 link set lo up
+          sudo ip -n bxns2 link set lo up
+          sudo ip -n bxns1 link set bxv1 up
+          sudo ip -n bxns2 link set bxv2 up
+          sudo ip -n bxns1 -6 addr add 2001:db8:4242::1/64 dev bxv1
+          sudo ip -n bxns2 -6 addr add 2001:db8:4242::2/64 dev bxv2
+          sudo ip6tables -I FORWARD 1 -i bxbr0 -o bxbr0 -m comment --comment 'box-repro' -j DROP
+          echo '=== installed rule ===' >> "$O"
+          sudo ip6tables -S FORWARD | grep box-repro >> "$O" || true
+          echo '=== test A: bridge netfilter disabled ===' >> "$O"
+          sudo sysctl -w net.bridge.bridge-nf-call-ip6tables=0 >> "$O" 2>&1
+          if sudo ip netns exec bxns1 ping -6 -c 2 -W 1 2001:db8:4242::2 >> "$O" 2>&1; then
+            echo 'RESULT_DISABLED=PEER_REACHABLE_DESPITE_FORWARD_DROP' >> "$O"
+          else
+            echo 'RESULT_DISABLED=PEER_BLOCKED' >> "$O"
+          fi
+          echo '=== test B: bridge netfilter enabled ===' >> "$O"
+          sudo sysctl -w net.bridge.bridge-nf-call-ip6tables=1 >> "$O" 2>&1
+          if sudo ip netns exec bxns1 ping -6 -c 2 -W 1 2001:db8:4242::2 >> "$O" 2>&1; then
+            echo 'RESULT_ENABLED=PEER_REACHABLE' >> "$O"
+          else
+            echo 'RESULT_ENABLED=PEER_BLOCKED_BY_FORWARD_DROP' >> "$O"
+          fi
+          echo '=== counter ===' >> "$O"
+          sudo ip6tables -L FORWARD -v -n | grep box-repro >> "$O" || true
+          cat "$O"
+      - name: Commit result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add box-bridge-isolation-repro.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'research: record bridge isolation prerequisite repro'
+          git push
