@@ -1,0 +1,260 @@
+=== version ===
+box 0.1.176-ascii-prod1
+=== exact high-signal matches with context ===
+--- BOX_CLI_TOKEN
+--- SERVICE_PREVIEW_TOKEN
+--- scoped token
+--- metadata
+48823-?433333
+48824-?fd != -1.zdebug_
+48825: (SIGIO)VerbatimDeviceNSpoisonedThreadIdFileDescFileTypeDirEntryNulErrorMakePipeStaticFdtruncateMetadatamodifiedaccessed
+48826-_@SPSR_FIQSPSR_IRQSPSR_ABTSPSR_UNDSPSR_SVCTPIDRUROTPIDRURWDW_OP_orDW_OP_eqDW_OP_geDW_OP_gtDW_OP_leDW_OP_ltDW_OP_neELR_mode
+48827:ACdeadlockmetadata
+48828-Location01234567NotFoundTimedOutDeadlock
+48829-failed to read archive streamfailed to read archive entryarchive contains an unsupported special filefailed to extract archive entryarchive entry escaped the destinationchunkIndexr2Keysha256sizeBytessignedUrl
+48830-[38;5;245m  signed URL expired, refreshing
+--
+55107-_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtB4_6result6ResultNtNtCsaD2Fbg807h4_10serde_json5value5ValueNtCscRcuEFgk1fc_6anyhow5ErrorEECsGCIFLUvQ2Q_3box
+55108-_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtB4_6result6ResultNtNtCskSjJLSRHk7U_5alloc6string6StringNtNtNtB4_2io5error5ErrorEECsGCIFLUvQ2Q_3box
+55109:_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtB4_6result6ResultNtNtCsl1RqEF7rHWY_3std2fs8MetadataNtNtNtB4_2io5error5ErrorEECsGCIFLUvQ2Q_3box
+55110-_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtB4_6result6ResultNtNtCsl1RqEF7rHWY_3std7process10ExitStatusNtNtNtB4_2io5error5ErrorEECsGCIFLUvQ2Q_3box
+55111-_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtB4_6result6ResultNtNtCsl1RqEF7rHWY_3std7process6OutputNtNtNtB4_2io5error5ErrorEECsGCIFLUvQ2Q_3box
+55112-_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtB4_6result6ResultNtNtNtCsjMYODDEHvr6_7reqwest8blocking6client6ClientNtNtB13_5error5ErrorEECsGCIFLUvQ2Q_3box
+--
+55793-_RINvMs3_NtCskSjJLSRHk7U_5alloc3stre7replaceReECsg2pjOlgJnah_10webbrowser
+55794-_RINvMs3_NtCskSjJLSRHk7U_5alloc3stre7replacecECsg2pjOlgJnah_10webbrowser
+55795:_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtB4_6result6ResultNtNtCsl1RqEF7rHWY_3std2fs8MetadataNtNtNtB4_2io5error5ErrorEECsg2pjOlgJnah_10webbrowser
+55796-_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtB4_6result6ResultNtNtCsl1RqEF7rHWY_3std7process6OutputNtNtNtB4_2io5error5ErrorEECsg2pjOlgJnah_10webbrowser
+55797-_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtB4_6result6ResultuNtNtNtB4_2io5error5ErrorEECsg2pjOlgJnah_10webbrowser
+55798-_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueINtNtCskSjJLSRHk7U_5alloc3vec3VecINtNtBG_5boxed3BoxDINtNtNtB4_3ops8function5FnMutuEp6OutputINtNtB4_6result6ResultuNtNtNtB4_2io5error5ErrorENtNtB4_6marker4SendNtB2S_4SyncEL_EEECsg2pjOlgJnah_10webbrowser
+--
+56244-_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueNtNtNtNtCs4kqgsptORU2_10hyper_util6client6legacy7connect9ConnectedEBJ_
+56245-_RINvNtCs806nzKq9KaB_4core3ptr9drop_glueTINtNtB4_6result6ResultNtNtNtB4_3net11socket_addr10SocketAddrNtNtNtB4_2io5error5ErrorEBC_EECs4kqgsptORU2_10hyper_util
+56246:_RNvXs_NtCsmV3aFZFmc1_12tracing_core8callsiteNtB4_15DefaultCallsiteNtB4_8Callsite8metadata
+56247-_RNvYNtNtCsmV3aFZFmc1_12tracing_core8callsite15DefaultCallsiteNtB4_8Callsite15private_type_idCs4kqgsptORU2_10hyper_util
+56248-_RNvYNtNtNtCs4kqgsptORU2_10hyper_util2rt5tokio10TokioSleepNtNtNtCs9OvxBhucoZ5_5hyper2rt5timer5Sleep9___type_idB8_
+56249-hyper_util.326d673f7c8d4988-cgu.7
+--
+61504-_RNvNtNtCsl1RqEF7rHWY_3std3sys2fs9hard_link
+61505-ring_core_0_17_14__p384_point_add
+61506:_RNvNtCsmV3aFZFmc1_12tracing_core8metadata9MAX_LEVEL
+61507-_RNvXs3_NtNtNtCs7ijfqJgFWkO_3mio3net3tcp6streamNtB5_9TcpStreamNtNtNtBb_5event6source6Source10deregister
+61508-anon.c19fdcad92d9a2b2979ba080a8251771.13.llvm.15380310747599535592
+61509-anon.7fd0aff0f607e9adf9abf971b716f590.114.llvm.16153158382226395562
+--
+61705-_RNvXs5_NtCs1nTJXZHZ2Kh_6webpki11verify_certNtB5_26RequiredEkuNotFoundContextNtNtCs806nzKq9KaB_4core3fmt5Debug3fmt
+61706-_RNvNtNtNtNtCsibAgFRjIz5c_4ring2ec7suite_b5ecdsa7signing30ECDSA_P256_SHA256_ASN1_SIGNING
+61707:_RNvNtNtCsl1RqEF7rHWY_3std3sys2fs8metadata
+61708-_RNvMNtNtNtCs7ijfqJgFWkO_3mio3net3tcp6streamNtB2_9TcpStream9peer_addr
+61709-_RNvXs6_NtNtNtCs4kqgsptORU2_10hyper_util6client6legacy7connectINtB5_10ExtraChainNtNtB5_4http8HttpInfoENtB5_10ExtraInner9clone_boxBb_.llvm.96073074487892954
+61710-_RNvNtNtCsibAgFRjIz5c_4ring4aead4quic8CHACHA20
+--
+63989-_RNvXs_NtCsgGXrR8MCtpT_3tar3paxNtB4_13PaxExtensionsNtNtNtNtCs806nzKq9KaB_4core4iter6traits8iterator8Iterator4next
+63990-_RNvXs_NvNtCsl1RqEF7rHWY_3std9panicking13resume_unwindNtB4_9RewrapBoxNtNtCs806nzKq9KaB_4core3fmt7Display3fmt
+63991:_RNvMsm_NtCsl1RqEF7rHWY_3std2fsNtB5_8Metadata8modified
+63992-_RNvXs9_NtNtCsdhc0vDpqW3H_6rustls6client5tls13NtB5_13ExpectTrafficINtNtB9_12common_state5StateNtNtB7_11client_conn20ClientConnectionDataE15extract_secrets
+63993-_RNvNtNtNtNtCsibAgFRjIz5c_4ring2ec7suite_b3ops4p25617PUBLIC_SCALAR_OPS
+63994-_RNvMs_NtCsdhc0vDpqW3H_6rustls12common_stateNtB4_11CommonState16buffer_plaintext
+--
+65616-anon.a70800669a5440f03e7a6243303314c3.27.llvm.6593155641913953280
+65617-_RNvMs4_NtCskSjJLSRHk7U_5alloc7raw_vecINtB5_6RawVecNtNtNtCsdhc0vDpqW3H_6rustls4msgs5enums10NamedGroupE8grow_oneBS_
+65618:_RNvNtNtCsl1RqEF7rHWY_3std3sys2fs16symlink_metadata
+65619-_RNvXs4_NtNtNtCsl1RqEF7rHWY_3std2io8buffered9bufreaderINtB5_9BufReaderQIBQ_RShEENtB9_7BufRead7consumeCsjMYODDEHvr6_7reqwest
+65620-_RNvNtNtNtCs9OvxBhucoZ5_5hyper5proto2h14role16is_complete_fast
+65621-_RNvMs16_NtCsl1RqEF7rHWY_3std4pathNtB6_4Path6parent
+--- cloud-init
+--- user-data
+--- userdata
+--- 169.254
+--- Hetzner
+50680-        [ "$recursive" = 1 ] && [ -d "$src" ] || exit 1
+50681-        unsupported=$(/usr/bin/find -L "$src" \( ! \( -type f -o -type d \) -o -perm /7000 -o \( -type f -links +1 \) -o \( -type d ! -perm -0700 \) -o \( -type f ! -perm -0600 \) \) -print -quit) || exit 1
+50682:        [ -z "$unsupported" ]baremetalhetznercloudstack/api/box/reposdeletion operation did not include statusSend a prompt to Codex or Claude inside a Box
+50683-Arguments:
+50684-  <ID>          Box ID.
+50685-  [PROMPT]...   Prompt text to send.
+--
+50741-[?25hdatabaseIdstruct LoginStartResponsestruct LoginPollResponsestruct Configno_updatea Display implementation returned an error unexpectedlyErrorCliAPI_URLapi-urlForce machine-readable JSON/JSONL outputNO_UPDATEno-updateSkip the automatic CLI update check0.1.176-ascii-prod1Ascii Box CLIDocs: https://docs.ascii.dev/box/cli-reference
+50742-Programmatic use: https://docs.ascii.dev/box/use-in-code
+50743:Secrets: https://box.ascii.dev/box/dashboard?tab=secretslogoutapi-keyttlno_auto_stopno_envmachine_typebeta_bare_metalsetup_filefilterallhoursdeleteresumefollowtimeoutdetachdesktoprecursivesourcedestinationremotelocaldata-retentionself-updatecompletionsshellidssnapshot-idsa subcommand is required but one was not providedOnboardGOOGLEUse Google sign-in during onboarding.EMAILUse email code sign-in during onboarding.Sign in, choose repositories, and start the Box planLoginStart Google sign-in.Start email code sign-in.Existing Box API token. Omit to start GitHub sign-in.Sign in with a Box token, GitHub, Google, or emailRevoke this device's session and clear the stored tokenApiKeyManage API keys for SDKs and programmatic useWebhookManage Box lifecycle webhooksEnvManage named box environments: repos, env vars, secret files, safety togglesNewTTLLifetime in seconds before the Box is eligible for cleanup.NO_AUTO_STOPno-auto-stopDisable automatic stop. The Box runs until you stop it.ENVKEY=VALUEPer-box environment variable. Repeat for multiple values. Overrides dashboard variables with the same name.NO_ENVno-envCreate a box with none of your account's stored secrets, for boxes you give to your own users. SSH, desktop, snapshots, and public URLs still work.ENVIRONMENTNamed environment to start from (repos, secrets, credentials). Defaults to your default environment ('base').MACHINE_TYPEMachine size: small (2 vCPU, 4GB, half rate), default (4 vCPU, 8GB), or large (8 vCPU, 16GB, 2x rate). Default: default.BETA_BARE_METALbeta-bare-metalDeprecated alias for --type bare-metal.SETUP_FILEsetup-fileShell script file to run on the Box after it is ready (max 64KB). Runs in the background; watch `setupStatus` in box info for the result.Admins only: pin the Box to an exact machine provider: hetzner, cloudstack, or baremetal.Create the Box from a named snapshot (saved with `box snapshot <id> <name>`).TEAM_IDCreate the Box in a team's context: it runs on the team's shared balance instead of yours. See `box team list`.Bill this Box to your personal account even when a team scope is active (`box team switch`).Create a new Box sandboxShow or switch your team billing scope (sticky: applies to every `box new`)Box ID.Show details for one BoxFILTERGROUPSState groups to include: r=up/running, s=stopped, p=pending, t=stopping, e=error. Combine letters, e.g. sr. Default: r.ALLInclude every state (same as --filter rspte).List your BoxesExtendHOURSSet the remaining lifetime in hours.Set the remaining lifetime in seconds.Extend or set how long a Box stays onDeleteBox ID, or "current"/"self".YESSkip the interactive destructive confirmation.Permanently delete a Box and all of its dataInspect an asynchronous data deletion operationFORCEStop even if the Box cannot be snapshotted. Everything written since the last successful snapshot is LOST. Only use this after a stop has already failed.Stop a running Box and snapshot it for resume/forkRmSkip the confirmation prompt. Required when stdout is not a terminal or --json is set.Deprecated alias for `delete`. Hidden from help; use `box delete` insteadResumePer-box environment variable. Repeat for multiple values. Overrides dashboard variables with the same name. Replaces the box's current per-box variables.Resume into a no-env box: drop all of your account's stored secrets and scrub any inherited from the snapshot. One-way; the box stays no-env after.Re-pin the box to a named environment's latest version before resuming.Resume onto a different machine size: small, default or large. Omit to keep the box's current size. Shrinking is refused if the box's data does not fit.Set the resumed Box's lifetime in seconds. Omit to keep the Box's current setting.Admins only: resume the Box onto an exact machine provider: hetzner, cloudstack, or baremetal. Sticky until changed on a later resume.Resume a stopped Box from its latest snapshotPromptAgent provider to use: codex or claude.MODELProvider model id. Omit to use the Agents dashboard default.Reasoning/thinking level. Omit to use the model default.PROMPTPrompt text.Send a prompt to Codex or Claude inside a BoxRun `box prompt --help` to fetch the current provider/model list from the Box API.InterruptStop the agent running in a BoxEventsFOLLOWStream a Box's agent chat events (prompts, responses, git checkpoints). A Box that was never prompted returns nothing; use `box info` for stateShow your plan and usage limitsPer-box environment variable for the fork. Repeat for multiple values. Overrides dashboard variables with the same name. Replaces the per-box variables the fork would inherit from the source box.Fork into a no-env box: drop all of your account's stored secrets and scrub any inherited from the source snapshot. The fork stays no-env.Re-pin the fork to a named environment's latest version. Omit to inherit the source box's environment.Fork onto a different machine size: small, default or large. Omit to inherit the source box's size. Shrinking is refused if the box's data does not fit.Lifetime in seconds for the fork. Omit for 1 hour; the fork does not inherit the source Box's setting.Disable automatic stop. The fork runs until you stop it.Admins only: fork onto an exact machine provider: hetzner, cloudstack, or baremetal. Omit to inherit the source box's provider.Fork a Box from its latest snapshotSshCOMMANDCommand to run. Omit for an interactive shell.Open an SSH session into a Box, or run a command non-interactivelyCWDDIRWorking directory, relative to the Box work directory.TIMEOUTTimeout in seconds (max 600). Default: 30.DETACHRun in the background and print the process id. Output goes to a log file on the Box.PIDShow status and logs of a background process started with --detach.Command to run.Run a command in a Box over the Box API (no SSH), optionally in the backgroundPort inside the Box to expose.PUBLICReturn an ungated public URL.PRIVATEReturn a token-gated URL. This is the default.TITLEDisplay title for the hosted port.Expose a Box port on a stable HTTPS URLDesktopVNCUse VNC streaming (more stable on poor/locked-down networks).With --vnc, return a URL that does not require an access token.Open the Box desktop or browser preview URLScpRECURSIVECopy directories recursively.Source path. Use <box-id>:<path> for remote paths.DESTINATIONDestination path. Use <box-id>:<path> for remote paths.Copy files to or from a Box over scpForwardREMOTERemote port inside the Box.LOCALLocal port to bind. Defaults to the remote port.Local bind address. Defaults to 127.0.0.1.Forward a TCP port from a Box to your machineOpen the Box dashboard in a browserShow API health, account, plan, and CLI configurationDataRetentionShow or enable delete-on-stop data retentionSnapshotsBox ID. Omit to list snapshots across all your Boxes.LIMITMaximum number of snapshots to fetch per page.Fetch every page instead of stopping at the first.List filesystem snapshots taken of your BoxesBox ID, or "current"/"self", to save a named snapshot from.Name to save the snapshot under. Reuse a name to replace it.Save a Box's state under a name, or inspect/download snapshotsCheck for and install the latest CLI release for this channelCompletionsShell to generate the script for.Print a shell completion script (box IDs included) for bash, zsh, fish, or powershellPrint box ID candidates for shell completion. Used by the completion scriptsPrint ordinary snapshot ID candidates for shell completionoutLatestShow the most recent snapshot for a BoxSnapshot ID, or a Box ID / "current"/"self" for its latest snapshot.Print the file tree captured in a snapshotOUTOutput directory. Defaults to ./<snapshot-id>.Download a snapshot and reassemble it into a local directorySnapshot ID. Named snapshots still use `box snapshot rm <name>`.Permanently delete one ordinary filesystem snapshot by snapshot IDName of the named snapshot to remove.Remove a named snapshotStatusDeletion operation ID returned by a delete command.Show the current status of a deletion operationShow whether delete-on-stop data retention is enabledEnableEnable deletion of Box data after each Box stopsrenamesetsafe_for_third_partiessecretsbox_credentialsagents_credentialsset-varrm-varrm-filebranchrm-repoupgradeList your environments: default marker, latest version, live boxes per versionEnvironment name.Show one environment in full: toggles, variables, secret files, repos, versionsEnvironment name (letters, numbers, dot, dash, underscore).Create a new named environment. It starts empty with everything injected by defaultRenameCurrent environment name.New environment name.Rename an environment. Boxes stay pinned to their versionsDefaultMake an environment the default for new boxesDelete an environment. Boxes pinned to its versions keep running; new boxes can no longer use itSetSAFE_FOR_THIRD_PARTIEStrue|falseMaster switch: true = inject NOTHING of yours (like --no-env). Overrides the granular toggles.GITHUBInject your GitHub access (token, repo clones).SECRETSInject your env variables and secret files.BOX_CREDENTIALSbox-credentialsInject the in-box Box CLI credentials (account-scoped).AGENTS_CREDENTIALSagents-credentialsInject your agent credentials (Claude/Codex logins).Change what the environment injects into boxes. Mints a new version; running boxes are NOT touched until you `env upgrade`SetVarSet one environment variable. Mints a new versionRmVarVariable name.Remove one environment variable. Mints a new versionSetFileIn-box path, relative to the workspace (e.g. .env or repo/.env).LOCAL_FILERead contents from this local file instead of stdin.Write one secret file (contents from --from or stdin). Mints a new versionRmFileIn-box path of the secret file.Remove one secret file. Mints a new versionAddRepoRepository full name, e.g. owner/repo.BRANCHBase branch to clone. Default: main.Add (or re-branch) a repo in the environment. Mints a new versionRmRepoRemove a repo from the environment. Mints a new versionUpgradeRe-pin this environment's boxes to its latest version: live boxes get the new config pushed now (withheld secrets scrubbed first), stopped ones pick it up at resumecreaterotaterevokeCreateDisplay name for the key, e.g. the project that will use it.Create a new API key. The secret is shown once; store it nowInclude per-box machine keys the platform manages automatically. Default: only keys you created.List your API keys. Secrets are never shown, only prefix and last fourRotateAPI key ID. See `api-key list`.Replace an API key's secret. The old secret stops working; the new one is shown onceRevokePermanently revoke an API keythe following required argument was not provided: urlremoveURLPublic HTTPS endpoint that accepts POST requests on port 443.Optional display name.EVENTSEVENTEvent to receive: ready, error, or archived. Repeat or comma-separate. Default: all.Register an HTTPS endpoint. Its signing secret is shown onceList registered webhooks. Signing secrets are never shownWebhook ID. See `webhook list`.Replace a webhook's signing secret. The old secret stops workingRemovePermanently remove a webhook and cancel pending deliveriesswitchtargetthe following required argument was not provided: targetList the teams you belong toSwitchTARGETTeam ID or name (see `box team list`), or 'personal'.Bill new boxes to a team, or 'personal' to go back to your own account
+50744-archivedstoppingread_tilexpectedReserved
+50745-ThreadIdApiErrorTimedOutEL2NSYNCENOTUNIQELIBEXECERESTARTESTRPIPEENOTSOCKEMSGSIZEENETDOWNENOTCONNEALREADYWSTOPPED__WCLONENo anodeNulErrorTarErrorexo-openkde-openwsl-openxdg-opencinnamonTerminal-Commandhttp/1.1tls_infousernamepasswordfragmentResponseRedirecttrailersUnixTimeContinueif-matchif-rangelocationOverflowIdentityrequiredcontentsoverflowUpgradedno_proxyNO_PROXYgot_typeUnscopedBorrowedidentityDisabledAcceptedRejectedDTLSv1_0DTLSv1_2DTLSv1_3FinishedHostNameMLKEM512MLKEM768HpkeAeadKeySharefinishedexporterNoKeyLogmin_bits+
+50746-TooLargeTooSmallCHACHA20X509 CRLIpv4AddrIpv6Addrsequencea IpAddra stringset_hostCanceledShutdownInternalfd != -1SockAddrAF_INET6AF_VSOCKSOCK_RAWSOCK_RDMREADABLEWRITABLEPRIORITYRegistryreadablewritablepriorityAllocErrHTTP/0.9HTTP/1.0HTTP/1.1HTTP/2.0HTTP/3.0Conflicton_blackon_greenon_whiteCLICOLORargument
+--- hcloud
+--- bootstrap
+49019-  (generation 
+49020-__dockervol__/
+49021:/api/box/dashboard/bootstrap
+49022-HTTP 
+49023-/api/box/boxes/
+49024-/desktop?vnc=1
+--- /var/lib/cloud
+--- authorized_keys
+--- ssh-key
+49044- onboard
+49045- onboard --json
+49046:ssh-keygen failed with status 
+49047-	;1H
+49048-[?25h
+49049-archive upload failed (tar: 
+--
+50403--infUnixenumuniti128u128PortdateetaglinkvaryHEADUserSizeOpenIdleBusy%2e.%2E..%2e.%2EGoneTERMdumbhelplongBOLD
+50404-[9m    for< -> shim as mut dyn  is boolchar__ZNteam_namepending_login_urlpending_login_poll_tokenpending_login_auth_methodpending_login_emaillast_update_checkemailstatus
+50405:}{falseidisDefaultprompt response did not include promptIddesktop response did not include desktopUrlbox info response did not include box@%_+=:,./-machineIpv4machineUrlreasonsupportEmail,-boxbox-devhttp://localhost:3000https://staging.ascii.devpending ssh-keygen-l-fBox API returned an invalid SSH host keybox create response did not include box.id
+50406-[90mpromptbox is not ready for SSH yet: missing machine IPBox API did not return an SSH host keyerror-sBOX_API_URLPATCHextendforce
+50407-This deletes 
+50408-q and ALL of its snapshots. It cannot be resumed or forked afterwards.
+--
+50608-1. github
+50609-2. google
+50610:3. email1Choose 1, 2, or 3.BOX_DASHBOARD_URLhttps://box.ascii.dev/box/dashboarddeletion response did not include operationAsk the user to open this URL and complete Box sign-in. After the browser says it is complete, run nextCommand.-ted25519-Cascii-box-yssh-keygen returned an invalid UTF-8 public keyssh-keygen could not derive the public keyempty Box API key
+50611- logged inlogin_completeuse either a Box API token or a browser login method, not bothsupported
+50612-: none
+50613-self can only be used inside a Box shell where BOX_ID is setset -eu
+--
+50803-called `Result::unwrap()` on an `Err` valuethreads should not terminate unexpectedlyfatal runtime error: thread result panicked on drop, aborting
+50804-UnknownErrnoEPERMENOENTESRCHEINTREIOENXIOE2BIGENOEXECEBADFECHILDEAGAINENOMEMEACCESEFAULTENOTBLKEBUSYEEXISTEXDEVENODEVENOTDIREISDIREINVALENFILEEMFILEENOTTYETXTBSYEFBIGENOSPCESPIPEEROFSEMLINKEPIPEERANGEEDEADLKENAMETOOLONGENOLCKENOSYSENOTEMPTYELOOPENOMSGEIDRMECHRNGEL3HLTEL3RSTELNRNGEUNATCHENOCSIEL2HLTEBADEEBADREXFULLENOANOEBADRQCEBADSLTEBFONTENOSTRENODATAETIMEENOSRENONETENOPKGEREMOTEENOLINKESRMNTECOMMEPROTOEMULTIHOPEDOTDOTEBADMSGEOVERFLOWEBADFDEREMCHGELIBACCELIBBADELIBSCNELIBMAXEILSEQEUSERSEDESTADDRREQEPROTOTYPEENOPROTOOPTEPROTONOSUPPORTESOCKTNOSUPPORTEOPNOTSUPPEPFNOSUPPORTEAFNOSUPPORTEADDRINUSEEADDRNOTAVAILENETUNREACHENETRESETECONNABORTEDECONNRESETENOBUFSEISCONNESHUTDOWNETOOMANYREFSETIMEDOUTECONNREFUSEDEHOSTDOWNEHOSTUNREACHEINPROGRESSESTALEEUCLEANENOTNAMENAVAILEISNAMEREMOTEIOEDQUOTENOMEDIUMEMEDIUMTYPEECANCELEDENOKEYEKEYEXPIREDEKEYREVOKEDEKEYREJECTEDEOWNERDEADENOTRECOVERABLEERFKILLEHWPOISON
+50805:ErrorcontextsourceFromUtf8Errorbyteserrorstatusmessagedescription() is deprecated; use Displayssh-keygensshcould not start tar for the uploadscpcould not start rsyncinternal error: entered unreachable code: invalid Once stateFromUtf8Errorbyteserrorstatusmessagedescription() is deprecated; use Display
+50806-tar--versionrsync--helpssh-G-oChannelTimeout=session=5mbox-scp-capability-checkTooManyBitsnum_requested_bitslimitNotEnoughRemainingBitsrequestedremainingDecodebufferErrorNotEnoughBytesForSequencewantedZeroOffsetNotEnoughBytesInDictionarygotOffsetTooBigoffsetbuf_lenBadMagicNumFSETableErrorHuffmanTableErrorMissingCompressedSizeMissingNumStreamsGetBitsErrorHuffmanDecoderErrorUninitializedHuffmanTableMissingBytesForJumpHeaderMissingBytesForLiteralsneededExtraPaddingskipped_bitsBitstreamReadMismatchDecodedLiteralCountMismatchdecodedFSEDecoderErrorUnsupportedOffsetoffset_codeNotEnoughBytesForNumSequencesExtraBitsbits_remainingMissingCompressionModeMissingByteForRleLlTableMissingByteForRleOfTableMissingByteForRleMlTableIllegalLiteralSectionTypeNotEnoughBytesAccLogIsZeroAccLogTooBigmaxProbabilityCounterMismatchexpected_sumsymbol_probabilitiesTooManySymbolsTableIsUninitializedReadFrameHeaderErrorDictionaryDecodeErrorFailedToReadBlockHeaderFailedToReadBlockBodyFailedToReadChecksumNotYetInitializedFailedToInitializeFailedToDrainDecodebufferFailedToSkipFrameTargetTooSmallDictNotProvideddict_idInvalidFrameContentSizeFlagWindowTooBigWindowTooSmallFrameDescriptorErrorDictIdTooSmallMismatchedFrameSizeFrameSizeIsZeroSourceIsEmptyNotEnoughBytesForWeightsgot_bytesexpected_bytesTooManyWeightsMissingWeightsLeftoverIsNotAPowerOf2NotEnoughBytesToDecompressWeightsFSETableUsedTooManyBytesavailable_bytesNotEnoughBytesInSourceWeightBiggerThanMaxNumBitsMaxBitsTooHighRawRLECompressedPoisonErrorMagicNumberReadErrorBadMagicNumberFrameDescriptorReadErrorInvalidFrameDescriptorWindowDescriptorReadErrorDictionaryIdReadErrorFrameContentSizeReadErrorSkipFramemagic_numberlengthneed_at_leastReadErrorFoundReservedBlockBlockTypeErrorBlockSizeErrorInvalidBlocktypeNumbernumBlockSizeTooLargeBlockContentReadErrorMalformedSectionHeaderexpected_lenremaining_bytesDecompressLiteralsErrorLiteralsSectionParseErrorSequencesHeaderParseErrorDecodeSequenceErrorExecuteSequencesErrorDecoderStateIsFailedExpectedHeaderOfPreviousBlocksourceDecompressBlockErrordescription() is deprecated; use Display
+50807-`Extensions` tracks values by type
+50808-TryFromIntErrora Display implementation returned an error unexpectedlyErrorParseIntErrorEmptyInvalidDigitPosOverflowNegOverflowNotAPowerOfTwodescription() is deprecated; use Display
+--- desktop
+2008-t$HH
+2009-|$@t
+2010:desktopUH
+2011-t$pH
+2012-modeH
+2013-t$pH
+--
+3795-|$/H
+3796-T$@H
+3797:desktopUI
+3798-l$HH
+3799-D$ H
+3800-)D$0
+--
+13981-L$xf
+13982-D$hH
+13983:[DesktopH1
+13984-p Entry]H1
+13985-;Exec
+13986-Hidd1
+--
+48753-too_many_requests
+48754-________________________
+48755:env.file_removedenv.repo_removedAPI key revoked.desktopAvailableWebhook removed.
+48756-source ~/.bashrcbilling requiredstart a Box planOpenAI Codex CLIonboarding_startonboarding_links<empty response>ConnectTimeout=5machine_providerreasoning_effortMACHINE_PROVIDERmachine-providerREASONING_EFFORTreasoning-effortVariable to set.
+48757-uespemosarenegylmodnarodsetybdet
+48758-P	O4
+--
+48843-/rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library/std/src/thread/functions.rs
+48844-/rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library/core/src/str/pattern.rs
+48845:/?desktop=1&theme=light&boxId=
+48846-&src=
+48847-expected KEY=VALUE, got: 
+48848- zstd init failed for generation 
+--
+48878-/resume
+48879-/api/box/boxes/
+48880:/desktop
+48881::VNC also available (more stable, less fluid): box desktop 
+48882- --vnc
+48883-environment "
+48884-" created.
+--
+48985-	ssh:     
+48986- ssh 
+48987:	desktop: 
+48988:	 desktop 
+48989-	fork:    
+48990- fork 
+48991-	forward: 
+--
+49022-HTTP 
+49023-/api/box/boxes/
+49024:/desktop?vnc=1
+49025:preparing VNC desktop... 
+49026-you [
+49027-to use 
+49028- in this shell now: 
+--
+50403--infUnixenumuniti128u128PortdateetaglinkvaryHEADUserSizeOpenIdleBusy%2e.%2E..%2e.%2EGoneTERMdumbhelplongBOLD
+50404-[9m    for< -> shim as mut dyn  is boolchar__ZNteam_namepending_login_urlpending_login_poll_tokenpending_login_auth_methodpending_login_emaillast_update_checkemailstatus
+50405:}{falseidisDefaultprompt response did not include promptIddesktop response did not include desktopUrlbox info response did not include box@%_+=:,./-machineIpv4machineUrlreasonsupportEmail,-boxbox-devhttp://localhost:3000https://staging.ascii.devpending ssh-keygen-l-fBox API returned an invalid SSH host keybox create response did not include box.id
+50406-[90mpromptbox is not ready for SSH yet: missing machine IPBox API did not return an SSH host keyerror-sBOX_API_URLPATCHextendforce
+50407-This deletes 
+50408-q and ALL of its snapshots. It cannot be resumed or forked afterwards.
+--
+50418-% snapshot latest|tree|pull|delete|rm)
+50419-github0one scp path must use <box-id>:<path>the following required argument was not provided: jsonthe following required argument was not provided: no_updatethe following required argument was not provided: googlethe following required argument was not provided: no_auto_stopthe following required argument was not provided: no_envthe following required argument was not provided: beta_bare_metalthe following required argument was not provided: personalthe following required argument was not provided: idthe following required argument was not provided: allthe following required argument was not provided: publicthe following required argument was not provided: privatethe following required argument was not provided: vncthe following required argument was not provided: recursivethe following required argument was not provided: sourcethe following required argument was not provided: destinationthe following required argument was not provided: remotethe following required argument was not provided: shellthe following required argument was not provided: yesthe following required argument was not provided: forcethe following required argument was not provided: providerthe following required argument was not provided: followthe following required argument was not provided: detachthe following required argument was not provided: portthe following required argument was not provided: namethe following required argument was not provided: new_namethe following required argument was not provided: pairthe following required argument was not provided: keythe following required argument was not provided: paththe following required argument was not provided: repoeventsunknownboxes
+50420:Formatting argument out of rangecould not resolve home directoryupgrade your plan or buy creditsDesktop/window control (+ xclip)Search, JSON, and HTTP utilitiesg
+50421-access-control-allow-credentials
+50422-RelativeUrlWithCannotBeABaseBase
+50423-retrying requires cloned request
+--
+50426-DW_AT_BORLAND_Delphi_constructorDW_TAG_GNU_formal_parameter_packDW_TAG_SUN_fortran_vax_structureFound an unknown standard opcodeFound an unknown extended opcodeThe line range must not be zero.
+50427-hasMorenextCursorlimitrunningresume request still in flightbox resume failed--
+50428:could not resolve config directoryasciiconfig.jsonyesdesktopUrlkeep this private--public is only supported with --vncvnc/api/box/environmentsenvironments (default)safeForThirdPartiessafe-for-third-partiesPUTenv.renameddefaultenv.defaultenv.deletedpassBoxCredentialspassAgentsCredentialsnothing to change; pass at least one toggle, e.g. --safe-for-third-parties truesaved as a new version. running boxes are unchanged; apply with `box env upgrade`.env.var_setenv.var_removedpipe the file contents on stdin or pass --from <local-file>env.file_setbaseBranchenv.repo_addedupgradedLiveupgradedStoppedesfailed
+50429-[91menv.upgradedjson.corruptlinux-x64stateNo boxes.IDStateTime leftSubdomain
+50430-  Name
+50431-environment response did not include idssh-i-N-Ltmp
+--
+50457-[?25hhome_userdockersnapshotIdgeneration.box-snapshot-pull-tmpinventoryPruning to the snapshot's exact file set
+50458-prune pass failedNo inventory for this snapshot 
+50459: restored the union of layers (exact point-in-time restore needs an inventory)./api/box/named-snapshotsunknown errorsavedtreeAvailablenot available for this snapshotentriesfileCounttotalSizeBytestruncated(tree truncated; `box snapshot pull` restores the full contents)BOX_IDdownloading CLI update...installing CLI update...newsubdomainsnapshotAvailablesetupStatussetupErrorenvironmentVersiondesktop: unavailable; machine is not upfork:    waiting for a snapshot/api/box/snapshotssnapshotsMore snapshots available 
+50460- pass --all to fetch every page.namedhttps://ascii.devBOX_STAGING_API_URLBOX_DEV_API_URLstagingdevforwardDocs:
+50461:https://docs.ascii.dev/box/cli-referencehttps://docs.ascii.dev/box/use-in-codehttps://box.ascii.dev/box/dashboard?tab=environmenthttps://docs.ascii.dev-oBatchMode=yesConnectTimeout=15ServerAliveInterval=10ServerAliveCountMax=6remote scp path must use <box-id>:<path>remote scp path cannot be emptyonboardloginNo snapshots for this Box.completedAt/-S-Oprovide --hours, --ttl, or --no-auto-stop--hours is too largeuse either --hours or --ttl, not bothpreparing VNC desktop... 0scould not reach the Box APItimed out preparing the VNC desktop (still provisioning). run the command again in a moment.git checkpointsummaryusage limitis_streamingcontentmodels
+50462- unavailable
+50463:, create and manage boxes:create a boxlist your boxesinfo <id>details, ssh, desktopusage and plan
+50464-./.BOX_SCP_RSYNCaccountStatusbillingStatushasSubscriptionsubscriptionPlanNameaccessTiertrialgoogleBoxGoogleGitHubarchivingstoppedtoo many requests. wait a moment and retryzshpowershell# __BIN__ shell completion (PowerShell)
+50465-# Install: add to $PROFILE:  __BIN__ completions powershell | Out-String | Invoke-Expression
+50466-Register-ArgumentCompleter -Native -CommandName __BIN__ -ScriptBlock {
+--
+50604-    return 0
+50605-complete -F ___BIN___complete -o default __BIN__
+50606:info extend delete stop resume prompt interrupt events fork ssh desktop forward snapshots__IDSUBS_CASE____IDSUBS__onboard login logout new info list extend delete deletion stop resume prompt interrupt events limits fork ssh desktop scp forward dashboard status data-retention snapshots snapshot webhook self-update completions help__BIN__enableddata-retention response did not include enabledascii_box_known_hostssuspendedReasonAccount suspendedsupport@ascii.devcould not create a temporary transfer directory
+50607-choose sign-in method:
+50608-1. github
+50609-2. google
+--
+50712-confirmation did not match; nothing was deleteddelete archived box dataNAMEDSTATUSSOURCE
+50713-  Size
+50714:Claude Code CLIExpose a service from the boxluxDesktop/browser controlBox CLIAIgit, ghGit and GitHub CLInode, bun, denoJavaScript/TypeScript (+ npm, pnpm, nvm)python3, uvPython (+ pip, venv)goGo 1.23 toolchainrustc, cargoRust (+ rustup, rust-analyzer)gcc, clang, cmakeC/C++ (+ g++, make, ninja)java, mvn, gradleJava / OpenJDK 11kotlin, scala, sbtKotlin & Scala (JVM)ruby, bundlerphp, composerPHP 8.4dotnet.NET 8 SDK (C#, F#)elixir, erlangErlang / ElixirRR statistical computinggoogle-chrome-stable, ffmpegBrowser and media toolingimagemagickImage manipulation (convert)xdotool, wmctrladb, scrcpyAndroid control (ReDroid preinstalled)Desktop & mediarg, jq, curlContainer runtimesqlite3Local SQL databaseSystem/dev/nullStrictHostKeyChecking=yeslogin_expiredTell the user the Box sign-in expired and rerun nextCommand.src=$1
+50715-        rsync_help=$(rsync --help 2>/dev/null) || exit 1
+50716-        case "$rsync_help" in *' -s'*'args'*) ;; *) exit 1 ;; esac
+50717-        test -x /usr/bin/find || exit 1
+--
+50741-[?25hdatabaseIdstruct LoginStartResponsestruct LoginPollResponsestruct Configno_updatea Display implementation returned an error unexpectedlyErrorCliAPI_URLapi-urlForce machine-readable JSON/JSONL outputNO_UPDATEno-updateSkip the automatic CLI update check0.1.176-ascii-prod1Ascii Box CLIDocs: https://docs.ascii.dev/box/cli-reference
+50742-Programmatic use: https://docs.ascii.dev/box/use-in-code
+50743:Secrets: https://box.ascii.dev/box/dashboard?tab=secretslogoutapi-keyttlno_auto_stopno_envmachine_typebeta_bare_metalsetup_filefilterallhoursdeleteresumefollowtimeoutdetachdesktoprecursivesourcedestinationremotelocaldata-retentionself-updatecompletionsshellidssnapshot-idsa subcommand is required but one was not providedOnboardGOOGLEUse Google sign-in during onboarding.EMAILUse email code sign-in during onboarding.Sign in, choose repositories, and start the Box planLoginStart Google sign-in.Start email code sign-in.Existing Box API token. Omit to start GitHub sign-in.Sign in with a Box token, GitHub, Google, or emailRevoke this device's session and clear the stored tokenApiKeyManage API keys for SDKs and programmatic useWebhookManage Box lifecycle webhooksEnvManage named box environments: repos, env vars, secret files, safety togglesNewTTLLifetime in seconds before the Box is eligible for cleanup.NO_AUTO_STOPno-auto-stopDisable automatic stop. The Box runs until you stop it.ENVKEY=VALUEPer-box environment variable. Repeat for multiple values. Overrides dashboard variables with the same name.NO_ENVno-envCreate a box with none of your account's stored secrets, for boxes you give to your own users. SSH, desktop, snapshots, and public URLs still work.ENVIRONMENTNamed environment to start from (repos, secrets, credentials). Defaults to your default environment ('base').MACHINE_TYPEMachine size: small (2 vCPU, 4GB, half rate), default (4 vCPU, 8GB), or large (8 vCPU, 16GB, 2x rate). Default: default.BETA_BARE_METALbeta-bare-metalDeprecated alias for --type bare-metal.SETUP_FILEsetup-fileShell script file to run on the Box after it is ready (max 64KB). Runs in the background; watch `setupStatus` in box info for the result.Admins only: pin the Box to an exact machine provider: hetzner, cloudstack, or baremetal.Create the Box from a named snapshot (saved with `box snapshot <id> <name>`).TEAM_IDCreate the Box in a team's context: it runs on the team's shared balance instead of yours. See `box team list`.Bill this Box to your personal account even when a team scope is active (`box team switch`).Create a new Box sandboxShow or switch your team billing scope (sticky: applies to every `box new`)Box ID.Show details for one BoxFILTERGROUPSState groups to include: r=up/running, s=stopped, p=pending, t=stopping, e=error. Combine letters, e.g. sr. Default: r.ALLInclude every state (same as --filter rspte).List your BoxesExtendHOURSSet the remaining lifetime in hours.Set the remaining lifetime in seconds.Extend or set how long a Box stays onDeleteBox ID, or "current"/"self".YESSkip the interactive destructive confirmation.Permanently delete a Box and all of its dataInspect an asynchronous data deletion operationFORCEStop even if the Box cannot be snapshotted. Everything written since the last successful snapshot is LOST. Only use this after a stop has already failed.Stop a running Box and snapshot it for resume/forkRmSkip the confirmation prompt. Required when stdout is not a terminal or --json is set.Deprecated alias for `delete`. Hidden from help; use `box delete` insteadResumePer-box environment variable. Repeat for multiple values. Overrides dashboard variables with the same name. Replaces the box's current per-box variables.Resume into a no-env box: drop all of your account's stored secrets and scrub any inherited from the snapshot. One-way; the box stays no-env after.Re-pin the box to a named environment's latest version before resuming.Resume onto a different machine size: small, default or large. Omit to keep the box's current size. Shrinking is refused if the box's data does not fit.Set the resumed Box's lifetime in seconds. Omit to keep the Box's current setting.Admins only: resume the Box onto an exact machine provider: hetzner, cloudstack, or baremetal. Sticky until changed on a later resume.Resume a stopped Box from its latest snapshotPromptAgent provider to use: codex or claude.MODELProvider model id. Omit to use the Agents dashboard default.Reasoning/thinking level. Omit to use the model default.PROMPTPrompt text.Send a prompt to Codex or Claude inside a BoxRun `box prompt --help` to fetch the current provider/model list from the Box API.InterruptStop the agent running in a BoxEventsFOLLOWStream a Box's agent chat events (prompts, responses, git checkpoints). A Box that was never prompted returns nothing; use `box info` for stateShow your plan and usage limitsPer-box environment variable for the fork. Repeat for multiple values. Overrides dashboard variables with the same name. Replaces the per-box variables the fork would inherit from the source box.Fork into a no-env box: drop all of your account's stored secrets and scrub any inherited from the source snapshot. The fork stays no-env.Re-pin the fork to a named environment's latest version. Omit to inherit the source box's environment.Fork onto a different machine size: small, default or large. Omit to inherit the source box's size. Shrinking is refused if the box's data does not fit.Lifetime in seconds for the fork. Omit for 1 hour; the fork does not inherit the source Box's setting.Disable automatic stop. The fork runs until you stop it.Admins only: fork onto an exact machine provider: hetzner, cloudstack, or baremetal. Omit to inherit the source box's provider.Fork a Box from its latest snapshotSshCOMMANDCommand to run. Omit for an interactive shell.Open an SSH session into a Box, or run a command non-interactivelyCWDDIRWorking directory, relative to the Box work directory.TIMEOUTTimeout in seconds (max 600). Default: 30.DETACHRun in the background and print the process id. Output goes to a log file on the Box.PIDShow status and logs of a background process started with --detach.Command to run.Run a command in a Box over the Box API (no SSH), optionally in the backgroundPort inside the Box to expose.PUBLICReturn an ungated public URL.PRIVATEReturn a token-gated URL. This is the default.TITLEDisplay title for the hosted port.Expose a Box port on a stable HTTPS URLDesktopVNCUse VNC streaming (more stable on poor/locked-down networks).With --vnc, return a URL that does not require an access token.Open the Box desktop or browser preview URLScpRECURSIVECopy directories recursively.Source path. Use <box-id>:<path> for remote paths.DESTINATIONDestination path. Use <box-id>:<path> for remote paths.Copy files to or from a Box over scpForwardREMOTERemote port inside the Box.LOCALLocal port to bind. Defaults to the remote port.Local bind address. Defaults to 127.0.0.1.Forward a TCP port from a Box to your machineOpen the Box dashboard in a browserShow API health, account, plan, and CLI configurationDataRetentionShow or enable delete-on-stop data retentionSnapshotsBox ID. Omit to list snapshots across all your Boxes.LIMITMaximum number of snapshots to fetch per page.Fetch every page instead of stopping at the first.List filesystem snapshots taken of your BoxesBox ID, or "current"/"self", to save a named snapshot from.Name to save the snapshot under. Reuse a name to replace it.Save a Box's state under a name, or inspect/download snapshotsCheck for and install the latest CLI release for this channelCompletionsShell to generate the script for.Print a shell completion script (box IDs included) for bash, zsh, fish, or powershellPrint box ID candidates for shell completion. Used by the completion scriptsPrint ordinary snapshot ID candidates for shell completionoutLatestShow the most recent snapshot for a BoxSnapshot ID, or a Box ID / "current"/"self" for its latest snapshot.Print the file tree captured in a snapshotOUTOutput directory. Defaults to ./<snapshot-id>.Download a snapshot and reassemble it into a local directorySnapshot ID. Named snapshots still use `box snapshot rm <name>`.Permanently delete one ordinary filesystem snapshot by snapshot IDName of the named snapshot to remove.Remove a named snapshotStatusDeletion operation ID returned by a delete command.Show the current status of a deletion operationShow whether delete-on-stop data retention is enabledEnableEnable deletion of Box data after each Box stopsrenamesetsafe_for_third_partiessecretsbox_credentialsagents_credentialsset-varrm-varrm-filebranchrm-repoupgradeList your environments: default marker, latest version, live boxes per versionEnvironment name.Show one environment in full: toggles, variables, secret files, repos, versionsEnvironment name (letters, numbers, dot, dash, underscore).Create a new named environment. It starts empty with everything injected by defaultRenameCurrent environment name.New environment name.Rename an environment. Boxes stay pinned to their versionsDefaultMake an environment the default for new boxesDelete an environment. Boxes pinned to its versions keep running; new boxes can no longer use itSetSAFE_FOR_THIRD_PARTIEStrue|falseMaster switch: true = inject NOTHING of yours (like --no-env). Overrides the granular toggles.GITHUBInject your GitHub access (token, repo clones).SECRETSInject your env variables and secret files.BOX_CREDENTIALSbox-credentialsInject the in-box Box CLI credentials (account-scoped).AGENTS_CREDENTIALSagents-credentialsInject your agent credentials (Claude/Codex logins).Change what the environment injects into boxes. Mints a new version; running boxes are NOT touched until you `env upgrade`SetVarSet one environment variable. Mints a new versionRmVarVariable name.Remove one environment variable. Mints a new versionSetFileIn-box path, relative to the workspace (e.g. .env or repo/.env).LOCAL_FILERead contents from this local file instead of stdin.Write one secret file (contents from --from or stdin). Mints a new versionRmFileIn-box path of the secret file.Remove one secret file. Mints a new versionAddRepoRepository full name, e.g. owner/repo.BRANCHBase branch to clone. Default: main.Add (or re-branch) a repo in the environment. Mints a new versionRmRepoRemove a repo from the environment. Mints a new versionUpgradeRe-pin this environment's boxes to its latest version: live boxes get the new config pushed now (withheld secrets scrubbed first), stopped ones pick it up at resumecreaterotaterevokeCreateDisplay name for the key, e.g. the project that will use it.Create a new API key. The secret is shown once; store it nowInclude per-box machine keys the platform manages automatically. Default: only keys you created.List your API keys. Secrets are never shown, only prefix and last fourRotateAPI key ID. See `api-key list`.Replace an API key's secret. The old secret stops working; the new one is shown onceRevokePermanently revoke an API keythe following required argument was not provided: urlremoveURLPublic HTTPS endpoint that accepts POST requests on port 443.Optional display name.EVENTSEVENTEvent to receive: ready, error, or archived. Repeat or comma-separate. Default: all.Register an HTTPS endpoint. Its signing secret is shown onceList registered webhooks. Signing secrets are never shownWebhook ID. See `webhook list`.Replace a webhook's signing secret. The old secret stops workingRemovePermanently remove a webhook and cancel pending deliveriesswitchtargetthe following required argument was not provided: targetList the teams you belong toSwitchTARGETTeam ID or name (see `box team list`), or 'personal'.Bill new boxes to a team, or 'personal' to go back to your own account
+50744-archivedstoppingread_tilexpectedReserved
+50745-ThreadIdApiErrorTimedOutEL2NSYNCENOTUNIQELIBEXECERESTARTESTRPIPEENOTSOCKEMSGSIZEENETDOWNENOTCONNEALREADYWSTOPPED__WCLONENo anodeNulErrorTarErrorexo-openkde-openwsl-openxdg-opencinnamonTerminal-Commandhttp/1.1tls_infousernamepasswordfragmentResponseRedirecttrailersUnixTimeContinueif-matchif-rangelocationOverflowIdentityrequiredcontentsoverflowUpgradedno_proxyNO_PROXYgot_typeUnscopedBorrowedidentityDisabledAcceptedRejectedDTLSv1_0DTLSv1_2DTLSv1_3FinishedHostNameMLKEM512MLKEM768HpkeAeadKeySharefinishedexporterNoKeyLogmin_bits+
+50746-TooLargeTooSmallCHACHA20X509 CRLIpv4AddrIpv6Addrsequencea IpAddra stringset_hostCanceledShutdownInternalfd != -1SockAddrAF_INET6AF_VSOCKSOCK_RAWSOCK_RDMREADABLEWRITABLEPRIORITYRegistryreadablewritablepriorityAllocErrHTTP/0.9HTTP/1.0HTTP/1.1HTTP/2.0HTTP/3.0Conflicton_blackon_greenon_whiteCLICOLORargument
+--
+50825-stream did not contain valid UTF-8failed to convert path to url
+50826-webbrowser::commoncommand present but exited unsuccessfullyfailed to write whole buffer
+50827:command not foundnewTab.local/sharekde-open5gvfs-opengnome-openmate-opengiokfmclientStart"&"flatpakkdegnomewslx-www-browserNo valid browsers detected. You can specify one in BROWSER environment variable%spowershell.exe/cstart^^^&getdefault-web-browserinvalid default browser nameunable to determine xdg browsercontainerhttpsonly http urls supportedXDG_DATA_HOMEXDG_DATA_DIRSlinkslinks2elinksw3mewwnetrikretawqXDG_CURRENT_DESKTOPunknownDESKTOP_SESSIONKDE_SESSION_VERSIONBROWSERNo valid browser configured in BROWSER environment variable%c:%%%only default browser supportednot a valid xdg configxdg config is hidden/proc/sys/fs/binfmt_misc/WSLInteropenabledinvalid browsercmd.exexdg-settingsno default xdg browserwebbrowser::osapplicationsno valid xdg config foundxdg-open failedNot on haikuunable to determine wsl distro namepowershell.exe errorinvalid windows path/invalid command../..cmd.exepowershell.exewindows/system32/cmd.exeinvalid windows configWSL_DISTRO_NAME-NoLogo-NoProfile-NonInteractive$loc = Get-Location
+50828-Write-Output $loc.Pathwebbrowser::os::wslinvalid path-
+50829-$Signature = @"
+50830-using System;
+--
+55237-_RNvCsGCIFLUvQ2Q_3box24print_deletion_operation
+55238-_RNvCsGCIFLUvQ2Q_3box16parse_scp_box_id
+55239:_RNvCsGCIFLUvQ2Q_3box11desktop_box
+55240-_RNvCsGCIFLUvQ2Q_3box20resolve_machine_type
+55241-_RNvCsGCIFLUvQ2Q_3box14api_key_create
+55242-_RNvCsGCIFLUvQ2Q_3box9team_list
+--- hostPort
+50397-::ffff:
+50398-GETchunksfailed to spawn thread  api_urltokenbrowser_sessionchannelteamtruenullcodenamepathkindsize
+50399:[0margsinfoPOSTstoptypeforklistdata'\''Teamidleplan.sshvcpuprodexitbashfishself-chfnonehighinitfromSIZEPATHuserbox.hostCodeminsdays  fidonelostportrolejsonJSONexecbindNAMETYPEFROMTEAMInfoListStopForkExecSECSHostPORTBINDtreepullTreePullpairrepoPAIRREPOhaveneedusedstep
+50400-[KEDOMEADVNoneSomeZerodesc7
+50401-HOMEopenmatexfcehttplynxcurlfile::\\crlsDenyFullBodyInittimeIpv4Ipv6HttpZlibZstdX509BoolTimeX448OCSPNONESHA1Null or 
+50402-Ringcertocsp	
+--- noEnv
+50413-V and all of its snapshots permanently. Re-run with --yes to confirm, or use `box stop 
+50414-` to keep the data.
+50415:DELETErmnoEnvenvenvironmentmachineProvidermodelreasoningEffortinterrupt/api/box/limitslimitsyou can refer to it also as "current" instead of IDas long as you stay in this shell and it remains thelast created box in thereeventdashboardurl
+50416-usage: 
+50417-  snapshot <box-id> <name>  (or: 
+50418-% snapshot latest|tree|pull|delete|rm)
