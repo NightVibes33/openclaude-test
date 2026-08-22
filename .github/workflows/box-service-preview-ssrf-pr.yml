@@ -1,0 +1,67 @@
+name: Box service-preview destination fuzz
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fuzz exact prod guest-agent preview destination parser locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/pvf && mkdir -p /tmp/pvf/work
+          tag=agent-server-v0.0.49-ascii-prod29
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-agents-server-linux-x64" -o /tmp/pvf/agent; chmod +x /tmp/pvf/agent
+          cat >/tmp/pvf/srv.py <<'PY'
+          from http.server import BaseHTTPRequestHandler,HTTPServer
+          import threading,ssl,subprocess,tempfile,os
+          from pathlib import Path
+          class H(BaseHTTPRequestHandler):
+            label='plain'
+            def go(self):
+              n=int(self.headers.get('content-length','0') or 0); b=self.rfile.read(n) if n else b''
+              with Path('/tmp/pvf/hits.log').open('a') as f: f.write(f'{self.label}|{self.command}|{self.path}|host={self.headers.get("host","")}|auth={self.headers.get("authorization","")}|cookie={self.headers.get("cookie","")}|body={b.decode("utf8","replace")}\n')
+              out=(self.label+' OK').encode(); self.send_response(200); self.send_header('content-length',str(len(out))); self.end_headers(); self.wfile.write(out)
+            do_GET=go; do_POST=go
+            def log_message(self,*a): pass
+          def serve(addr,port,label):
+            C=type(label,(H,),{'label':label}); HTTPServer((addr,port),C).serve_forever()
+          threading.Thread(target=serve,args=('127.0.0.1',18081,'LOOP1'),daemon=True).start()
+          threading.Thread(target=serve,args=('127.0.0.2',18082,'LOOP2'),daemon=True).start()
+          threading.Event().wait()
+          PY
+          python3 /tmp/pvf/srv.py & spid=$!
+          export MACHINE_ID=box-preview-fuzz SHARED_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          export WORK_DIR=/tmp/pvf/work HOME=/tmp/pvf/work ASCII_PORT=18920 IS_SANDBOX=1 BACKEND_URL=http://127.0.0.1:9 BOX_CLI_API_URL=http://127.0.0.1:9
+          export SERVICE_PREVIEW_TOKEN='PV_TOKEN_1234567890'
+          /tmp/pvf/agent >/tmp/pvf/agent.log 2>&1 & apid=$!
+          trap 'kill $apid $spid 2>/dev/null || true' EXIT
+          for i in $(seq 1 80); do curl -s --max-time 1 http://127.0.0.1:18920/health >/dev/null 2>&1 && break; sleep .2; done
+          O=box-service-preview-destination-fuzz.txt; : >$O
+          req(){ n=$1; p=$2; shift 2; : >/tmp/pvf/body; c=$(curl -sS --path-as-is --max-time 4 -o /tmp/pvf/body -w '%{http_code}' "$@" "http://127.0.0.1:18920$p" 2>/dev/null||printf 000); printf '%-28s status=%s body=%s\n' "$n" "$c" "$(tr '\n\r' '  ' </tmp/pvf/body|head -c 400)" >>$O; }
+          base=/service-preview/PV_TOKEN_1234567890
+          req normal "$base/18081/a?x=1"
+          req header-forward "$base/18081/headers" -H 'Authorization: Basic SYNTHETIC' -H 'Cookie: session=SYNTHETIC' -H 'Host: attacker.example'
+          req port-zero "$base/0/x"
+          req port-maxplus "$base/65536/x"
+          req negative "$base/-1/x"
+          req alpha "$base/abc/x"
+          req userinfo "$base/18081@127.0.0.2:18082/escape"
+          req encoded-at "$base/18081%40127.0.0.2%3A18082/escape"
+          req encoded-slash "$base/18081%2F..%2F18082/escape"
+          req double-slash "$base//18082/escape"
+          req absolute-path "$base/18081/http://127.0.0.2:18082/escape"
+          req scheme-path "$base/http:%2F%2F127.0.0.2:18082/escape"
+          echo '=== hits ===' >>$O; cat /tmp/pvf/hits.log >>$O 2>/dev/null || true
+          echo '=== agent relevant ===' >>$O; grep -Eai 'preview|port|invalid|error' /tmp/pvf/agent.log | tail -n 300 >>$O || true
+          cat $O
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box-service-preview-destination-fuzz
+          path: box-service-preview-destination-fuzz.txt
+          if-no-files-found: error
