@@ -1,0 +1,2 @@
+Trigger marker for PR-based Box auth-boundary research workflows.
+Trusted-base harness trigger: 2026-08-21T22:53Z

@@ -1,0 +1,40 @@
+name: Box production guest network exposure
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect public production node release network controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          R=/tmp/boxnet; rm -rf "$R"; mkdir -p "$R/nm"
+          O=box-prod-network-exposure.txt
+          tag=node-manager-v0.5.0-ascii-prod1
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-node-manager-linux-x64.tar.gz" -o "$R/nm.tgz"
+          tar -xzf "$R/nm.tgz" -C "$R/nm"
+          {
+            echo "NODE_TAG=$tag"
+            echo '=== FILES ==='
+            find "$R/nm" -maxdepth 4 -type f -printf '%P\n' | sort
+            echo '=== AGENT / IPV6 PROXY ==='
+            grep -RniE -B6 -A18 'AGENT_PORT|ENABLE_AGENT_V6_PROXY|ascii-agent-v6-proxy|TCP6-LISTEN' "$R/nm" --exclude='ascii-node-manager*' 2>/dev/null || true
+            echo '=== FIREWALL / FILTERING / FORWARDING ==='
+            grep -RniE -B8 -A24 'nft|nftables|ip6tables|iptables|firewall|FORWARD|INPUT|OUTPUT|reject|drop|accept|conntrack|security.?group|allowed.?ip|allowlist|denylist|8911' "$R/nm" --exclude='ascii-node-manager*' 2>/dev/null || true
+            echo '=== BRIDGES / ROUTES / IPV6 PREFIXES ==='
+            grep -RniE -B8 -A24 'bridge|virbr|br-|ip -6|route|sysctl|forwarding|proxy_ndp|ndppd|ipv6|/80|/64|MACHINE_IP|GUEST_IP' "$R/nm" --exclude='ascii-node-manager*' 2>/dev/null || true
+            echo '=== PROVISION SCRIPT LIST ==='
+            find "$R/nm" -type f \( -name '*.sh' -o -name '*.service' -o -name '*.conf' \) -print | sort
+          } > "$O"
+          cat "$O"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box-prod-network-exposure
+          path: box-prod-network-exposure.txt
+          if-no-files-found: error

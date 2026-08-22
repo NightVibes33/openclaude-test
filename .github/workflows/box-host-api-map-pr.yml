@@ -1,0 +1,59 @@
+name: Box private-host API map
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Run production CLI against synthetic local API
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/boxmap && mkdir -p /tmp/boxmap/home
+          curl -fL 'https://ascii.dev/api/box/cli/download?platform=linux-x64&channel=ascii-prod' -o /tmp/boxmap/box
+          chmod +x /tmp/boxmap/box
+          cat >/tmp/boxmap/mock.py <<'PY'
+          from http.server import BaseHTTPRequestHandler,HTTPServer
+          import json
+          from pathlib import Path
+          class H(BaseHTTPRequestHandler):
+            def go(self):
+              n=int(self.headers.get('content-length','0') or 0); body=self.rfile.read(n) if n else b''
+              with Path('/tmp/boxmap/requests.log').open('a') as f:
+                f.write(f'{self.command} {self.path}\nAUTH={self.headers.get("authorization","")}\nBODY={body.decode("utf-8","replace")}\n---\n')
+              if self.path.endswith('/api/box/me'):
+                out={'id':'synthetic-user','email':'x@example.invalid','accountStatus':'active','billingStatus':'active','hasSubscriptions':True,'accessTier':'paid'}
+              elif '/host' in self.path:
+                out={'url':'https://token-gated.example.invalid/SYNTHETIC_ACCESS_TOKEN','accessToken':'SYNTHETIC_ACCESS_TOKEN','token':'SYNTHETIC_ACCESS_TOKEN','protectedAccess':True,'publicAccess':False}
+              elif '/boxes/' in self.path:
+                out={'id':'box-synthetic','state':'running','status':'running','machineId':'box-synthetic'}
+              else: out={'ok':True}
+              b=json.dumps(out).encode(); self.send_response(200); self.send_header('content-type','application/json'); self.send_header('content-length',str(len(b))); self.end_headers(); self.wfile.write(b)
+            do_GET=go; do_POST=go; do_PUT=go; do_DELETE=go
+            def log_message(self,*a): pass
+          HTTPServer(('127.0.0.1',19090),H).serve_forever()
+          PY
+          python3 /tmp/boxmap/mock.py >/tmp/boxmap/mock.log 2>&1 & mpid=$!; trap 'kill $mpid 2>/dev/null || true' EXIT
+          for i in $(seq 1 50); do (echo >/dev/tcp/127.0.0.1/19090) >/dev/null 2>&1 && break; sleep .1; done
+          kill -0 "$mpid"
+          export HOME=/tmp/boxmap/home BOX_API_URL=http://127.0.0.1:19090
+          O=box-host-api-map.txt; : >$O
+          {
+            echo '=== login synthetic ==='; /tmp/boxmap/box login SYNTHETIC_ACCOUNT_TOKEN --no-update 2>&1 || true
+            echo '=== host private ==='; /tmp/boxmap/box host box-synthetic 18081 --private --json --no-update 2>&1 || true
+            echo '=== host public ==='; /tmp/boxmap/box host box-synthetic 18081 --public --json --no-update 2>&1 || true
+            echo '=== requests ==='; cat /tmp/boxmap/requests.log 2>/dev/null || true
+            echo '=== mock log ==='; cat /tmp/boxmap/mock.log 2>/dev/null || true
+            echo '=== config paths ==='; find "$HOME" -type f -maxdepth 6 -print 2>/dev/null || true
+          } >$O
+          cat $O
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box-host-api-map
+          path: box-host-api-map.txt
+          if-no-files-found: error

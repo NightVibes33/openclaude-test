@@ -1,0 +1,61 @@
+name: Box production node-manager auth fuzz
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  fuzz-prod:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Run exact ascii-prod1 node-manager locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nmp && mkdir -p /tmp/nmp/tls /tmp/nmp/state /tmp/nmp/vms
+          tag=node-manager-v0.5.0-ascii-prod1
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-node-manager-linux-x64.tar.gz" -o /tmp/nmp/nm.tgz
+          tar -xzf /tmp/nmp/nm.tgz -C /tmp/nmp
+          echo '=== FILES ===' > /tmp/nmp/meta.txt; find /tmp/nmp -maxdepth 3 -type f -printf '%P %s\n' | sort >> /tmp/nmp/meta.txt
+          bin=/tmp/nmp/bin/ascii-node-manager; chmod +x "$bin"
+          echo '=== VERSION/STRINGS ===' >> /tmp/nmp/meta.txt; strings -a -n 5 "$bin" | grep -Eai -C 3 'missing signature|unauthorized|stale request|nonce|HMAC|/secret|/vms|maintenance|ownership|allowed.?ip|listen' | head -n 2500 >> /tmp/nmp/meta.txt || true
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=127.0.0.1' -keyout /tmp/nmp/tls/key.pem -out /tmp/nmp/tls/cert.pem >/dev/null 2>&1
+          export BAREMETAL_NODE_ID=node-test BAREMETAL_NODE_AGENT_BIND=127.0.0.1 BAREMETAL_NODE_AGENT_PORT=18789
+          export BAREMETAL_NODE_AGENT_HMAC_SECRET=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          export BAREMETAL_NODE_AGENT_ALLOWED_IPS='127.0.0.1/32,::1/128'
+          export BAREMETAL_NODE_AGENT_TLS_CERT=/tmp/nmp/tls/cert.pem BAREMETAL_NODE_AGENT_TLS_KEY=/tmp/nmp/tls/key.pem
+          export BAREMETAL_NODE_AGENT_REPO=/tmp/nmp BAREMETAL_OWNERSHIP_ROOT=/tmp/nmp/state VM_ROOT=/tmp/nmp/vms BAREMETAL_ABUSE_MONITOR=0
+          "$bin" >/tmp/nmp/server.log 2>&1 & echo $! >/tmp/nmp/pid
+          for i in $(seq 1 80); do curl -sk --max-time 1 https://127.0.0.1:18789/health >/dev/null 2>&1 && exit 0; kill -0 "$(cat /tmp/nmp/pid)" 2>/dev/null || break; sleep .25; done
+          cat /tmp/nmp/server.log >&2 || true; exit 1
+      - name: Fuzz unsigned production privileged routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          O=box-prod-node-manager-auth.txt
+          probe(){ n="$1"; m="$2"; p="$3"; d="${4-}"; : >/tmp/nmp/body; a=(-sk --path-as-is --max-time 3 -o /tmp/nmp/body -w '%{http_code}' -X "$m" "https://127.0.0.1:18789$p"); [ -n "$d" ]&&a+=(--data-binary "$d"); c=$(curl "${a[@]}" 2>/dev/null||printf 000); printf '%-24s %-7s %-42s status=%s body=%s\n' "$n" "$m" "$p" "$c" "$(tr '\n\r' '  ' </tmp/nmp/body|head -c 300)" >>$O; }
+          { echo '=== META ==='; cat /tmp/nmp/meta.txt; echo '=== STARTUP ==='; cat /tmp/nmp/server.log; echo '=== UNSIGNED ==='; } >$O
+          probe health GET /health
+          probe secret POST /secret '{}'
+          probe secret_query POST '/secret?x=1' '{}'
+          probe secret_pct POST '/%73ecret' '{}'
+          probe secret_double POST '//secret' '{}'
+          probe secret_dot POST '/./secret' '{}'
+          probe vms POST /vms '{}'
+          probe vms_get GET /vms
+          probe maintenance POST /maintenance '{}'
+          probe delete DELETE '/vms/box-node0-deadbeef?ownershipId=AAAAAAAA'
+          probe traversal POST '/foo/../secret' '{}'
+          probe pct_traversal POST '/foo/%2e%2e/secret' '{}'
+          probe encoded_slash POST '/x%2f..%2fsecret' '{}'
+          probe options OPTIONS /secret
+          echo '=== PARTIAL HEADERS ===' >>$O
+          for hs in 'X-Baremetal-Signature: 00' 'X-Baremetal-Timestamp: 1' 'X-Baremetal-Nonce: x'; do c=$(curl -sk --max-time 3 -o /tmp/nmp/body -w '%{http_code}' -X POST https://127.0.0.1:18789/secret -H "$hs" --data '{}' 2>/dev/null||printf 000); echo "$hs status=$c body=$(tr '\n\r' '  ' </tmp/nmp/body|head -c 250)" >>$O; done
+          cat $O
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box-prod-node-manager-auth
+          path: box-prod-node-manager-auth.txt
+          if-no-files-found: error

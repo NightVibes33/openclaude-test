@@ -1,0 +1,9 @@
+name: Box PR smoke
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo BOX_PR_WORKFLOWS_READY

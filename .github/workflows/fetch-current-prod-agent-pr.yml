@@ -1,0 +1,31 @@
+name: Fetch current public production agent
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch current public release binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-remote --tags --refs https://github.com/ariana-dot-dev/agent-server.git \
+            | awk '{print $2}' | sed 's#refs/tags/##' \
+            | grep -E '^agent-server-v[0-9].*-ascii-prod[0-9]+$' | sort -V >/tmp/tags
+          tag=$(tail -1 /tmp/tags)
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-agents-server-linux-x64" -o ascii-agents-server-linux-x64
+          chmod +x ascii-agents-server-linux-x64
+          printf '%s\n' "$tag" > release-tag.txt
+          sha256sum ascii-agents-server-linux-x64 > sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: current-public-prod-agent
+          path: |
+            ascii-agents-server-linux-x64
+            release-tag.txt
+            sha256.txt
+          if-no-files-found: error

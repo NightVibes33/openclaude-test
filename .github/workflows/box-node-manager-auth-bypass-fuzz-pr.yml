@@ -1,0 +1,85 @@
+name: Box node-manager auth fuzz PR
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run exact public node-manager locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nmf && mkdir -p /tmp/nmf/tls /tmp/nmf/state /tmp/nmf/vms
+          tag=$(curl -fsSL 'https://api.github.com/repos/ariana-dot-dev/agent-server/releases?per_page=100' | jq -r '[.[]|select(.tag_name|startswith("node-manager-v"))]|sort_by(.published_at)|last.tag_name')
+          url="https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-node-manager-linux-x64.tar.gz"
+          curl -fL "$url" -o /tmp/nmf/nm.tgz
+          tar -xzf /tmp/nmf/nm.tgz -C /tmp/nmf
+          bin=/tmp/nmf/bin/ascii-node-manager
+          chmod +x "$bin"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=127.0.0.1' -keyout /tmp/nmf/tls/key.pem -out /tmp/nmf/tls/cert.pem >/dev/null 2>&1
+          export BAREMETAL_NODE_ID=node-test
+          export BAREMETAL_NODE_AGENT_BIND=127.0.0.1
+          export BAREMETAL_NODE_AGENT_PORT=18787
+          export BAREMETAL_NODE_AGENT_HMAC_SECRET=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          export BAREMETAL_NODE_AGENT_ALLOWED_IPS='127.0.0.1/32,::1/128'
+          export BAREMETAL_NODE_AGENT_TLS_CERT=/tmp/nmf/tls/cert.pem
+          export BAREMETAL_NODE_AGENT_TLS_KEY=/tmp/nmf/tls/key.pem
+          export BAREMETAL_NODE_AGENT_REPO=/tmp/nmf
+          export BAREMETAL_OWNERSHIP_ROOT=/tmp/nmf/state
+          export VM_ROOT=/tmp/nmf/vms
+          export BAREMETAL_ABUSE_MONITOR=0
+          "$bin" >/tmp/nmf/server.log 2>&1 & echo $! >/tmp/nmf/pid
+          for i in $(seq 1 60); do curl -sk --max-time 1 https://127.0.0.1:18787/health >/dev/null 2>&1 && exit 0; kill -0 "$(cat /tmp/nmf/pid)" 2>/dev/null || break; sleep .25; done
+          cat /tmp/nmf/server.log >&2 || true
+          exit 1
+      - name: Probe auth canonicalization
+        shell: bash
+        run: |
+          set -euo pipefail
+          O=box-node-manager-auth-pr.txt
+          probe(){
+            n="$1"; m="$2"; p="$3"; d="${4-}"; : >/tmp/nmf/body
+            a=(-sk --path-as-is --max-time 3 -o /tmp/nmf/body -w '%{http_code}' -X "$m" "https://127.0.0.1:18787$p")
+            [ -n "$d" ] && a+=(--data-binary "$d")
+            c=$(curl "${a[@]}" 2>/dev/null || printf 000)
+            printf 'UNSIGNED %-22s %-7s %-38s status=%s body=%s\n' "$n" "$m" "$p" "$c" "$(tr '\n\r' '  ' </tmp/nmf/body | head -c 240)" >> "$O"
+          }
+          {
+            echo '=== startup ==='; cat /tmp/nmf/server.log || true
+            echo '=== unsigned privileged paths ==='
+          } > "$O"
+          probe secret POST /secret '{'
+          probe secret_pct POST '/%73ecret' '{'
+          probe secret_dot POST '/./secret' '{'
+          probe secret_double POST '//secret' '{'
+          probe secret_query POST '/secret?x=1' '{'
+          probe vms POST /vms '{'
+          probe vms_pct POST '/%76ms' '{'
+          probe maintenance POST /maintenance '{'
+          probe delete DELETE '/vms/box-node0-deadbeef?ownershipId=AAAAAAAA'
+          probe traversal POST '/foo/../secret' '{'
+          probe pct_traversal POST '/foo/%2e%2e/secret' '{'
+          probe encoded_slash POST '/x%2f..%2fsecret' '{'
+          probe semicolon POST '/secret;foo' '{'
+          probe trailing POST '/secret/' '{'
+          echo '=== malformed auth headers ===' >> "$O"
+          for h in \
+            'X-Baremetal-Signature: 00' \
+            'X-Baremetal-Timestamp: 1' \
+            'X-Baremetal-Nonce: x'; do
+            c=$(curl -sk --path-as-is --max-time 3 -o /tmp/nmf/body -w '%{http_code}' -X POST https://127.0.0.1:18787/secret -H "$h" --data-binary '{' 2>/dev/null || printf 000)
+            echo "HEADER=$h status=$c body=$(tr '\n\r' '  ' </tmp/nmf/body | head -c 240)" >> "$O"
+          done
+          cat "$O"
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: box-node-manager-auth-pr
+          path: box-node-manager-auth-pr.txt
+          if-no-files-found: warn
