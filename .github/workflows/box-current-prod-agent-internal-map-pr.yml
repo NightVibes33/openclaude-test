@@ -1,0 +1,37 @@
+name: Box current prod guest-agent internal relay map
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Extract internal relay and auth contexts from current ascii-prod agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/im && mkdir -p /tmp/im
+          git ls-remote --tags --refs https://github.com/ariana-dot-dev/agent-server.git | awk '{print $2}' | sed 's#refs/tags/##' | grep -E '^agent-server-v[0-9].*-ascii-prod[0-9]+$' | sort -V > /tmp/im/tags
+          tag=$(tail -1 /tmp/im/tags); echo "$tag" > /tmp/im/tag
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-agents-server-linux-x64" -o /tmp/im/agent
+          strings -a -n 4 /tmp/im/agent > /tmp/im/strings.txt
+          O=box-current-prod-internal-relay-map.txt
+          {
+            echo "TAG=$tag"; echo "SHA256=$(sha256sum /tmp/im/agent|awk '{print $1}')"
+            echo '=== internal API literal contexts ==='
+            grep -n -E -B 35 -A 70 '/api/internal/agent|GIT-HOOK|git-hook-event|ASCII_TOKEN|ASCII_API_URL' /tmp/im/strings.txt | head -n 30000 || true
+            echo '=== likely HTTP routes ==='
+            grep -E '^/[A-Za-z0-9_?&=./:%+{}<>~-]{2,100}$' /tmp/im/strings.txt | sort -u | grep -E 'hook|event|token|internal|git|credential|secret|routine|workshop|shield|report|callback|webhook|proxy|preview|auth|update|upload|execute|command|desktop|snapshot|repo|branch|logs|subscription|status|health' | head -n 10000 || true
+            echo '=== relay/fetch logging literals ==='
+            grep -Eai -B 12 -A 30 'Relaying to backend|Backend response|Bearer |authorization|fetch\(|apiUrl=set|token=set|internal/agent' /tmp/im/strings.txt | head -n 20000 || true
+          } >$O
+          cat $O
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box-current-prod-internal-relay-map
+          path: box-current-prod-internal-relay-map.txt
+          if-no-files-found: error
