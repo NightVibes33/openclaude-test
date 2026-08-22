@@ -1,0 +1,145 @@
+name: Box current prod route guard census
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Probe exact current production route guards locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          R=/tmp/boxgc; rm -rf "$R"; mkdir -p "$R/work"
+          O=box-current-prod-route-guard-census.txt
+          git ls-remote --tags --refs https://github.com/ariana-dot-dev/agent-server.git | awk '{print $2}' | sed 's#refs/tags/##' | grep -E '^agent-server-v[0-9].*-ascii-prod[0-9]+$' | sort -V > "$R/tags"
+          tag=$(tail -1 "$R/tags")
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-agents-server-linux-x64" -o "$R/agent"; chmod +x "$R/agent"
+
+          cat >"$R/backend.py" <<'PY'
+          from http.server import BaseHTTPRequestHandler,HTTPServer
+          from pathlib import Path
+          class H(BaseHTTPRequestHandler):
+            def x(self):
+              n=int(self.headers.get('content-length','0') or 0); b=self.rfile.read(n)
+              with Path('/tmp/boxgc/backend.log').open('a') as f:
+                f.write('METHOD='+self.command+' PATH='+self.path+' AUTH='+self.headers.get('authorization','')+' BODY='+b.decode('utf8','replace')+'\n')
+              out=b'{"success":true,"ok":true,"exitCode":23,"data":{}}'
+              self.send_response(200); self.send_header('content-type','application/json'); self.send_header('content-length',str(len(out))); self.end_headers(); self.wfile.write(out)
+            do_GET=x; do_POST=x; do_PUT=x; do_DELETE=x; do_PATCH=x
+            def log_message(self,*a): pass
+          HTTPServer(('127.0.0.1',19098),H).serve_forever()
+          PY
+          python3 "$R/backend.py" >"$R/backend.out" 2>&1 & bpid=$!
+          export MACHINE_ID=box-guard-census SHARED_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          export WORK_DIR="$R/work" HOME="$R/work" ASCII_PORT=18933 IS_SANDBOX=1
+          export BACKEND_URL=http://127.0.0.1:19098 ASCII_API_URL=http://127.0.0.1:19098 BOX_CLI_API_URL=http://127.0.0.1:19098 ASCII_TOKEN=GUARD_CENSUS_TOKEN_MARKER NO_PROXY=127.0.0.1,localhost
+          "$R/agent" >"$R/agent.log" 2>&1 & apid=$!
+          trap 'kill "$apid" "$bpid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 100); do curl -sS --max-time 1 http://127.0.0.1:18933/health >/dev/null 2>&1 && break; sleep .15; done
+
+          cat >"$R/routes" <<'EOF'
+          /start
+          /claude-state
+          /conversations
+          /prompt
+          /interrupt
+          /reset
+          /export-state
+          /restore-state
+          /switch-conversation
+          /git-state
+          /git-status
+          /git-reset
+          /git-push
+          /provider-usage
+          /sshkey
+          /upload-project-chunk
+          /upload-project-finalize
+          /ports
+          /port-visibility
+          /generate-branch-name
+          /generate-task-summary
+          /rename-branch-from-prompt
+          /update-credentials
+          /update-secrets
+          /update-environment
+          /prepare-box-tools
+          /update-github-token
+          /generate-ssh-keypair
+          /authorize-ssh-key
+          /deploy-ssh-identity
+          /report-routine-event
+          /poll-routine-events
+          /git-hook-event
+          /poll-context-events
+          /execute-routines
+          /stop-routine
+          /write-routine-logs
+          /restore-snapshot
+          /create-incremental-snapshot
+          /snapshot-archive-hold
+          /snapshot-noop-probe
+          /capabilities
+          /restore-incremental-snapshot
+          /desktop
+          /desktop-vnc
+          /screenshot
+          /host-firewall
+          /update-one-token
+          /update-backend-url
+          /ralph-mode-setup
+          /ralph-mode-check-lock
+          /clone-repo
+          /remove-repo
+          /update-repo-branch
+          /receive-merge-files
+          /apply-merge-diffs
+          /logs
+          /box-direct
+          /workshop
+          /render-report
+          /render-figures
+          /shield-check
+          /subscription
+          /service-preview
+          EOF
+
+          { echo "AGENT_TAG=$tag"; echo "AGENT_SHA256=$(sha256sum "$R/agent"|awk '{print $1}')"; echo '=== ROOT GUARD CENSUS ==='; } > "$O"
+          while IFS= read -r p; do
+            [ -n "$p" ] || continue
+            for method in GET POST; do
+              : >"$R/body"
+              code=$(curl --noproxy '*' -sS --max-time 2 -o "$R/body" -w '%{http_code}' -X "$method" -H 'content-type: application/json' --data-binary '{}' "http://127.0.0.1:18933$p" 2>/dev/null || printf 000)
+              body=$(tr '\r\n' '  ' <"$R/body" | head -c 300)
+              printf '%-4s %-32s status=%s body=%s\n' "$method" "$p" "$code" "$body" >> "$O"
+            done
+          done < "$R/routes"
+
+          echo '=== TARGETED ROUTE-SHAPED PLAINTEXT PROBES ===' >> "$O"
+          probe(){ n="$1"; path="$2"; data="$3"; : >"$R/body"; c=$(curl --noproxy '*' -sS --max-time 4 -o "$R/body" -w '%{http_code}' -X POST -H 'content-type: application/json' --data-binary "$data" "http://127.0.0.1:18933$path" 2>/dev/null || printf 000); printf '%s status=%s body=%s\n' "$n" "$c" "$(tr '\r\n' '  ' <"$R/body" | head -c 500)" >> "$O"; }
+          probe git_hook /git-hook-event '{"hookType":"pre_commit","repoPath":"GUARD_CENSUS_PATH","branch":"x","stagedFiles":["x"]}'
+          probe update_backend /update-backend-url '{"backendUrl":"http://127.0.0.1:19098"}'
+          probe update_token /update-one-token '{"oneToken":"ATTACKER_TOKEN"}'
+          probe port_visibility /port-visibility '{"port":18080,"public":true}'
+          probe host_firewall /host-firewall '{"port":18080,"public":true}'
+          probe routine_event /report-routine-event '{"routineId":"x","event":"done","data":{"marker":"x"}}'
+          probe stop_routine /stop-routine '{"routineId":"x"}'
+          probe write_routine_logs /write-routine-logs '{"routineId":"x","logs":"GUARD_CENSUS"}'
+          probe clone_repo /clone-repo '{"url":"https://example.invalid/repo.git","dir":"x"}'
+          probe remove_repo /remove-repo '{"dir":"GUARD_CENSUS"}'
+          probe subscription /subscription '{"action":"status"}'
+
+          echo '=== BACKEND RECEIPTS ===' >> "$O"; cat "$R/backend.log" >> "$O" 2>/dev/null || true
+          echo '=== ROUTE-SPECIFIC / ERROR LOG SIGNALS ===' >> "$O"
+          grep -Eai 'git-hook|invalid request|decrypt|auth|routine|backend|token|firewall|port|clone|remove|subscription|error' "$R/agent.log" | tail -n 600 >> "$O" || true
+          cat "$O"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box-current-prod-route-guard-census
+          path: box-current-prod-route-guard-census.txt
+          if-no-files-found: error
