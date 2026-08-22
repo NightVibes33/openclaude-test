@@ -1,0 +1,88 @@
+name: Box guest-agent route auth audit
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  route-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run exact public guest-agent against synthetic local backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/gar && mkdir -p /tmp/gar/work
+          tag=agent-server-v0.0.49-ascii-prod29
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-agents-server-linux-x64" -o /tmp/gar/agent
+          chmod +x /tmp/gar/agent
+
+          cat >/tmp/gar/mock.py <<'PY'
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+          from pathlib import Path
+          class H(BaseHTTPRequestHandler):
+              def _go(self):
+                  n=int(self.headers.get('content-length','0') or 0)
+                  body=self.rfile.read(n) if n else b''
+                  with Path('/tmp/gar/mock.log').open('a') as f:
+                      f.write('METHOD='+self.command+' PATH='+self.path+'\n')
+                      f.write('AUTH='+self.headers.get('authorization','')+'\n')
+                      f.write('BODY='+body.decode('utf-8','replace')+'\n---\n')
+                  out=b'{"exitCode":17,"ok":true}'
+                  self.send_response(200); self.send_header('content-type','application/json'); self.send_header('content-length',str(len(out))); self.end_headers(); self.wfile.write(out)
+              do_POST=_go
+              do_GET=_go
+              def log_message(self,*a): pass
+          HTTPServer(('127.0.0.1',19080),H).serve_forever()
+          PY
+          python3 /tmp/gar/mock.py >/tmp/gar/mock-server.log 2>&1 & echo $! >/tmp/gar/mock.pid
+
+          export MACHINE_ID=box-node-test-routeaudit
+          export SHARED_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          export WORK_DIR=/tmp/gar/work ASCII_PORT=18912 IS_SANDBOX=1 HOME=/tmp/gar/work
+          export ASCII_API_URL=http://127.0.0.1:19080
+          export ASCII_TOKEN='aaa.eyJhZ2VudElkIjoic3ludGhldGljLWFnZW50In0.bbb'
+          export BACKEND_URL=http://127.0.0.1:19080 BOX_CLI_API_URL=http://127.0.0.1:19080
+          /tmp/gar/agent >/tmp/gar/server.log 2>&1 & echo $! >/tmp/gar/pid
+          for i in $(seq 1 80); do curl -sS --max-time 1 http://127.0.0.1:18912/health >/dev/null 2>&1 && break; kill -0 "$(cat /tmp/gar/pid)" 2>/dev/null || break; sleep .25; done
+
+          O=box-guest-agent-route-audit.txt
+          echo "TAG=$tag" > "$O"
+          echo "SHA256=$(sha256sum /tmp/gar/agent|awk '{print $1}')" >> "$O"
+          probe(){ n="$1"; m="$2"; p="$3"; d="${4-}"; : >/tmp/gar/body; a=(-sS --path-as-is --max-time 4 -o /tmp/gar/body -w '%{http_code}' -X "$m" "http://127.0.0.1:18912$p"); [ -n "$d" ]&&a+=(-H 'Content-Type: application/json' --data-binary "$d"); c=$(curl "${a[@]}" 2>/dev/null||printf 000); printf 'PROBE %-34s %-6s %-46s status=%s body=%s\n' "$n" "$m" "$p" "$c" "$(tr '\n\r' '  ' </tmp/gar/body|head -c 360)" >> "$O"; }
+
+          routes=(
+            /start /claude-state /conversations /prompt /interrupt /reset /export-state /restore-state /switch-conversation
+            /git-state /git-status /git-reset /git-push /git-history /provider-usage /sshkey /upload-project-chunk /upload-project-finalize
+            /ports /port-visibility /generate-branch-name /generate-task-summary /rename-branch-from-prompt /update-credentials /update-secrets
+            /update-environment /prepare-box-tools /update-github-token /generate-ssh-keypair /authorize-ssh-key /deploy-ssh-identity
+            /report-routine-event /poll-routine-events /poll-context-events /execute-routines /stop-routine /write-routine-logs
+            /restore-snapshot /create-incremental-snapshot /restore-incremental-snapshot /desktop /desktop-vnc /screenshot
+            /update-one-token /update-backend-url /ralph-mode-setup /ralph-mode-check-lock /clone-repo /remove-repo /update-repo-branch
+            /receive-merge-files /apply-merge-diffs /logs /box-direct /render-report /list-skills /render-figures /shield-check /subscription
+            /spokesperson/cycle /spokesperson/interrupt /spokesperson/switch-conversation
+          )
+          for p in "${routes[@]}"; do probe "plain-${p//\//_}" POST "$p" '{}'; done
+
+          probe git-hook-event-missing-auth POST /git-hook-event '{"hookType":"pre_commit","repoPath":"/tmp/SYNTHETIC-CALLER-PATH","branch":"audit-canary","stagedFiles":["CANARY.txt"]}'
+          probe spokesperson-cli-output POST /spokesperson/cli-output '{"kind":"say","content":"UNAUTH_ROUTE_AUDIT_CANARY"}'
+          probe workshop-system-logs GET /workshop/logs/system
+          probe workshop-script-logs GET /workshop/logs/script
+          probe service-preview-invalid GET /service-preview/not-a-valid-token/19080
+          probe service-preview-shared-key GET /service-preview/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/19080
+          probe service-preview-machine-id GET /service-preview/box-node-test-routeaudit/19080
+          probe service-preview-ascii-token GET '/service-preview/aaa.eyJhZ2VudElkIjoic3ludGhldGljLWFnZW50In0.bbb/19080'
+
+          echo '=== MOCK BACKEND RECEIVED ===' >> "$O"
+          cat /tmp/gar/mock.log >> "$O" 2>/dev/null || true
+          echo '=== RELEVANT SERVER LOG ===' >> "$O"
+          grep -Eai 'GIT-HOOK|spokesperson|service.preview|Invalid data|DECRYPT|Error' /tmp/gar/server.log | tail -n 500 >> "$O" || true
+          cat "$O"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box-guest-agent-route-audit
+          path: box-guest-agent-route-audit.txt
+          if-no-files-found: error
