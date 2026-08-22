@@ -1,0 +1,30 @@
+name: Fetch public production node scripts
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch public production release scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=node-manager-v0.5.0-ascii-prod1
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-node-manager-linux-x64.tar.gz" -o nm.tgz
+          mkdir nm
+          tar -xzf nm.tgz -C nm
+          printf '%s\n' "$tag" > nm/release-tag.txt
+          sha256sum nm.tgz > nm/archive-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-prod-node-scripts
+          path: |
+            nm/bare-metal-node/**
+            nm/release-tag.txt
+            nm/archive-sha256.txt
+          include-hidden-files: true
+          if-no-files-found: error
