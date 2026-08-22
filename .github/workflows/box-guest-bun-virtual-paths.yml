@@ -1,0 +1,55 @@
+name: Box guest Bun virtual-path probe
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe exact production guest binary locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/bunprobe && mkdir -p /tmp/bunprobe/work
+          tag=agent-server-v0.0.49-ascii-prod29
+          curl -fL "https://github.com/ariana-dot-dev/agent-server/releases/download/$tag/ascii-agents-server-linux-x64" -o /tmp/bunprobe/agent
+          chmod +x /tmp/bunprobe/agent
+          export MACHINE_ID=box-node-bunprobe
+          export SHARED_KEY=BUNPROBE_SHARED_KEY_CANARY_0123456789abcdef0123456789abcdef
+          export ASCII_TOKEN=BUNPROBE_ASCII_TOKEN_CANARY
+          export ASCII_API_URL=http://127.0.0.1:9 BACKEND_URL=http://127.0.0.1:9 BOX_CLI_API_URL=http://127.0.0.1:9
+          export WORK_DIR=/tmp/bunprobe/work HOME=/tmp/bunprobe/work ASCII_PORT=18913 IS_SANDBOX=1
+          printf 'BUNPROBE_FILE_CANARY\n' >/tmp/bunprobe/canary.txt
+          /tmp/bunprobe/agent >/tmp/bunprobe/server.log 2>&1 & pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 80); do curl -sS --max-time 1 http://127.0.0.1:18913/health >/dev/null 2>&1 && break; sleep .25; done
+          O=box-guest-bun-virtual-paths.txt
+          : > "$O"
+          probe(){
+            p="$1"; : >/tmp/bunprobe/body
+            c=$(curl -sS --path-as-is --max-time 3 -o /tmp/bunprobe/body -w '%{http_code}' "http://127.0.0.1:18913$p" 2>/dev/null || printf 000)
+            printf '%-58s status=%s ct=%s bytes=%s body=%s\n' "$p" "$c" "$(file -b --mime-type /tmp/bunprobe/body 2>/dev/null||true)" "$(wc -c </tmp/bunprobe/body)" "$(tr '\n\r' '  ' </tmp/bunprobe/body | head -c 500)" >> "$O"
+          }
+          paths=(
+            '/bun:info' '/bun:info/' '/bun:version' '/bun:env' '/bun:main' '/bun:manifest'
+            '/bun:internal' '/bun:sqlite' '/bun:ffi' '/bun:jsc' '/bun:test'
+            '/$bunfs/root/etc/passwd' '/%24bunfs/root/etc/passwd' '/$bunfs/root/proc/self/environ'
+            '/$bunfs/root/tmp/bunprobe/canary.txt' '/%24bunfs/root/tmp/bunprobe/canary.txt'
+            '/bunfs/root/tmp/bunprobe/canary.txt' '/file:///tmp/bunprobe/canary.txt'
+            '/bun:info?path=/tmp/bunprobe/canary.txt' '/bun:info?file=/tmp/bunprobe/canary.txt'
+            '/bun:info?path=/proc/self/environ' '/bun:info?file=/proc/self/environ'
+          )
+          for p in "${paths[@]}"; do probe "$p"; done
+          echo '=== CANARY SEARCH ===' >> "$O"
+          grep -aE 'BUNPROBE_(SHARED_KEY|ASCII_TOKEN|FILE)_CANARY' "$O" && echo 'CANARY_LEAK=YES' >> "$O" || echo 'CANARY_LEAK=NO' >> "$O"
+          echo '=== server tail ===' >> "$O"; tail -n 150 /tmp/bunprobe/server.log >> "$O" || true
+          cat "$O"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box-guest-bun-virtual-paths
+          path: box-guest-bun-virtual-paths.txt
+          if-no-files-found: warn
