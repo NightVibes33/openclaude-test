@@ -106,6 +106,57 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             build | tee xcodebuild.log
 
+      - name: Smoke-test app launch in iOS 27 Simulator
+        working-directory: AegisBlock
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project AegisBlock.xcodeproj \
+            -scheme AegisBlock \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath DerivedDataSim \
+            IPHONEOS_DEPLOYMENT_TARGET=27.0 \
+            build >/tmp/aegis-sim-build.log
+
+          UDID="$(python3 - <<'PY'
+          import json, subprocess
+          data=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          for runtime, devices in data.get('devices', {}).items():
+              if 'iOS-27' not in runtime:
+                  continue
+              for device in devices:
+                  if device.get('isAvailable'):
+                      print(device['udid'])
+                      raise SystemExit
+          raise SystemExit('No available iOS 27 simulator')
+          PY
+          )"
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$UDID" -b
+          APP="DerivedDataSim/Build/Products/Debug-iphonesimulator/AegisBlock.app"
+          test -f "$APP/Info.plist"
+          xcrun simctl install "$UDID" "$APP"
+
+          set +e
+          xcrun simctl launch --console "$UDID" com.nightvibes33.aegisblock >/tmp/aegis-launch.log 2>&1 &
+          LAUNCH_PID=$!
+          sleep 6
+          if kill -0 "$LAUNCH_PID" 2>/dev/null; then
+            kill "$LAUNCH_PID" 2>/dev/null || true
+            xcrun simctl terminate "$UDID" com.nightvibes33.aegisblock 2>/dev/null || true
+            set -e
+            echo "AegisBlock remained alive past launch smoke window."
+          else
+            wait "$LAUNCH_PID"
+            status=$?
+            set -e
+            cat /tmp/aegis-launch.log || true
+            echo "AegisBlock exited during launch smoke test (status $status)."
+            exit 1
+          fi
+
       - name: Package unsigned IPA
         working-directory: AegisBlock
         run: |
