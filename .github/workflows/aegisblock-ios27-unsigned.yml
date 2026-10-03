@@ -114,13 +114,13 @@ jobs:
             test -f "$plist"
             /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$plist"
             test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$plist")" = "XPC!"
-            name="$((/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$plist") 2>/dev/null || true)"
+            name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$plist" 2>/dev/null || true)"
             test -n "$name"
-            executable="$((/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist") 2>/dev/null || true)"
+            executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist" 2>/dev/null || true)"
             test -n "$executable"
-            identifier="$((/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist") 2>/dev/null || true)"
+            identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist" 2>/dev/null || true)"
             test -n "$identifier"
-            version="$((/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist") 2>/dev/null || true)"
+            version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist" 2>/dev/null || true)"
             test -n "$version"
           done
           test "$ext_count" -eq 8
