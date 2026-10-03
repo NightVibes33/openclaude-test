@@ -49,6 +49,10 @@ jobs:
           t = q.read_text()
           t = t.replace("final class PacketTunnelProvider: NEPacketTunnelProvider {", "final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {")
           q.write_text(t)
+          q = Path("Packages/AegisCore/Sources/AegisCore/SharedSettings.swift")
+          t = q.read_text()
+          t = t.replace("public struct UpstreamConfig: Codable, Sendable, Equatable, Identifiable {", "public struct UpstreamConfig: Codable, Sendable, Hashable, Identifiable {")
+          q.write_text(t)
           PY
           grep -n "27.0" project.yml
 
