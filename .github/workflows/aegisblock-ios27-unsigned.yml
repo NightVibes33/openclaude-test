@@ -39,6 +39,12 @@ jobs:
           s = s.replace('iOS: "18.0"', 'iOS: "27.0"')
           s = s.replace('IPHONEOS_DEPLOYMENT_TARGET: "18.0"', 'IPHONEOS_DEPLOYMENT_TARGET: "27.0"')
           p.write_text(s)
+          for rel in ["App/ProtectionIntents.swift", "Widgets/AegisWidgets.swift"]:
+              q = Path(rel)
+              t = q.read_text()
+              t = t.replace("static var title: LocalizedStringResource =", "static let title: LocalizedStringResource =")
+              t = t.replace("static var description = IntentDescription", "static let description = IntentDescription")
+              q.write_text(t)
           PY
           grep -n "27.0" project.yml
 
