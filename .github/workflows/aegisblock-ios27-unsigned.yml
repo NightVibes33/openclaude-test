@@ -45,6 +45,10 @@ jobs:
               t = t.replace("static var title: LocalizedStringResource =", "static let title: LocalizedStringResource =")
               t = t.replace("static var description = IntentDescription", "static let description = IntentDescription")
               q.write_text(t)
+          q = Path("PacketTunnel/PacketTunnelProvider.swift")
+          t = q.read_text()
+          t = t.replace("final class PacketTunnelProvider: NEPacketTunnelProvider {", "final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {")
+          q.write_text(t)
           PY
           grep -n "27.0" project.yml
 
