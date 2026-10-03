@@ -1,0 +1,99 @@
+name: AegisBlock iOS 27 Unsigned IPA
+
+on:
+  push:
+    branches:
+      - aegisblock-ios27-unsigned
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify macOS 27 and Xcode 27
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Restore AegisBlock source
+        run: |
+          base64 --decode AegisBuildPayload.b64 > AegisBlock-clean.tar.xz
+          echo "7be0b4f7fdc37973430c43571c2e107aaf7dccb3e6eb29414a2fb33c33065c04  AegisBlock-clean.tar.xz" | shasum -a 256 -c -
+          tar -xJf AegisBlock-clean.tar.xz
+          test -f AegisBlock/project.yml
+
+      - name: Target iOS 27
+        working-directory: AegisBlock
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("project.yml")
+          s = p.read_text()
+          s = s.replace('iOS: "18.0"', 'iOS: "27.0"')
+          s = s.replace('IPHONEOS_DEPLOYMENT_TARGET: "18.0"', 'IPHONEOS_DEPLOYMENT_TARGET: "27.0"')
+          p.write_text(s)
+          PY
+          grep -n "27.0" project.yml
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: AegisBlock
+        run: xcodegen generate
+
+      - name: Build unsigned iOS 27 device app
+        working-directory: AegisBlock
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project AegisBlock.xcodeproj \
+            -scheme AegisBlock \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath DerivedData \
+            IPHONEOS_DEPLOYMENT_TARGET=27.0 \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build | tee xcodebuild.log
+
+      - name: Package unsigned IPA
+        working-directory: AegisBlock
+        run: |
+          set -euo pipefail
+          APP="DerivedData/Build/Products/Release-iphoneos/AegisBlock.app"
+          test -f "$APP/Info.plist"
+          rm -rf Payload AegisBlock-iOS27-unsigned.ipa
+          mkdir Payload
+          cp -R "$APP" Payload/AegisBlock.app
+          find Payload -name _CodeSignature -type d -prune -exec rm -rf {} + || true
+          find Payload -name embedded.mobileprovision -type f -delete || true
+          /usr/bin/zip -qry AegisBlock-iOS27-unsigned.ipa Payload
+          unzip -t AegisBlock-iOS27-unsigned.ipa
+          shasum -a 256 AegisBlock-iOS27-unsigned.ipa
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' Payload/AegisBlock.app/Info.plist || true
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AegisBlock-iOS27-unsigned
+          path: AegisBlock/AegisBlock-iOS27-unsigned.ipa
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AegisBlock-iOS27-build-log
+          path: AegisBlock/xcodebuild.log
+          if-no-files-found: ignore
