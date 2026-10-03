@@ -25,7 +25,7 @@ jobs:
       - name: Restore AegisBlock source
         run: |
           base64 -D -i AegisBuildPayload.b64 -o AegisBlock-clean.tar.xz
-          echo "5d02e09fc3d86b7bfcc3ac61e9286a0a3cfc7fa552f48a65fdd0f3f4a813a9e2  AegisBlock-clean.tar.xz" | shasum -a 256 -c -
+          echo "193f2825a181c04ba34dff007a4f47e24b394bd2e549253d64676d0e478e9cf2  AegisBlock-clean.tar.xz" | shasum -a 256 -c -
           tar -xJf AegisBlock-clean.tar.xz
           test -f AegisBlock/project.yml
 
