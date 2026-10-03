@@ -74,6 +74,14 @@ jobs:
           PY
           grep -n "27.0" project.yml
 
+      - name: Test launch identity and core
+        working-directory: AegisBlock
+        run: |
+          test -f Packages/AegisCore/Sources/AegisCore/RuntimeIdentity.swift
+          ! grep -R 'AppGroupPaths(groupID: appGroupID)!' App Packages/AegisCore/Sources/AegisCore
+          ! grep -R 'SharedSettings(groupID: appGroupID)!' App Packages/AegisCore/Sources/AegisCore
+          swift test --package-path Packages/AegisCore
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
