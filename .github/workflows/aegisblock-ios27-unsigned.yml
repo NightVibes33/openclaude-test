@@ -85,6 +85,30 @@ jobs:
           set -euo pipefail
           APP="DerivedData/Build/Products/Release-iphoneos/AegisBlock.app"
           test -f "$APP/Info.plist"
+
+          # Installability gate: every embedded app extension must retain NSExtension.
+          ext_count=0
+          for ext in "$APP"/PlugIns/*.appex; do
+            test -d "$ext"
+            ext_count=$((ext_count + 1))
+            plist="$ext/Info.plist"
+            test -f "$plist"
+            /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$plist"
+            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$plist")" = "XPC!"
+          done
+          test "$ext_count" -eq 8
+
+          # Safari shard metadata must survive XcodeGen and Xcode processing.
+          for i in 1 2 3 4 5; do
+            plist="$APP/PlugIns/AegisBlocker$i.appex/Info.plist"
+            test "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$plist")" = "com.apple.Safari.content-blocker"
+            test "$(/usr/libexec/PlistBuddy -c 'Print :RuleShardIndex' "$plist")" = "$i"
+          done
+
+          # Main-app custom metadata must also survive.
+          /usr/libexec/PlistBuddy -c 'Print :BGTaskSchedulerPermittedIdentifiers:0' "$APP/Info.plist" >/dev/null
+          /usr/libexec/PlistBuddy -c 'Print :TunnelBundleID' "$APP/Info.plist" >/dev/null
+
           rm -rf Payload AegisBlock-iOS27-unsigned.ipa
           mkdir Payload
           cp -R "$APP" Payload/AegisBlock.app
