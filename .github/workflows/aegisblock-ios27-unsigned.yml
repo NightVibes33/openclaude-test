@@ -52,6 +52,25 @@ jobs:
           t = q.read_text()
           t = t.replace("public struct UpstreamConfig: Codable, Sendable, Equatable, Identifiable {", "public struct UpstreamConfig: Codable, Sendable, Hashable, Identifiable {")
           q.write_text(t)
+
+          import plistlib
+          extension_plists = [
+              "Config/Tunnel-Info.plist",
+              "Config/Blocker1-Info.plist",
+              "Config/Blocker2-Info.plist",
+              "Config/Blocker3-Info.plist",
+              "Config/Blocker4-Info.plist",
+              "Config/Blocker5-Info.plist",
+              "Config/Advanced-Info.plist",
+              "Config/Widgets-Info.plist",
+          ]
+          for rel in extension_plists:
+              p = Path(rel)
+              with p.open("rb") as fh:
+                  plist = plistlib.load(fh)
+              plist["CFBundleName"] = "$(PRODUCT_NAME)"
+              with p.open("wb") as fh:
+                  plistlib.dump(plist, fh, fmt=plistlib.FMT_XML, sort_keys=False)
           PY
           grep -n "27.0" project.yml
 
@@ -95,6 +114,14 @@ jobs:
             test -f "$plist"
             /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$plist"
             test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundlePackageType' "$plist")" = "XPC!"
+            name="$((/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$plist") 2>/dev/null || true)"
+            test -n "$name"
+            executable="$((/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist") 2>/dev/null || true)"
+            test -n "$executable"
+            identifier="$((/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist") 2>/dev/null || true)"
+            test -n "$identifier"
+            version="$((/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$plist") 2>/dev/null || true)"
+            test -n "$version"
           done
           test "$ext_count" -eq 8
 
