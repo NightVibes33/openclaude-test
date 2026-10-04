@@ -162,16 +162,12 @@ replace_text(settings, [
 # SideStore-safe runtime identity and App Group resolution.
 group_identifier = ROOT / "wBlockCoreService/GroupIdentifier.swift"
 group_identifier.write_text(r'''import Foundation
-#if os(macOS)
-import Security
-#endif
 
-/// Runtime bundle identity used by the app and all embedded extensions.
+/// Runtime identity for Nullex and its embedded Safari extensions.
 ///
-/// Sideloading tools can rewrite a bundle family, for example:
-/// com.nightvibes33.nullex -> com.nightvibes33.nullex.<token>
-/// and then append each extension suffix.  Nullex resolves the containing app
-/// family at runtime so Safari extension IDs and the shared App Group stay in sync.
+/// SideStore can rewrite bundle identifiers and provisioning entitlements
+/// independently.  Never infer the active App Group from a rewritten bundle
+/// identifier when a signed provisioning profile tells us the exact value.
 public enum RuntimeBundleIdentity {
     public static let baseBundleIdentifier = "com.nightvibes33.nullex"
     public static let baseGroupIdentifier = "group.com.nightvibes33.nullex"
@@ -187,22 +183,18 @@ public enum RuntimeBundleIdentity {
         guard let bundleIdentifier, !bundleIdentifier.isEmpty else {
             return baseBundleIdentifier
         }
-
         let components = bundleIdentifier.split(separator: ".").map(String.init)
-        guard components.count > 1 else { return bundleIdentifier }
-
-        if let last = components.last, knownExtensionSuffixes.contains(last) {
-            return components.dropLast().joined(separator: ".")
+        guard let last = components.last, knownExtensionSuffixes.contains(last) else {
+            return bundleIdentifier
         }
-
-        return bundleIdentifier
+        return components.dropLast().joined(separator: ".")
     }
 
     public static func extensionBundleIdentifier(
         _ suffix: String,
         from bundleIdentifier: String? = Bundle.main.bundleIdentifier
     ) -> String {
-        "\(containingAppBundleIdentifier(from: bundleIdentifier)).\(suffix)"
+        "\\(containingAppBundleIdentifier(from: bundleIdentifier)).\\(suffix)"
     }
 
     public static func isContainingApp(
@@ -212,91 +204,137 @@ public enum RuntimeBundleIdentity {
         return bundleIdentifier == containingAppBundleIdentifier(from: bundleIdentifier)
     }
 
-    static func groupCandidates(
+    static func inferredGroupCandidates(
         from bundleIdentifier: String? = Bundle.main.bundleIdentifier
     ) -> [String] {
         let family = containingAppBundleIdentifier(from: bundleIdentifier)
-        var candidates = [
-            "group.\(family)",
-            baseGroupIdentifier,
-        ]
-
-        // Some signers preserve the base App Group even after rewriting bundle IDs.
-        if family.hasPrefix(baseBundleIdentifier + ".") {
-            candidates.append(baseGroupIdentifier)
-        }
-
         var seen = Set<String>()
-        return candidates.filter { seen.insert($0).inserted }
+        return ["group.\\(family)", baseGroupIdentifier]
+            .filter { seen.insert($0).inserted }
     }
 }
 
-/// GroupIdentifier provides access to the shared App Group container.
+/// Resolves the *signed* App Group rather than guessing it from CFBundleIdentifier.
+/// This is critical for SideStore/AltStore-style resigning.
 public final class GroupIdentifier {
     public static let shared = GroupIdentifier()
     public let value: String
+    public let containerURL: URL?
 
     private init() {
-        #if os(macOS)
-        value = Self.resolvedMacOSGroupIdentifier()
-        #else
-        value = Self.resolvedMobileGroupIdentifier()
-        #endif
+        let resolved = Self.resolve()
+        value = resolved.identifier
+        containerURL = resolved.url
     }
 
-    #if !os(macOS)
-    private static func resolvedMobileGroupIdentifier() -> String {
-        for candidate in RuntimeBundleIdentity.groupCandidates() {
-            if FileManager.default.containerURL(
+    private static func resolve() -> (identifier: String, url: URL?) {
+        let fileManager = FileManager.default
+
+        // SideStore embeds the provisioning profile it actually signed with.
+        // Its Entitlements dictionary is the source of truth for App Groups.
+        for candidate in provisioningProfileApplicationGroups() {
+            if let url = fileManager.containerURL(
                 forSecurityApplicationGroupIdentifier: candidate
-            ) != nil {
-                return candidate
+            ) {
+                return (candidate, url)
             }
         }
-        return RuntimeBundleIdentity.baseGroupIdentifier
-    }
-    #endif
 
-    #if os(macOS)
-    private static func resolvedMacOSGroupIdentifier() -> String {
-        if let identifier = teamPrefixedApplicationGroupFromSigningEntitlements() {
-            return identifier
+        // Xcode/simulator and signers that preserve the original group.
+        for candidate in RuntimeBundleIdentity.inferredGroupCandidates() {
+            if let url = fileManager.containerURL(
+                forSecurityApplicationGroupIdentifier: candidate
+            ) {
+                return (candidate, url)
+            }
         }
 
-        if let prefix = Bundle.main.infoDictionary?["AppIdentifierPrefix"] as? String,
-           let identifier = applicationGroupIdentifier(withAppIdentifierPrefix: prefix) {
-            return identifier
-        }
-
-        return RuntimeBundleIdentity.baseGroupIdentifier
+        // Keep a stable identifier for diagnostics, but callers must use
+        // containerURL / resolvedContainerURL and handle an unavailable group.
+        return (RuntimeBundleIdentity.baseGroupIdentifier, nil)
     }
 
-    private static func applicationGroupIdentifier(withAppIdentifierPrefix prefix: String) -> String? {
-        guard !prefix.isEmpty, !prefix.contains("$(") else { return nil }
-        if prefix.hasSuffix(".") {
-            return "\(prefix)\(RuntimeBundleIdentity.baseGroupIdentifier)"
-        }
-        return "\(prefix).\(RuntimeBundleIdentity.baseGroupIdentifier)"
+    public static func resolvedContainerURL() -> URL? {
+        shared.containerURL
     }
 
-    private static func teamPrefixedApplicationGroupFromSigningEntitlements() -> String? {
-        guard let task = SecTaskCreateFromSelf(kCFAllocatorDefault),
-              let entitlement = SecTaskCopyValueForEntitlement(
-                task,
-                "com.apple.security.application-groups" as CFString,
-                nil
-              ),
-              let applicationGroups = entitlement as? [String]
+    private static func provisioningProfileApplicationGroups() -> [String] {
+        guard let profileURL = Bundle.main.url(
+            forResource: "embedded",
+            withExtension: "mobileprovision"
+        ),
+        let data = try? Data(contentsOf: profileURL)
         else {
-            return nil
+            return []
         }
 
-        let suffix = ".\(RuntimeBundleIdentity.baseGroupIdentifier)"
-        return applicationGroups.first { $0.hasSuffix(suffix) }
+        let open = Data("<plist".utf8)
+        let close = Data("</plist>".utf8)
+        guard let start = data.range(of: open)?.lowerBound,
+              let closeRange = data.range(
+                of: close,
+                options: [],
+                in: start..<data.endIndex
+              )
+        else {
+            return []
+        }
+
+        let end = closeRange.upperBound
+        let plistData = data.subdata(in: start..<end)
+        guard let root = try? PropertyListSerialization.propertyList(
+            from: plistData,
+            options: [],
+            format: nil
+        ) as? [String: Any],
+        let entitlements = root["Entitlements"] as? [String: Any],
+        let groups = entitlements["com.apple.security.application-groups"] as? [String]
+        else {
+            return []
+        }
+
+        return groups.filter { !$0.isEmpty }
     }
-    #endif
 }
 ''', encoding="utf-8")
+
+
+# All host-side file I/O must use the exact signed App Group resolved above.
+replace_text(ROOT / "wBlock/FilterListLoader.swift", [
+    ('''    func getSharedContainerURL() -> URL? {
+        FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: GroupIdentifier.shared.value)
+    }''',
+     '''    func getSharedContainerURL() -> URL? {
+        GroupIdentifier.resolvedContainerURL()
+    }'''),
+])
+
+# Core services use the same resolved URL so conversion and extension reloads
+# see the exact same files after SideStore resigning.
+for rel in [
+    "wBlockCoreService/ProtobufDataManager.swift",
+    "wBlockCoreService/UserScriptStorageManager.swift",
+    "wBlockCoreService/HeadlessLaunch.swift",
+    "wBlockCoreService/wBlockCoreService.swift",
+    "wBlock/ConcurrentLogManager.swift",
+    "wBlock/CloudSyncManager.swift",
+]:
+    p = ROOT / rel
+    replace_text(p, [
+        ('FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: GroupIdentifier.shared.value)',
+         'GroupIdentifier.resolvedContainerURL()'),
+        ('fileManager.containerURL(forSecurityApplicationGroupIdentifier: GroupIdentifier.shared.value)',
+         'GroupIdentifier.resolvedContainerURL()'),
+    ])
+
+# Fail with the actual shared-container diagnosis instead of a generic
+# "Couldn't download" / conversion failure.
+replace_text(ROOT / "wBlock/FilterListUpdater.swift", [
+    ('LocalizedStrings.text("Unable to access shared container")',
+     'LocalizedStrings.text("Nullex could not access its signed App Group container. Re-sign with App Groups enabled.")'),
+])
+
 
 # The five Safari content blockers must track the sideload-rewritten host family.
 targets = ROOT / "wBlockCoreService/ContentBlockerTargets.swift"
@@ -579,6 +617,45 @@ for _rel in [
 
 # Keep the upstream screen/layout hierarchy; Nullex must not expose extra
 # controls merely because it is a rebrand.
+
+
+# Complete user-facing rebrand. Preserve internal Swift/module symbols and protocol
+# message names; only resource/display text is changed.
+for path in ROOT.rglob("*"):
+    if not path.is_file():
+        continue
+    if path.suffix.lower() not in {".strings", ".xcstrings", ".json", ".html", ".css", ".md"}:
+        continue
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        continue
+    if "wBlock" in text:
+        path.write_text(text.replace("wBlock", "Nullex"), encoding="utf-8")
+
+# Target remaining obvious user-facing Swift literals while leaving identifiers alone.
+for rel in [
+    "wBlock/ContentView.swift",
+    "wBlock/SettingsView.swift",
+    "wBlock/OnboardingView.swift",
+    "wBlock/ApplyChangesProgressView.swift",
+    "wBlock/UserScriptManagerView.swift",
+    "wBlock/LogsView.swift",
+    "wBlock/BackupManager.swift",
+    "wBlock/SponsorBlockTransferView.swift",
+]:
+    p = ROOT / rel
+    if not p.exists():
+        continue
+    text = p.read_text(encoding="utf-8")
+    # Replace only quoted string contents on a line; never Swift identifiers.
+    lines = []
+    for line in text.splitlines(keepends=True):
+        if "wBlock" in line and '"' in line:
+            line = line.replace("wBlock", "Nullex")
+        lines.append(line)
+    p.write_text("".join(lines), encoding="utf-8")
+
 
 # Mark derivative clearly and retain GPL attribution.
 notice = ROOT / "NULLEX_NOTICE.md"
