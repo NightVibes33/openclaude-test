@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: 0xCUB3/wBlock
-          ref: 98539c863ca42098b62895e1fa1798eaed9e84de
+          ref: a57ee911dcaf063e4209e26dd256203dffa072b7
           path: wblock
 
       - name: Verify macOS 27 / Xcode 27
@@ -47,6 +47,11 @@ jobs:
           grep -q 'com.nightvibes33.nullex' wblock/wBlock.xcodeproj/project.pbxproj
           grep -q 'RuntimeBundleIdentity' wblock/wBlockCoreService/GroupIdentifier.swift
           grep -q 'Nullex' wblock/NULLEX_NOTICE.md
+          grep -q 'a57ee911dcaf063e4209e26dd256203dffa072b7' wblock/NULLEX_NOTICE.md
+          grep -q 'AdGuard Experimental Filter' wblock/wBlock/FilterListLoader.swift
+          grep -q 'category: FilterListCategory.experimental' wblock/wBlock/FilterListLoader.swift
+          grep -q 'rules_foreign_experimental_ios.json' wblock/wBlockCoreService/ContentBlockerTargets.swift
+          grep -q 'Nullex 4' wblock/wBlockCoreService/ContentBlockerTargets.swift
 
       - name: Audit Nullex branding and upstream UI parity
         run: |
@@ -85,6 +90,22 @@ jobs:
           cv=(root/"wBlock"/"ContentView.swift").read_text()
           if "nullexHeroView" in cv:
               problems.append("custom Nullex hero leaked into upstream UI")
+
+          # The derivative must not add Files exposure or other Nullex-only
+          # capabilities that upstream wBlock does not expose.
+          import plistlib
+          main_info=root/"wBlock"/"Info.plist"
+          with main_info.open("rb") as fh:
+              plist=plistlib.load(fh)
+          for key in ["UIFileSharingEnabled", "LSSupportsOpeningDocumentsInPlace"]:
+              if key in plist:
+                  problems.append(f"Nullex-only exposed capability: {key}")
+
+          # Experimental stays an upstream filter category; it is not a sixth
+          # content-blocker extension.
+          loader=(root/"wBlock"/"FilterListLoader.swift").read_text(errors="ignore")
+          if "AdGuard Experimental Filter" not in loader or "FilterListCategory.experimental" not in loader:
+              problems.append("upstream Experimental filter catalog entry missing")
 
           # User-facing Swift surfaces must not expose the old product name.
           ui_swift = [
@@ -142,31 +163,26 @@ jobs:
             cp "$ICON_DIR/1024.png" "$dst/3.png"
           done
 
-          MARK="$GITHUB_WORKSPACE/wblock/wBlock/Resources/Assets.xcassets/NullexMark.imageset"
-          mkdir -p "$MARK"
-          cp "$ICON_DIR/1024.png" "$MARK/NullexMark.png"
-          cat > "$MARK/Contents.json" <<'JSON'
-          {
-            "images": [
-              {
-                "filename": "NullexMark.png",
-                "idiom": "universal",
-                "scale": "1x"
-              }
-            ],
-            "info": {
-              "author": "xcode",
-              "version": 1
-            }
-          }
-          JSON
-
           WEB_ICONS="$GITHUB_WORKSPACE/wblock/wBlock Scripts (iOS)/Resources/assets/images"
           mkdir -p "$WEB_ICONS"
           for size in 48 96 128 256 512; do
             sips -s format png -z "$size" "$size" "$SRC" --out "$WEB_ICONS/icon-$size.png" >/dev/null
           done
 
+      - name: Restore Xcode and SwiftPM cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            wblock/DerivedData/SourcePackages
+            wblock/DerivedData/ModuleCache.noindex
+            wblock/DerivedData/SDKStatCaches.noindex
+            wblock/DerivedData/Build/Intermediates.noindex
+            wblock/DerivedData/Build/Products
+            ~/Library/Caches/org.swift.swiftpm
+          key: nullex-xcode27-${{ runner.arch }}-a57ee911-${{ hashFiles('.nullex/apply_nullex.py') }}
+          restore-keys: |
+            nullex-xcode27-${{ runner.arch }}-a57ee911-
+            nullex-xcode27-${{ runner.arch }}-
       - name: Build Nullex unsigned for iOS 27
         working-directory: wblock
         run: |
@@ -261,6 +277,8 @@ jobs:
           done
 
           ext_count=0
+          blocker_count=0
+          webext_count=0
           for ext in "$APP"/PlugIns/*.appex; do
             test -d "$ext"
             ext_count=$((ext_count + 1))
@@ -273,16 +291,28 @@ jobs:
             test -n "$display"
             test -n "$name"
             test -n "$ident"
-            case "$display" in *wBlock*) echo "Old display branding: $display"; exit 1;; esac
-            case "$name" in *wBlock*) echo "Old bundle-name branding: $name"; exit 1;; esac
             test -n "$point"
+
             case "$ident" in
-              com.nightvibes33.nullex.*) ;;
-              *) echo "Unexpected extension identifier: $ident"; exit 1 ;;
+              com.nightvibes33.nullex.blocker1) expected="Nullex 1"; expected_point="com.apple.Safari.content-blocker"; blocker_count=$((blocker_count + 1));;
+              com.nightvibes33.nullex.blocker2) expected="Nullex 2"; expected_point="com.apple.Safari.content-blocker"; blocker_count=$((blocker_count + 1));;
+              com.nightvibes33.nullex.blocker3) expected="Nullex 3"; expected_point="com.apple.Safari.content-blocker"; blocker_count=$((blocker_count + 1));;
+              com.nightvibes33.nullex.blocker4) expected="Nullex 4"; expected_point="com.apple.Safari.content-blocker"; blocker_count=$((blocker_count + 1));;
+              com.nightvibes33.nullex.blocker5) expected="Nullex 5"; expected_point="com.apple.Safari.content-blocker"; blocker_count=$((blocker_count + 1));;
+              com.nightvibes33.nullex.advanced) expected="Nullex Advanced"; expected_point="com.apple.Safari.web-extension"; webext_count=$((webext_count + 1));;
+              *) echo "Unexpected/exposed extension identifier: $ident"; exit 1;;
             esac
-            echo "$display / $name -> $ident [$point]"
+
+            test "$display" = "$expected"
+            test "$name" = "$expected"
+            test "$point" = "$expected_point"
+            echo "$display -> $ident [$point]"
           done
-          test "$ext_count" -ge 6
+
+          # Exactly upstream parity: five blockers + one Advanced web extension.
+          test "$ext_count" -eq 6
+          test "$blocker_count" -eq 5
+          test "$webext_count" -eq 1
 
       - name: Preserve app-group entitlements for SideStore resigning
         working-directory: wblock
@@ -346,9 +376,30 @@ jobs:
             fi
           done < <(find "$APP" -type f \( -name '*.strings' -o -name 'messages.json' -o -name 'manifest.json' \) -print0)
 
-          # Targeted binary phrases that would be visible if localization lookup misses.
+          python3 - "$APP" <<'PY'
+          import plistlib, sys
+          from pathlib import Path
+          app=Path(sys.argv[1])
+          bad=[]
+          for p in app.rglob("Info.plist"):
+              try:
+                  with p.open("rb") as fh:
+                      d=plistlib.load(fh)
+              except Exception:
+                  continue
+              for key in ("CFBundleDisplayName", "CFBundleName", "NSHumanReadableDescription"):
+                  value=d.get(key)
+                  if isinstance(value,str) and "wBlock" in value:
+                      bad.append(f"{p}:{key}={value}")
+          if bad:
+              print("\n".join(bad))
+              raise SystemExit(1)
+          PY
+
+          # Targeted binary phrases that can surface through SwiftUI fallback
+          # strings. Internal module/symbol names are intentionally ignored.
           BIN="$APP/wBlock"
-          for phrase in 'Welcome to wBlock' 'Set up wBlock' 'wBlock Scripts' 'Restart wBlock'; do
+          for phrase in 'Welcome to wBlock' 'Set up wBlock' 'wBlock Scripts' 'Restart wBlock' 'Part of wBlock' "wBlock's" 'wBlock’s'; do
             if strings "$BIN" | grep -F "$phrase"; then
               echo "Visible branding phrase remains in executable: $phrase"
               fail=1
@@ -448,9 +499,10 @@ jobs:
       - name: Package corresponding source
         run: |
           set -euo pipefail
-          rm -rf wblock/DerivedData wblock/DerivedDataSim
           tar -czf Nullex-wBlock-GPL-source.tar.gz \
             --exclude='.git' \
+            --exclude='DerivedData' \
+            --exclude='DerivedDataSim' \
             -C wblock .
 
       - name: Upload Nullex IPA
