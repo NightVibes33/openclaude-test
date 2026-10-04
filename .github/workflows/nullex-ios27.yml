@@ -195,6 +195,49 @@ jobs:
           done
           test "$ext_count" -ge 6
 
+      - name: Preserve app-group entitlements for SideStore resigning
+        working-directory: wblock
+        run: |
+          set -euo pipefail
+          APP="$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP"
+
+          # Sign nested frameworks/libraries first.
+          while IFS= read -r item; do
+            /usr/bin/codesign --force --sign - --timestamp=none "$item"
+          done < <(find "$APP" \( -name '*.framework' -o -name '*.dylib' \) -print | sort -r)
+
+          # Carry each extension's requested App Group entitlement in the ad-hoc
+          # signature so SideStore can preserve/re-provision it when resigning.
+          for ext in "$APP"/PlugIns/*.appex; do
+            ident="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$ext/Info.plist")"
+            case "$ident" in
+              *.ads)      ent="wBlock Ads (iOS)/wBlock_Ads_iOS.entitlements" ;;
+              *.privacy)  ent="wBlock Privacy (iOS)/wBlock Privacy (iOS).entitlements" ;;
+              *.security) ent="wBlock Security (iOS)/wBlock Security (iOS).entitlements" ;;
+              *.regional) ent="wBlock Foreign (iOS)/wBlock Foreign (iOS).entitlements" ;;
+              *.custom)   ent="wBlock Custom (iOS)/wBlock Custom (iOS).entitlements" ;;
+              *.scripts)  ent="wBlock Scripts (iOS)/wBlock Scripts (iOS).entitlements" ;;
+              *) echo "Unknown extension identity: $ident"; exit 1 ;;
+            esac
+            /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$ent" "$ext"
+          done
+
+          /usr/bin/codesign --force --sign - --timestamp=none --entitlements "wBlock/wBlock.entitlements" "$APP"
+
+          # Hard gate: every target must explicitly request the same shared group.
+          APP_ENT="$RUNNER_TEMP/app-entitlements.plist"
+          /usr/bin/codesign -d --entitlements "$APP_ENT" "$APP"
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$APP_ENT" | grep -qx 'group.com.nightvibes33.nullex'
+
+          for ext in "$APP"/PlugIns/*.appex; do
+            EXT_ENT="$RUNNER_TEMP/$(basename "$ext").entitlements.plist"
+            /usr/bin/codesign -d --entitlements "$EXT_ENT" "$ext"
+            /usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$EXT_ENT" | grep -qx 'group.com.nightvibes33.nullex'
+          done
+
+          /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
+
       - name: Build and smoke-test canonical + SideStore-style launch
         working-directory: wblock
         run: |
@@ -296,8 +339,6 @@ jobs:
           rm -rf Payload Nullex-iOS27-unsigned.ipa
           mkdir Payload
           cp -R "$APP" Payload/Nullex.app
-          find Payload -name _CodeSignature -type d -prune -exec rm -rf {} + || true
-          find Payload -name embedded.mobileprovision -type f -delete || true
           /usr/bin/zip -qry Nullex-iOS27-unsigned.ipa Payload
           unzip -t Nullex-iOS27-unsigned.ipa
           shasum -a 256 Nullex-iOS27-unsigned.ipa
