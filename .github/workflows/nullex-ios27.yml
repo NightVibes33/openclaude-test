@@ -449,14 +449,16 @@ jobs:
           grep -q 'didFinish:complete' "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'groupAvailable=true' "$DATA/Documents/Nullex-Launch.txt"
           for _ in $(seq 1 30); do
-            grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt"
-          grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt" && break
+            if grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt" \
+              && grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt"; then
+              break
+            fi
             sleep 1
           done
           cat "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt"
-          xcrun simctl terminate "$UDID" com.nightvibes33.nullex
+          xcrun simctl terminate "$UDID" com.nightvibes33.nullex 2>/dev/null || true
 
           # SideStore-style rewritten host + extensions + App Group.
           REWRITTEN="$RUNNER_TEMP/Nullex-Rewritten.app"
@@ -505,14 +507,16 @@ jobs:
           grep -q "$REWRITTEN_GROUP" "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'groupAvailable=true' "$DATA/Documents/Nullex-Launch.txt"
           for _ in $(seq 1 30); do
-            grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt"
-          grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt" && break
+            if grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt" \
+              && grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt"; then
+              break
+            fi
             sleep 1
           done
           cat "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt"
-          xcrun simctl terminate "$UDID" "$REWRITTEN_ID"
+          xcrun simctl terminate "$UDID" "$REWRITTEN_ID" 2>/dev/null || true
 
       - name: Package SideStore-resignable Nullex IPA
         working-directory: wblock
