@@ -334,47 +334,6 @@ jobs:
 
           /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
 
-      - name: Preserve App Group entitlement for SideStore resigning
-        working-directory: wblock
-        run: |
-          set -euo pipefail
-          APP="$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
-          test -n "$APP"
-
-          ENT="$RUNNER_TEMP/Nullex-AppGroup.entitlements"
-          cat > "$ENT" <<'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>com.apple.security.application-groups</key>
-            <array>
-              <string>group.com.nightvibes33.nullex</string>
-            </array>
-          </dict>
-          </plist>
-          PLIST
-
-          # Sign nested code first. The signature is intentionally ad-hoc:
-          # SideStore replaces it, but can now inspect the requested entitlement.
-          find "$APP" -type d -name '*.framework' -print0 | while IFS= read -r -d '' fw; do
-            codesign --force --sign - --timestamp=none "$fw"
-          done
-
-          for ext in "$APP"/PlugIns/*.appex; do
-            codesign --force --sign - --timestamp=none --entitlements "$ENT" "$ext"
-            codesign --verify --strict "$ext"
-            codesign -d --entitlements :- "$ext" 2>"$RUNNER_TEMP/ext-entitlements.plist"
-            grep -q 'group.com.nightvibes33.nullex' "$RUNNER_TEMP/ext-entitlements.plist"
-          done
-
-          codesign --force --sign - --timestamp=none --entitlements "$ENT" "$APP"
-          codesign --verify --deep --strict "$APP"
-          codesign -d --entitlements :- "$APP" 2>"$RUNNER_TEMP/app-entitlements.plist"
-          grep -q 'group.com.nightvibes33.nullex' "$RUNNER_TEMP/app-entitlements.plist"
-
-          echo "Host + all Safari extensions carry the App Group entitlement."
-
       - name: Verify no user-visible wBlock branding remains
         working-directory: wblock
         run: |
