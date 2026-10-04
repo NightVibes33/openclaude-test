@@ -675,6 +675,20 @@ for path in ROOT.rglob("*"):
         path.write_text(text.replace("Nullex Scripts", "Nullex Advanced"), encoding="utf-8")
 
 
+
+# Safari popup/accessibility fallbacks are user-facing even though they live in JS.
+replace_text(ROOT / "wBlock Scripts (iOS)/Resources/pages/popup/popup.js", [
+    ("Open wBlock to finish applying filters.", "Open Nullex to finish applying filters."),
+    ("Open wBlock to resume blocking.", "Open Nullex to resume blocking."),
+    ("'Open wBlock'", "'Open Nullex'"),
+    ('"Open wBlock"', '"Open Nullex"'),
+])
+replace_text(ROOT / "wBlock Scripts (iOS)/Resources/zapper-content.js", [
+    ("'wBlock Element Zapper'", "'Nullex Element Zapper'"),
+    ('"wBlock Element Zapper"', '"Nullex Element Zapper"'),
+])
+
+
 # Mark derivative clearly and retain GPL attribution.
 notice = ROOT / "NULLEX_NOTICE.md"
 notice.write_text("""# Nullex
