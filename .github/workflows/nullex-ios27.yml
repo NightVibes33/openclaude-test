@@ -252,6 +252,14 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" = "com.nightvibes33.nullex"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist")" = "Nullex"
 
+          # Xcode derives CFBundleName from the upstream target PRODUCT_NAME.
+          # Normalize the finished bundle so system UI never exposes wBlock target names.
+          for ext in "$APP"/PlugIns/*.appex; do
+            plist="$ext/Info.plist"
+            display="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$plist")"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleName $display" "$plist"
+          done
+
           ext_count=0
           for ext in "$APP"/PlugIns/*.appex; do
             test -d "$ext"
