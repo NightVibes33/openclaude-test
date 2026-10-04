@@ -1,0 +1,593 @@
+name: Nullex iOS 27
+
+on:
+  push:
+    branches:
+      - nullex-wblock-ios27
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nullex-ios27-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout build harness
+        uses: actions/checkout@v4
+
+      - name: Verify macOS 27 and Xcode 27
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Checkout current wBlock upstream
+        run: |
+          git clone --no-tags https://github.com/0xCUB3/wBlock.git Nullex
+          cd Nullex
+          git checkout 98539c863ca42098b62895e1fa1798eaed9e84de
+          test "$(git rev-parse HEAD)" = "98539c863ca42098b62895e1fa1798eaed9e84de"
+
+      - name: Reconstruct exact Nullex icon
+        run: |
+          set -euo pipefail
+          cat .nullex/icon2/part00.b64               .nullex/icon2/part01.b64               .nullex/icon2/part02.b64               .nullex/icon2/part03.b64               .nullex/icon2/part04.b64               .nullex/icon2/part05.b64               .nullex/icon2/part06.b64               .nullex/icon2/part07.b64 > "$RUNNER_TEMP/nullex-icon.b64"
+          base64 -D -i "$RUNNER_TEMP/nullex-icon.b64" -o "$RUNNER_TEMP/NullexIcon.jpg"
+          echo "22183d80aab6536b184c0fde7ae7344b9d2fe0a3423797edc1ff36b3d772c8b4  $RUNNER_TEMP/NullexIcon.jpg" | shasum -a 256 -c -
+          sips -s format png -z 1024 1024 "$RUNNER_TEMP/NullexIcon.jpg" --out "$RUNNER_TEMP/NullexIcon.png" >/dev/null
+
+          for p in             "Nullex/wBlock/Resources/Assets.xcassets/AppIcon.appiconset/1.png"             "Nullex/wBlock/Resources/Assets.xcassets/AppIcon.appiconset/2.png"             "Nullex/wBlock/Resources/Assets.xcassets/AppIcon.appiconset/3.png"             "Nullex/wBlock Scripts (iOS)/Resources/Assets.xcassets/AppIcon.appiconset/1.png"             "Nullex/wBlock Scripts (iOS)/Resources/Assets.xcassets/AppIcon.appiconset/2.png"             "Nullex/wBlock Scripts (iOS)/Resources/Assets.xcassets/AppIcon.appiconset/3.png"
+          do
+            cp "$RUNNER_TEMP/NullexIcon.png" "$p"
+          done
+
+          MARK="Nullex/wBlock/Resources/Assets.xcassets/NullexMark.imageset"
+          mkdir -p "$MARK"
+          cp "$RUNNER_TEMP/NullexIcon.png" "$MARK/NullexMark.png"
+          cat > "$MARK/Contents.json" <<'JSON'
+          {
+            "images" : [
+              {
+                "filename" : "NullexMark.png",
+                "idiom" : "universal",
+                "scale" : "1x"
+              }
+            ],
+            "info" : {
+              "author" : "xcode",
+              "version" : 1
+            }
+          }
+          JSON
+
+          WEB="Nullex/wBlock Scripts (iOS)/Resources/assets/images"
+          mkdir -p "$WEB"
+          for size in 48 96 128 256 512; do
+            sips -s format png -z "$size" "$size" "$RUNNER_TEMP/NullexIcon.jpg" --out "$WEB/icon-$size.png" >/dev/null
+          done
+
+      - name: Rebrand and harden for sideloading
+        working-directory: Nullex
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, plistlib, re
+
+          ROOT = Path(".")
+          BASE_BUNDLE = "com.nightvibes33.nullex"
+          BASE_GROUP = "group.com.nightvibes33.nullex"
+
+          # --- Xcode project: preserve upstream architecture, replace only product identity. ---
+          pbx = Path("wBlock.xcodeproj/project.pbxproj")
+          s = pbx.read_text()
+
+          bundle_map = {
+              "skula.wBlock.wBlock-Ads-iOS": f"{BASE_BUNDLE}.ads",
+              "skula.wBlock.wBlock-Privacy-iOS": f"{BASE_BUNDLE}.privacy",
+              "skula.wBlock.wBlock-Security-iOS": f"{BASE_BUNDLE}.security",
+              "skula.wBlock.wBlock-Foreign-iOS": f"{BASE_BUNDLE}.foreign",
+              "skula.wBlock.wBlock-Custom-iOS": f"{BASE_BUNDLE}.custom",
+              "skula.wBlock.wBlock-Scripts--iOS-": f"{BASE_BUNDLE}.scripts",
+              "skula.wBlock.wBlock-Multipurpose-iOS": f"{BASE_BUNDLE}.multipurpose",
+              "skula.wBlock.wBlock-Experimental-iOS": f"{BASE_BUNDLE}.experimental",
+          }
+          for old, new in bundle_map.items():
+              s = s.replace(old, new)
+
+          # Main application identity.
+          s = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER = skula\.wBlock;', f'PRODUCT_BUNDLE_IDENTIFIER = {BASE_BUNDLE};', s)
+
+          # Visible names while keeping internal target/module names unchanged.
+          visible_names = {
+              'INFOPLIST_KEY_CFBundleDisplayName = wBlock;': 'INFOPLIST_KEY_CFBundleDisplayName = Nullex;',
+              'INFOPLIST_KEY_CFBundleDisplayName = "wBlock 1";': 'INFOPLIST_KEY_CFBundleDisplayName = "Nullex Ads";',
+              'INFOPLIST_KEY_CFBundleDisplayName = "wBlock 2";': 'INFOPLIST_KEY_CFBundleDisplayName = "Nullex Privacy";',
+              'INFOPLIST_KEY_CFBundleDisplayName = "wBlock 3";': 'INFOPLIST_KEY_CFBundleDisplayName = "Nullex Security";',
+              'INFOPLIST_KEY_CFBundleDisplayName = "wBlock 4";': 'INFOPLIST_KEY_CFBundleDisplayName = "Nullex Regional";',
+              'INFOPLIST_KEY_CFBundleDisplayName = "wBlock 5";': 'INFOPLIST_KEY_CFBundleDisplayName = "Nullex Custom";',
+              'INFOPLIST_KEY_CFBundleDisplayName = "wBlock Scripts";': 'INFOPLIST_KEY_CFBundleDisplayName = "Nullex Scripts";',
+              'INFOPLIST_KEY_CFBundleDisplayName = "wBlock Multipurpose";': 'INFOPLIST_KEY_CFBundleDisplayName = "Nullex Multipurpose";',
+              'INFOPLIST_KEY_CFBundleDisplayName = "wBlock Experimental";': 'INFOPLIST_KEY_CFBundleDisplayName = "Nullex Experimental";',
+          }
+          for old, new in visible_names.items():
+              s = s.replace(old, new)
+
+          # This sideload build uses a lean iOS entitlement file for the host app.
+          s = s.replace('CODE_SIGN_ENTITLEMENTS = wBlock/wBlock.entitlements;', 'CODE_SIGN_ENTITLEMENTS = wBlock/Nullex-iOS.entitlements;')
+          pbx.write_text(s)
+
+          # Dedicated iOS host entitlements: shared container only.
+          entitlement = {
+              "com.apple.security.application-groups": [BASE_GROUP],
+          }
+          with Path("wBlock/Nullex-iOS.entitlements").open("wb") as fh:
+              plistlib.dump(entitlement, fh, fmt=plistlib.FMT_XML, sort_keys=False)
+
+          # Extensions share the same group. Keep all upstream entitlements otherwise.
+          for path in ROOT.rglob("*.entitlements"):
+              if path.as_posix() == "wBlock/Nullex-iOS.entitlements":
+                  continue
+              text = path.read_text(errors="ignore")
+              text = text.replace("group.skula.wBlock", BASE_GROUP)
+              text = text.replace("iCloud.skula.wBlock", "iCloud.com.nightvibes33.nullex")
+              path.write_text(text)
+
+          # Main Info.plist URL scheme and background-task identity.
+          info = Path("wBlock/Info.plist")
+          text = info.read_text()
+          text = text.replace("com.alexanderskula.wblock", BASE_BUNDLE)
+          text = text.replace("wblockapp", "nullex")
+          info.write_text(text)
+
+          # Human-readable extension descriptions.
+          for path in ROOT.glob("wBlock* (iOS)/Info.plist"):
+              text = path.read_text()
+              text = text.replace("wBlock", "Nullex")
+              path.write_text(text)
+
+          # Runtime App Group resolver: supports normal signing and SideStore-style
+          # bundle-family rewriting without force-unwrapping the original group.
+          group_file = Path("wBlockCoreService/GroupIdentifier.swift")
+          group_file.write_text(r'''import Foundation
+          #if os(macOS)
+          import Security
+          #endif
+
+          public final class GroupIdentifier {
+              public static let shared = GroupIdentifier()
+              public let value: String
+
+              private static let baseGroupIdentifier = "group.com.nightvibes33.nullex"
+              private static let baseBundleIdentifier = "com.nightvibes33.nullex"
+
+              private init() {
+                  #if os(iOS)
+                  value = Self.resolvedIOSGroupIdentifier()
+                  #elseif os(macOS)
+                  value = Self.resolvedMacOSGroupIdentifier()
+                  #else
+                  value = Self.baseGroupIdentifier
+                  #endif
+              }
+
+              #if os(iOS)
+              private static func resolvedIOSGroupIdentifier() -> String {
+                  let current = Bundle.main.bundleIdentifier ?? baseBundleIdentifier
+                  let extensionSuffixes = [
+                      ".ads", ".privacy", ".security", ".foreign", ".custom",
+                      ".scripts", ".multipurpose", ".experimental"
+                  ]
+
+                  var parent = current
+                  if let suffix = extensionSuffixes.first(where: { current.hasSuffix($0) }) {
+                      parent.removeLast(suffix.count)
+                  }
+
+                  var candidates = [
+                      baseGroupIdentifier,
+                      "group.\(parent)"
+                  ]
+
+                  let rewrittenPrefix = baseBundleIdentifier + "."
+                  if parent.hasPrefix(rewrittenPrefix) {
+                      let remainder = parent.dropFirst(rewrittenPrefix.count)
+                      if let token = remainder.split(separator: ".").first, !token.isEmpty {
+                          candidates.append("group.\(token).\(baseBundleIdentifier)")
+                      }
+                  }
+
+                  var seen = Set<String>()
+                  for candidate in candidates where seen.insert(candidate).inserted {
+                      if FileManager.default.containerURL(
+                          forSecurityApplicationGroupIdentifier: candidate
+                      ) != nil {
+                          return candidate
+                      }
+                  }
+                  return baseGroupIdentifier
+              }
+              #endif
+
+              #if os(macOS)
+              private static func resolvedMacOSGroupIdentifier() -> String {
+                  if let identifier = teamPrefixedApplicationGroupFromSigningEntitlements() {
+                      return identifier
+                  }
+                  if let prefix = Bundle.main.infoDictionary?["AppIdentifierPrefix"] as? String,
+                     !prefix.isEmpty, !prefix.contains("$(") {
+                      let clean = prefix.hasSuffix(".") ? String(prefix.dropLast()) : prefix
+                      return "\(clean).\(baseGroupIdentifier)"
+                  }
+                  return baseGroupIdentifier
+              }
+
+              private static func teamPrefixedApplicationGroupFromSigningEntitlements() -> String? {
+                  guard let task = SecTaskCreateFromSelf(kCFAllocatorDefault),
+                        let entitlement = SecTaskCopyValueForEntitlement(
+                            task,
+                            "com.apple.security.application-groups" as CFString,
+                            nil
+                        ),
+                        let groups = entitlement as? [String]
+                  else { return nil }
+
+                  if let exact = groups.first(where: { $0 == baseGroupIdentifier }) {
+                      return exact
+                  }
+                  return groups.first(where: { $0.hasSuffix(".\(baseGroupIdentifier)") })
+              }
+              #endif
+          }
+          ''')
+
+          # Dynamic extension IDs survive signer-added suffixes such as
+          # com.nightvibes33.nullex.<token>.ads.
+          targets = Path("wBlockCoreService/ContentBlockerTargets.swift")
+          t = targets.read_text()
+          insert = r'''
+          public enum NullexRuntimeIdentity {
+              public static let baseApplicationBundleIdentifier = "com.nightvibes33.nullex"
+
+              public static func applicationBundleIdentifier() -> String {
+                  let current = Bundle.main.bundleIdentifier ?? baseApplicationBundleIdentifier
+                  let suffixes = [
+                      ".ads", ".privacy", ".security", ".foreign", ".custom",
+                      ".scripts", ".multipurpose", ".experimental"
+                  ]
+                  if let suffix = suffixes.first(where: { current.hasSuffix($0) }) {
+                      return String(current.dropLast(suffix.count))
+                  }
+                  if current == baseApplicationBundleIdentifier ||
+                      current.hasPrefix(baseApplicationBundleIdentifier + ".") {
+                      return current
+                  }
+                  return baseApplicationBundleIdentifier
+              }
+
+              public static func extensionBundleIdentifier(_ suffix: String) -> String {
+                  "\(applicationBundleIdentifier()).\(suffix)"
+              }
+          }
+
+          '''
+          marker = "public enum Platform: Sendable {"
+          if insert.strip() not in t:
+              t = t.replace(marker, insert + marker)
+
+          ios_id_map = {
+              '"skula.wBlock.wBlock-Ads-iOS"': 'NullexRuntimeIdentity.extensionBundleIdentifier("ads")',
+              '"skula.wBlock.wBlock-Privacy-iOS"': 'NullexRuntimeIdentity.extensionBundleIdentifier("privacy")',
+              '"skula.wBlock.wBlock-Security-iOS"': 'NullexRuntimeIdentity.extensionBundleIdentifier("security")',
+              '"skula.wBlock.wBlock-Foreign-iOS"': 'NullexRuntimeIdentity.extensionBundleIdentifier("foreign")',
+              '"skula.wBlock.wBlock-Custom-iOS"': 'NullexRuntimeIdentity.extensionBundleIdentifier("custom")',
+          }
+          for old, new in ios_id_map.items():
+              t = t.replace(old, new)
+          for n, name in [(1,"Nullex Ads"),(2,"Nullex Privacy"),(3,"Nullex Security"),(4,"Nullex Regional"),(5,"Nullex Custom")]:
+              t = t.replace(f'displayName: "wBlock {n}"', f'displayName: "{name}"')
+          targets.write_text(t)
+
+          setup = Path("wBlock/SafariExtensionSetupSupport.swift")
+          text = setup.read_text()
+          text = text.replace(
+              'static let scriptsExtensionIdentifier = "skula.wBlock.wBlock-Scripts--iOS-"',
+              'static let scriptsExtensionIdentifier = NullexRuntimeIdentity.extensionBundleIdentifier("scripts")'
+          )
+          setup.write_text(text)
+
+          # Shared preferences follow whichever app group was actually provisioned.
+          for rel in [
+              "wBlockCoreService/PlayerCleanerPreference.swift",
+              "wBlockCoreService/DarkReaderAppearancePreference.swift",
+              "wBlockCoreService/TubeCleanerDeArrowPreference.swift",
+          ]:
+              p = Path(rel)
+              text = p.read_text()
+              text = re.sub(
+                  r'public static let storageSuiteName = "group\.skula\.wBlock"',
+                  'public static let storageSuiteName = GroupIdentifier.shared.value',
+                  text
+              )
+              p.write_text(text)
+
+          # Sideload build deliberately omits iCloud entitlements. Tell the UI the
+          # truth instead of attempting CloudKit and failing at runtime.
+          cloud = Path("wBlock/CloudSyncManager.swift")
+          text = cloud.read_text()
+          text = text.replace(
+              '#else\n        return true\n        #endif',
+              '#else\n        return false\n        #endif',
+              1
+          )
+          cloud.write_text(text)
+
+          # Rebrand ordinary user-facing Swift string literals without renaming
+          # internal symbols, types, target names, or module imports.
+          string_literal = re.compile(r'"(?:\\.|[^"\\])*"')
+          for path in [*Path("wBlock").rglob("*.swift"), *Path("wBlockCoreService").rglob("*.swift")]:
+              text = path.read_text()
+              def repl(match):
+                  value = match.group(0)
+                  value = value.replace("wBlock", "Nullex")
+                  # Preserve upstream network/source URLs.
+                  value = value.replace("0xCUB3/Nullex-userscripts", "0xCUB3/wBlock-userscripts")
+                  value = value.replace("0xCUB3/Nullex", "0xCUB3/wBlock")
+                  return value
+              path.write_text(string_literal.sub(repl, text))
+
+          # Re-apply runtime-ID expressions in case visible-string replacement
+          # touched legacy literals around them.
+          setup = Path("wBlock/SafariExtensionSetupSupport.swift")
+          text = setup.read_text()
+          text = text.replace(
+              'static let scriptsExtensionIdentifier = "skula.Nullex.wBlock-Scripts--iOS-"',
+              'static let scriptsExtensionIdentifier = NullexRuntimeIdentity.extensionBundleIdentifier("scripts")'
+          )
+          setup.write_text(text)
+
+          # Localizations and WebExtension visible strings.
+          for path in Path("wBlock").rglob("Localizable.strings"):
+              text = path.read_text(errors="ignore").replace("wBlock", "Nullex")
+              path.write_text(text)
+          for path in Path("wBlock Scripts (iOS)/Resources/_locales").rglob("messages.json"):
+              text = path.read_text(errors="ignore").replace("wBlock", "Nullex")
+              path.write_text(text)
+
+          # Cleaner iPhone tab naming.
+          tabs = Path("wBlock/AppTabView.swift")
+          text = tabs.read_text()
+          text = text.replace('Label("Filters", systemImage:', 'Label("Protection", systemImage:')
+          text = text.replace('Label("Userscripts", systemImage:', 'Label("Scripts", systemImage:')
+          text = text.replace('Text("Filters").tag(0)', 'Text("Protection").tag(0)')
+          text = text.replace('Text("Userscripts").tag(1)', 'Text("Scripts").tag(1)')
+          tabs.write_text(text)
+
+          # Premium iPhone-first hero using the exact supplied app artwork.
+          content = Path("wBlock/ContentView.swift")
+          text = content.read_text()
+          old = '''        return List {
+              Section {
+                  statsCardsView
+                      .unifiedTabCardSectionRow()
+              }
+          '''
+          new = '''        return List {
+              Section {
+                  nullexProtectionHeader
+                      .unifiedTabCardSectionRow()
+                  statsCardsView
+                      .unifiedTabCardSectionRow()
+              }
+          '''
+          if old not in text:
+              raise SystemExit("ContentView list insertion marker not found")
+          text = text.replace(old, new, 1)
+
+          hero_marker = "    private var statsCardsView: some View {"
+          hero = r'''    private var nullexProtectionHeader: some View {
+              HStack(spacing: 14) {
+                  Image("NullexMark")
+                      .resizable()
+                      .scaledToFit()
+                      .frame(width: 58, height: 58)
+                      .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                      .shadow(color: .purple.opacity(0.32), radius: 14, y: 4)
+
+                  VStack(alignment: .leading, spacing: 4) {
+                      Text("Nullex")
+                          .font(.title3.weight(.bold))
+                      Text(filterManager.isBlockingPaused
+                           ? "Protection paused"
+                           : (hasAppliedFilters ? "Protection active" : "Ready to protect Safari"))
+                          .font(.subheadline.weight(.semibold))
+                          .foregroundStyle(filterManager.isBlockingPaused ? .orange : .secondary)
+                      Text(hasAppliedFilters
+                           ? "\(enabledListsCount) lists · \(appliedSafariRulesCount.formatted()) rules"
+                           : "Five Safari engines · advanced script protection")
+                          .font(.caption)
+                          .foregroundStyle(.tertiary)
+                          .lineLimit(1)
+                  }
+
+                  Spacer(minLength: 6)
+
+                  Image(systemName: filterManager.isBlockingPaused
+                        ? "pause.circle.fill"
+                        : (hasAppliedFilters ? "checkmark.shield.fill" : "shield.lefthalf.filled"))
+                      .font(.title2)
+                      .foregroundStyle(filterManager.isBlockingPaused ? .orange : .purple)
+              }
+              .padding(16)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .liquidGlassCompat(cornerRadius: 24)
+              .padding(.vertical, 4)
+          }
+
+          '''
+          if hero_marker not in text:
+              raise SystemExit("ContentView hero marker not found")
+          text = text.replace(hero_marker, hero + hero_marker, 1)
+          content.write_text(text)
+
+          # Add GPL/upstream notice and keep upstream LICENSE unchanged.
+          Path("NULLEX_NOTICE.md").write_text(
+              """# Nullex\n\n"
+              "Nullex is a modified distribution of wBlock, originally developed by "
+              "Alexander Skula / 0xCUB3 and licensed under GNU GPL v3.0.\n\n"
+              "Upstream: https://github.com/0xCUB3/wBlock\n"
+              "Pinned upstream commit: 98539c863ca42098b62895e1fa1798eaed9e84de\n\n"
+              "Nullex modifications include product branding, iconography, iPhone UI "
+              "presentation, bundle identifiers, and sideload runtime-identity handling. "
+              "The original GPL-3.0 LICENSE is retained unchanged.\n"
+          )
+
+          # Validate no visible wBlock app/extension display names remain in iOS build settings.
+          project_text = pbx.read_text()
+          forbidden = [
+              'INFOPLIST_KEY_CFBundleDisplayName = wBlock;',
+              'INFOPLIST_KEY_CFBundleDisplayName = "wBlock 1";',
+              'INFOPLIST_KEY_CFBundleDisplayName = "wBlock 2";',
+              'INFOPLIST_KEY_CFBundleDisplayName = "wBlock 3";',
+              'INFOPLIST_KEY_CFBundleDisplayName = "wBlock 4";',
+              'INFOPLIST_KEY_CFBundleDisplayName = "wBlock 5";',
+              'skula.wBlock.wBlock-Ads-iOS',
+              'skula.wBlock.wBlock-Privacy-iOS',
+              'skula.wBlock.wBlock-Security-iOS',
+              'skula.wBlock.wBlock-Foreign-iOS',
+              'skula.wBlock.wBlock-Custom-iOS',
+              'skula.wBlock.wBlock-Scripts--iOS-',
+          ]
+          leftovers = [value for value in forbidden if value in project_text]
+          if leftovers:
+              raise SystemExit("Unrebranded iOS build settings: " + repr(leftovers))
+          PY
+
+      - name: Validate exact icon and rebrand
+        working-directory: Nullex
+        run: |
+          set -euo pipefail
+          test -f NULLEX_NOTICE.md
+          grep -q 'com.nightvibes33.nullex.ads' wBlock.xcodeproj/project.pbxproj
+          grep -q 'com.nightvibes33.nullex.scripts' wBlock.xcodeproj/project.pbxproj
+          grep -q 'NullexRuntimeIdentity' wBlockCoreService/ContentBlockerTargets.swift
+          grep -q 'resolvedIOSGroupIdentifier' wBlockCoreService/GroupIdentifier.swift
+          grep -q 'Nullex' wBlock/AppTabView.swift
+          grep -q 'nullexProtectionHeader' wBlock/ContentView.swift
+          cmp "$RUNNER_TEMP/NullexIcon.png" "wBlock/Resources/Assets.xcassets/AppIcon.appiconset/1.png"
+
+      - name: Build iOS 27 simulator
+        working-directory: Nullex
+        run: |
+          set -o pipefail
+          xcodebuild             -project wBlock.xcodeproj             -scheme wBlock             -configuration Debug             -sdk iphonesimulator             -destination 'generic/platform=iOS Simulator'             -derivedDataPath DerivedDataSim             CODE_SIGNING_ALLOWED=NO             build | tee simulator-build.log
+
+      - name: Launch smoke test on iOS 27
+        working-directory: Nullex
+        run: |
+          set -euo pipefail
+          UDID="$(python3 - <<'PY'
+          import json, subprocess
+          data=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','-j']))
+          for runtime, devices in data.get('devices', {}).items():
+              if 'iOS-27' not in runtime:
+                  continue
+              for d in devices:
+                  if d.get('isAvailable') and d.get('name','').startswith('iPhone'):
+                      print(d['udid'])
+                      raise SystemExit
+          raise SystemExit('No iOS 27 iPhone simulator found')
+          PY
+          )"
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$UDID" -b
+          APP="DerivedDataSim/Build/Products/Debug-iphonesimulator/wBlock.app"
+          test -f "$APP/Info.plist"
+          xcrun simctl install "$UDID" "$APP"
+          BID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+          test "$BID" = "com.nightvibes33.nullex"
+          xcrun simctl launch "$UDID" "$BID" >/tmp/nullex-launch.log 2>&1
+          sleep 8
+          if ! xcrun simctl spawn "$UDID" launchctl print "gui/$(id -u)/$BID" >/dev/null 2>&1; then
+            cat /tmp/nullex-launch.log || true
+            echo "Nullex did not remain alive after launch"
+            exit 1
+          fi
+          xcrun simctl terminate "$UDID" "$BID" || true
+
+      - name: Build unsigned iOS device app
+        working-directory: Nullex
+        run: |
+          set -o pipefail
+          xcodebuild             -project wBlock.xcodeproj             -scheme wBlock             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath DerivedData             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             build | tee device-build.log
+
+      - name: Package and validate unsigned IPA
+        working-directory: Nullex
+        run: |
+          set -euo pipefail
+          APP="DerivedData/Build/Products/Release-iphoneos/wBlock.app"
+          test -f "$APP/Info.plist"
+
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" = "com.nightvibes33.nullex"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist")" = "Nullex"
+
+          ext_count=0
+          for ext in "$APP"/PlugIns/*.appex; do
+            test -d "$ext"
+            ext_count=$((ext_count + 1))
+            plist="$ext/Info.plist"
+            test -n "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$plist" 2>/dev/null || true)"
+            test -n "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist" 2>/dev/null || true)"
+            test -n "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$plist" 2>/dev/null || true)"
+          done
+          test "$ext_count" -ge 6
+
+          rm -rf Payload Nullex-iOS27-unsigned.ipa
+          mkdir Payload
+          cp -R "$APP" Payload/Nullex.app
+          find Payload -name _CodeSignature -type d -prune -exec rm -rf {} + || true
+          find Payload -name embedded.mobileprovision -type f -delete || true
+          /usr/bin/zip -qry Nullex-iOS27-unsigned.ipa Payload
+          unzip -t Nullex-iOS27-unsigned.ipa
+          shasum -a 256 Nullex-iOS27-unsigned.ipa
+
+      - name: Package corresponding GPL source
+        working-directory: Nullex
+        run: |
+          set -euo pipefail
+          rm -rf DerivedData DerivedDataSim .git
+          /usr/bin/zip -qry ../Nullex-GPL-source.zip .             -x '*.DS_Store' 'simulator-build.log' 'device-build.log'
+          unzip -t ../Nullex-GPL-source.zip >/dev/null
+          shasum -a 256 ../Nullex-GPL-source.zip
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nullex-iOS27-unsigned
+          path: Nullex/Nullex-iOS27-unsigned.ipa
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Upload corresponding source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nullex-GPL-source
+          path: Nullex-GPL-source.zip
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nullex-build-logs
+          path: |
+            Nullex/simulator-build.log
+            Nullex/device-build.log
+          if-no-files-found: ignore
