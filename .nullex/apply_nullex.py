@@ -118,16 +118,32 @@ for path in ROOT.rglob("Info.plist"):
     with path.open("wb") as f:
         plistlib.dump(info, f, fmt=plistlib.FMT_XML, sort_keys=False)
 
-# BGTask identifiers belong to the upstream signing identity and are not stable
-# after SideStore rewrites identifiers. Foreground/manual updates remain.
+# Preserve upstream background auto-update support under Nullex identities.
+# BGTaskScheduler requires both the permitted identifiers and the matching
+# background modes in Info.plist; removing either produces notPermitted.
 main_info = ROOT / "wBlock/Info.plist"
 if main_info.exists():
     with main_info.open("rb") as f:
         info = plistlib.load(f)
-    info.pop("BGTaskSchedulerPermittedIdentifiers", None)
-    info.pop("UIBackgroundModes", None)
+    info["BGTaskSchedulerPermittedIdentifiers"] = [
+        f"{BASE_BUNDLE}.filter-update",
+        f"{BASE_BUNDLE}.filter-processing",
+    ]
+    info["UIBackgroundModes"] = ["fetch", "processing"]
     with main_info.open("wb") as f:
         plistlib.dump(info, f, fmt=plistlib.FMT_XML, sort_keys=False)
+
+app_delegate = ROOT / "wBlock/AppDelegate.swift"
+replace_text(app_delegate, [
+    (
+        'private let backgroundTaskIdentifier = "com.alexanderskula.wblock.filter-update"',
+        f'private let backgroundTaskIdentifier = "{BASE_BUNDLE}.filter-update"',
+    ),
+    (
+        'private let backgroundProcessingIdentifier = "com.alexanderskula.wblock.filter-processing"',
+        f'private let backgroundProcessingIdentifier = "{BASE_BUNDLE}.filter-processing"',
+    ),
+])
 
 # ---------------------------------------------------------------------------
 # SideStore-safe runtime identity

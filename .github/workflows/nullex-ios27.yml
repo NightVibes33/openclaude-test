@@ -52,6 +52,18 @@ jobs:
           grep -q 'category: FilterListCategory.experimental' wblock/wBlock/FilterListLoader.swift
           grep -q 'rules_foreign_experimental_ios.json' wblock/wBlockCoreService/ContentBlockerTargets.swift
           grep -q 'Nullex 4' wblock/wBlockCoreService/ContentBlockerTargets.swift
+          grep -q 'com.nightvibes33.nullex.filter-update' wblock/wBlock/AppDelegate.swift
+          grep -q 'com.nightvibes33.nullex.filter-processing' wblock/wBlock/AppDelegate.swift
+          python3 - <<'PY'
+          import plistlib
+          with open("wblock/wBlock/Info.plist","rb") as f:
+              p=plistlib.load(f)
+          assert p["BGTaskSchedulerPermittedIdentifiers"] == [
+              "com.nightvibes33.nullex.filter-update",
+              "com.nightvibes33.nullex.filter-processing",
+          ]
+          assert set(p["UIBackgroundModes"]) == {"fetch","processing"}
+          PY
 
       - name: Audit Nullex branding and upstream UI parity
         run: |
