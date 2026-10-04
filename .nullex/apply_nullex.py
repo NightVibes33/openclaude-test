@@ -1152,4 +1152,34 @@ derived from wBlock.
 The complete work remains licensed under GNU GPL v3. See LICENSE.
 """, encoding="utf-8")
 
+
+# Final user-visible branding sweep. Replace only standalone product-name text,
+# never identifiers such as skula.wBlock, module names, or wblock: message keys.
+display_name_pattern = re.compile(r'(?<![A-Za-z0-9_.])wBlock(?![A-Za-z0-9_])')
+text_suffixes = {".swift", ".strings", ".json", ".html", ".js", ".md", ".txt"}
+for path in ROOT.rglob("*"):
+    if not path.is_file() or path.suffix.lower() not in text_suffixes:
+        continue
+    # Preserve license/upstream source links exactly.
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        continue
+    branded = display_name_pattern.sub("Nullex", content)
+    branded = branded.replace("https://github.com/0xCUB3/Nullex", "https://github.com/0xCUB3/wBlock")
+    branded = branded.replace("github.com/0xCUB3/Nullex", "github.com/0xCUB3/wBlock")
+    if branded != content:
+        path.write_text(branded, encoding="utf-8")
+
+# Rebrand plist display strings without touching the actual GPL attribution.
+for path in ROOT.rglob("*.plist"):
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        continue
+    branded = display_name_pattern.sub("Nullex", content)
+    if branded != content:
+        path.write_text(branded, encoding="utf-8")
+
+
 print("Nullex overlay applied.")
