@@ -486,6 +486,121 @@ replace_text(ROOT / "wBlock/AppTabView.swift", [
     ('Label("Userscripts", systemImage:', 'Label("Scripts", systemImage:'),
 ])
 
+
+# Real-device sideload hardening.
+#
+# SideStore rewrites the containing bundle identifier. Background task identifiers
+# are not rewritten with it, so avoid registering/scheduling BGTaskScheduler work
+# in a rewritten sideload identity. Foreground/manual updates remain available.
+app_delegate = ROOT / "wBlock/AppDelegate.swift"
+replace_text(app_delegate, [
+    ('private let backgroundTaskIdentifier = "com.alexanderskula.wblock.filter-update"',
+     'private let backgroundTaskIdentifier = "com.nightvibes33.nullex.filter-update"'),
+    ('private let backgroundProcessingIdentifier = "com.alexanderskula.wblock.filter-processing"',
+     'private let backgroundProcessingIdentifier = "com.nightvibes33.nullex.filter-processing"'),
+    ('        // Register background tasks for filter updates (refresh + processing)\\n        registerBackgroundTasks()',
+     '''        // SideStore rewrites the containing bundle identifier but not the
+        // permitted BGTask identifiers. Register background work only for the
+        // canonical signed identity; sideload builds still update in foreground.
+        if canUseBackgroundTaskScheduler {
+            registerBackgroundTasks()
+        }'''),
+    ('        // Schedule only after the persisted interval and due date have loaded.\\n        Task { @MainActor in\\n            await rescheduleBackgroundTasks(reason: "Launch")\\n        }',
+     '''        // Schedule only when the runtime identity matches the canonical app.
+        if canUseBackgroundTaskScheduler {
+            Task { @MainActor in
+                await rescheduleBackgroundTasks(reason: "Launch")
+            }
+        }'''),
+    ('    private func registerBackgroundTasks() {',
+     '''    private var canUseBackgroundTaskScheduler: Bool {
+        guard Bundle.main.bundleIdentifier == "com.nightvibes33.nullex" else {
+            return false
+        }
+        let permitted = Bundle.main.object(
+            forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers"
+        ) as? [String] ?? []
+        return permitted.contains(backgroundTaskIdentifier)
+            && permitted.contains(backgroundProcessingIdentifier)
+    }
+
+    private func registerBackgroundTasks() {'''),
+    ('    private func rescheduleBackgroundTasks(reason: String) async {\\n        await ProtobufDataManager.shared.waitUntilLoaded()',
+     '''    private func rescheduleBackgroundTasks(reason: String) async {
+        guard canUseBackgroundTaskScheduler else { return }
+        await ProtobufDataManager.shared.waitUntilLoaded()'''),
+])
+
+# CloudKit is intentionally stripped from the unsigned sideload build. Upstream
+# assumes CloudKit is always available on iOS, which is unsafe after resigning.
+cloud = ROOT / "wBlock/CloudSyncManager.swift"
+replace_text(cloud, [
+    ('''        #else
+        return true
+        #endif''',
+     '''        #else
+        // Nullex unsigned/sideload builds do not ship the iCloud entitlement.
+        // Never touch CKContainer on these builds.
+        return false
+        #endif'''),
+    ('        isEnabled = defaults.bool(forKey: Keys.enabled)',
+     '        isEnabled = Self.hasCloudKitEntitlement && defaults.bool(forKey: Keys.enabled)'),
+])
+
+# Give crash diagnostics a Files-visible destination if launch gets far enough
+# to execute application(_:didFinishLaunchingWithOptions:).
+main_info = ROOT / "wBlock/Info.plist"
+if main_info.exists():
+    with main_info.open("rb") as f:
+        info = plistlib.load(f)
+    info["UIFileSharingEnabled"] = True
+    info["LSSupportsOpeningDocumentsInPlace"] = True
+    with main_info.open("wb") as f:
+        plistlib.dump(info, f, fmt=plistlib.FMT_XML, sort_keys=False)
+
+# Write a tiny launch marker before any optional background/cloud work.
+delegate_text = app_delegate.read_text(encoding="utf-8")
+launch_needle = '''    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        UNUserNotificationCenter.current().delegate = self'''
+launch_replacement = '''    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        writeNullexLaunchMarker("didFinish:start")
+        UNUserNotificationCenter.current().delegate = self'''
+if launch_needle in delegate_text:
+    delegate_text = delegate_text.replace(launch_needle, launch_replacement, 1)
+
+return_needle = '''        PortraitOrientationLock.apply()
+        return true'''
+return_replacement = '''        PortraitOrientationLock.apply()
+        writeNullexLaunchMarker("didFinish:complete")
+        return true'''
+if return_needle in delegate_text:
+    delegate_text = delegate_text.replace(return_needle, return_replacement, 1)
+
+extension_anchor = '''    private func registerBackgroundTasks() {'''
+launch_helper = '''    private func writeNullexLaunchMarker(_ event: String) {
+        let fm = FileManager.default
+        let base = fm.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? fm.temporaryDirectory
+        let url = base.appendingPathComponent("Nullex-Launch.txt")
+        let line = "\\(Date().timeIntervalSince1970) \\(event) bundle=\\(Bundle.main.bundleIdentifier ?? "nil") group=\\(GroupIdentifier.shared.value)\\n"
+        if let data = line.data(using: .utf8) {
+            if fm.fileExists(atPath: url.path),
+               let handle = try? FileHandle(forWritingTo: url) {
+                defer { try? handle.close() }
+                try? handle.seekToEnd()
+                try? handle.write(contentsOf: data)
+            } else {
+                try? data.write(to: url, options: .atomic)
+            }
+        }
+    }
+
+'''
+if extension_anchor in delegate_text and "writeNullexLaunchMarker(_ event:" not in delegate_text:
+    delegate_text = delegate_text.replace(extension_anchor, launch_helper + extension_anchor, 1)
+app_delegate.write_text(delegate_text, encoding="utf-8")
+
+
 # Mark derivative clearly and retain GPL attribution.
 notice = ROOT / "NULLEX_NOTICE.md"
 notice.write_text("""# Nullex
