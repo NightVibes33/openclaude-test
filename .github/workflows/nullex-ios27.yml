@@ -86,6 +86,28 @@ jobs:
           if "nullexHeroView" in cv:
               problems.append("custom Nullex hero leaked into upstream UI")
 
+          # User-facing Swift surfaces must not expose the old product name.
+          ui_swift = [
+              "ContentView.swift", "SettingsView.swift", "OnboardingView.swift",
+              "ApplyChangesProgressView.swift", "UserScriptManagerView.swift",
+              "LogsView.swift", "BackupManager.swift", "SponsorBlockTransferView.swift",
+              "AppTabView.swift", "FilterFallbacksView.swift", "FilterUpdateShortcuts.swift",
+              "FilterCategorySupport.swift", "FilterInfoView.swift", "SiteSettingsView.swift",
+          ]
+          for name in ui_swift:
+              p=root/"wBlock"/name
+              if not p.exists():
+                  continue
+              for line_no,line in enumerate(p.read_text(errors="ignore").splitlines(),1):
+                  # Ignore comments, imports, internal symbols, URLs and NSError domains.
+                  stripped=line.strip()
+                  if stripped.startswith("//") or "import wBlockCoreService" in line:
+                      continue
+                  if "github.com/0xCUB3/wBlock" in line or 'NSError(domain: "wBlock.' in line:
+                      continue
+                  if '"' in line and "wBlock" in line:
+                      problems.append(f"{p}:{line_no}: old brand in visible string")
+
           if problems:
               print("Branding/UI parity audit failed:")
               for p in problems: print(" -",p)
