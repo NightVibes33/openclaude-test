@@ -688,6 +688,23 @@ replace_text(ROOT / "wBlock/SettingsView.swift", [
 ])
 
 
+
+# Remaining WebExtension fallback labels can surface if localization lookup fails.
+for rel in [
+    "wBlock Scripts (iOS)/Resources/background.js",
+    "wBlock Scripts (iOS)/Resources/pages/popup/popup.js",
+    "wBlock Scripts (iOS)/Resources/zapper-content.js",
+]:
+    p = ROOT / rel
+    if not p.exists():
+        continue
+    replace_text(p, [
+        ("wBlock Scripts", "Nullex Advanced"),
+        ("Open wBlock", "Open Nullex"),
+        ("wBlock Element Zapper", "Nullex Element Zapper"),
+    ])
+
+
 # Safari popup/accessibility fallbacks are user-facing even though they live in JS.
 replace_text(ROOT / "wBlock Scripts (iOS)/Resources/pages/popup/popup.js", [
     ("Open wBlock to finish applying filters.", "Open Nullex to finish applying filters."),
