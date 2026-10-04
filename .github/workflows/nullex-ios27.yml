@@ -48,6 +48,51 @@ jobs:
           grep -q 'RuntimeBundleIdentity' wblock/wBlockCoreService/GroupIdentifier.swift
           grep -q 'Nullex' wblock/NULLEX_NOTICE.md
 
+      - name: Audit Nullex branding and upstream UI parity
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, sys
+          root=Path("wblock")
+          problems=[]
+
+          # Localized/UI resources must not leak the old product name.
+          for p in root.rglob("Localizable.strings"):
+              txt=p.read_text(errors="ignore")
+              if "wBlock" in txt:
+                  problems.append(str(p))
+          for p in (root/"wBlock Scripts (iOS)"/"Resources"/"_locales").rglob("messages.json"):
+              txt=p.read_text(errors="ignore")
+              if "wBlock" in txt:
+                  problems.append(str(p))
+
+          # Bundle display names must be Nullex-branded.
+          for p in [
+              root/"wBlock"/"Info.plist",
+              root/"wBlock Ads (iOS)"/"Info.plist",
+              root/"wBlock Privacy (iOS)"/"Info.plist",
+              root/"wBlock Security (iOS)"/"Info.plist",
+              root/"wBlock Foreign (iOS)"/"Info.plist",
+              root/"wBlock Custom (iOS)"/"Info.plist",
+              root/"wBlock Scripts (iOS)"/"Info.plist",
+          ]:
+              if p.exists() and "wBlock" in p.read_text(errors="ignore"):
+                  problems.append(str(p))
+
+          # No custom Nullex-only screen should have been injected; retain
+          # upstream wBlock layout/feature visibility.
+          cv=(root/"wBlock"/"ContentView.swift").read_text()
+          if "nullexHeroView" in cv:
+              problems.append("custom Nullex hero leaked into upstream UI")
+
+          if problems:
+              print("Branding/UI parity audit failed:")
+              for p in problems: print(" -",p)
+              sys.exit(1)
+          print("Nullex branding resources clean; upstream UI hierarchy preserved.")
+          PY
+
       - name: Install exact icon across app and Safari extension
         run: |
           set -euo pipefail
@@ -227,12 +272,12 @@ jobs:
 
           # Hard gate: every target must explicitly request the same shared group.
           APP_ENT="$RUNNER_TEMP/app-entitlements.plist"
-          /usr/bin/codesign -d --entitlements "$APP_ENT" "$APP"
+          /usr/bin/codesign -d --entitlements :- "$APP" > "$APP_ENT" 2>/dev/null
           /usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$APP_ENT" | grep -qx 'group.com.nightvibes33.nullex'
 
           for ext in "$APP"/PlugIns/*.appex; do
             EXT_ENT="$RUNNER_TEMP/$(basename "$ext").entitlements.plist"
-            /usr/bin/codesign -d --entitlements "$EXT_ENT" "$ext"
+            /usr/bin/codesign -d --entitlements :- "$ext" > "$EXT_ENT" 2>/dev/null
             /usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$EXT_ENT" | grep -qx 'group.com.nightvibes33.nullex'
           done
 
