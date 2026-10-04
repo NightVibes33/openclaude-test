@@ -372,23 +372,19 @@ jobs:
           # Premium iPhone-first hero using the exact supplied app artwork.
           content = Path("wBlock/ContentView.swift")
           text = content.read_text()
-          old = '''        return List {
-              Section {
-                  statsCardsView
-                      .unifiedTabCardSectionRow()
-              }
-          '''
-          new = '''        return List {
-              Section {
-                  nullexProtectionHeader
-                      .unifiedTabCardSectionRow()
-                  statsCardsView
-                      .unifiedTabCardSectionRow()
-              }
-          '''
-          if old not in text:
-              raise SystemExit("ContentView list insertion marker not found")
-          text = text.replace(old, new, 1)
+          pattern = re.compile(
+              r'(return List \\{\\s*Section \\{\\s*)(statsCardsView\\s*\\.unifiedTabCardSectionRow\\(\\))',
+              re.MULTILINE
+          )
+          replacement = (
+              r'\\1nullexProtectionHeader\\n'
+              r'                    .unifiedTabCardSectionRow()\\n'
+              r'                '
+              r'\\2'
+          )
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit("ContentView list insertion point not found")
 
           hero_marker = "    private var statsCardsView: some View {"
           hero = r'''    private var nullexProtectionHeader: some View {
