@@ -268,13 +268,23 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")" = "com.nightvibes33.nullex"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist")" = "Nullex"
 
-          # Xcode derives CFBundleName from the upstream target PRODUCT_NAME.
-          # Normalize the finished bundle so system UI never exposes wBlock target names.
+          # Xcode derives CFBundleName from upstream target PRODUCT_NAME values.
+          # Normalize only bundle metadata; keep executable/module names intact.
           for ext in "$APP"/PlugIns/*.appex; do
             plist="$ext/Info.plist"
             display="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$plist")"
             /usr/libexec/PlistBuddy -c "Set :CFBundleName $display" "$plist"
           done
+
+          CORE_FW="$APP/Frameworks/wBlockCoreService.framework"
+          if [ -f "$CORE_FW/Info.plist" ]; then
+            /usr/libexec/PlistBuddy -c 'Set :CFBundleName NullexCoreService' "$CORE_FW/Info.plist"
+            if /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$CORE_FW/Info.plist" >/dev/null 2>&1; then
+              /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName Nullex Core Service' "$CORE_FW/Info.plist"
+            else
+              /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string Nullex Core Service' "$CORE_FW/Info.plist"
+            fi
+          fi
 
           ext_count=0
           blocker_count=0
