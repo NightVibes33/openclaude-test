@@ -1017,8 +1017,8 @@ app_delegate = ROOT / "wBlock/AppDelegate.swift"
 replace_text(app_delegate, [
     ('''        let line = "\(Date().timeIntervalSince1970) \(event) bundle=\(Bundle.main.bundleIdentifier ?? "nil") group=\(GroupIdentifier.shared.value)\n"''',
      '''        let signedGroups = RuntimeBundleIdentity.signedApplicationGroups().joined(separator: ",")
-        let available = GroupIdentifier.shared.containerURL != nil ? "1" : "0"
-        let line = "\(Date().timeIntervalSince1970) \(event) bundle=\(Bundle.main.bundleIdentifier ?? "nil") group=\(GroupIdentifier.shared.value) groupContainer=\(available) signedGroups=\(signedGroups)\n"''')
+        let available = GroupIdentifier.shared.containerURL != nil
+        let line = "\(Date().timeIntervalSince1970) \(event) bundle=\(Bundle.main.bundleIdentifier ?? "nil") group=\(GroupIdentifier.shared.value) groupAvailable=\(available) signedGroups=\(signedGroups)\n"''')
 ])
 
 # Finish the user-visible rebrand while preserving upstream legal/source attribution.
