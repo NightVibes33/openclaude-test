@@ -182,7 +182,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            CURRENT_PROJECT_VERSION=112 \
+            CURRENT_PROJECT_VERSION=113 \
             build | tee xcodebuild.log
 
       - name: Force exact uploaded icon into final app bundle
@@ -326,6 +326,72 @@ jobs:
 
           /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
 
+      - name: Preserve App Group entitlement for SideStore resigning
+        working-directory: wblock
+        run: |
+          set -euo pipefail
+          APP="$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP"
+
+          ENT="$RUNNER_TEMP/Nullex-AppGroup.entitlements"
+          cat > "$ENT" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>com.apple.security.application-groups</key>
+            <array>
+              <string>group.com.nightvibes33.nullex</string>
+            </array>
+          </dict>
+          </plist>
+          PLIST
+
+          # Sign nested code first. The signature is intentionally ad-hoc:
+          # SideStore replaces it, but can now inspect the requested entitlement.
+          find "$APP" -type d -name '*.framework' -print0 | while IFS= read -r -d '' fw; do
+            codesign --force --sign - --timestamp=none "$fw"
+          done
+
+          for ext in "$APP"/PlugIns/*.appex; do
+            codesign --force --sign - --timestamp=none --entitlements "$ENT" "$ext"
+            codesign --verify --strict "$ext"
+            codesign -d --entitlements :- "$ext" 2>"$RUNNER_TEMP/ext-entitlements.plist"
+            grep -q 'group.com.nightvibes33.nullex' "$RUNNER_TEMP/ext-entitlements.plist"
+          done
+
+          codesign --force --sign - --timestamp=none --entitlements "$ENT" "$APP"
+          codesign --verify --deep --strict "$APP"
+          codesign -d --entitlements :- "$APP" 2>"$RUNNER_TEMP/app-entitlements.plist"
+          grep -q 'group.com.nightvibes33.nullex' "$RUNNER_TEMP/app-entitlements.plist"
+
+          echo "Host + all Safari extensions carry the App Group entitlement."
+
+      - name: Verify no user-visible wBlock branding remains
+        working-directory: wblock
+        run: |
+          set -euo pipefail
+          APP="$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          fail=0
+
+          while IFS= read -r -d '' file; do
+            if grep -a -n 'wBlock' "$file"; then
+              echo "User-visible wBlock branding remains in $file"
+              fail=1
+            fi
+          done < <(find "$APP" -type f \( -name '*.strings' -o -name 'messages.json' -o -name 'manifest.json' \) -print0)
+
+          # Targeted binary phrases that would be visible if localization lookup misses.
+          BIN="$APP/wBlock"
+          for phrase in 'Welcome to wBlock' 'Set up wBlock' 'wBlock Scripts' 'Restart wBlock'; do
+            if strings "$BIN" | grep -F "$phrase"; then
+              echo "Visible branding phrase remains in executable: $phrase"
+              fail=1
+            fi
+          done
+
+          test "$fail" -eq 0
+
       - name: Build and smoke-test canonical + SideStore-style launch
         working-directory: wblock
         run: |
@@ -340,7 +406,7 @@ jobs:
             IPHONEOS_DEPLOYMENT_TARGET=27.0 \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CURRENT_PROJECT_VERSION=112 \
+            CURRENT_PROJECT_VERSION=113 \
             build >/tmp/nullex-sim-build.log
 
           UDID="$(python3 - <<'PY'
@@ -363,8 +429,29 @@ jobs:
           APP="$(find DerivedDataSim/Build/Products/Debug-iphonesimulator -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP"
 
-          # Canonical launch must remain alive for 10 seconds and complete
-          # didFinishLaunching.
+          sign_bundle() {
+            local app="$1"
+            local group="$2"
+            local ent="$RUNNER_TEMP/sim-entitlements.plist"
+            cat > "$ent" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>com.apple.security.application-groups</key>
+          <array><string>$group</string></array>
+          </dict></plist>
+          PLIST
+            find "$app" -type d -name '*.framework' -print0 | while IFS= read -r -d '' fw; do
+              codesign --force --sign - --timestamp=none "$fw"
+            done
+            for ext in "$app"/PlugIns/*.appex; do
+              codesign --force --sign - --timestamp=none --entitlements "$ent" "$ext"
+            done
+            codesign --force --sign - --timestamp=none --entitlements "$ent" "$app"
+          }
+
+          # Canonical signed identity.
+          sign_bundle "$APP" "group.com.nightvibes33.nullex"
           xcrun simctl uninstall "$UDID" com.nightvibes33.nullex 2>/dev/null || true
           xcrun simctl install "$UDID" "$APP"
           OUT="$(xcrun simctl launch "$UDID" com.nightvibes33.nullex)"
@@ -373,36 +460,36 @@ jobs:
           test -n "$PID"
           sleep 10
           kill -0 "$PID"
-          ps -p "$PID" -o command= | grep -q 'wBlock\|Nullex'
           DATA="$(xcrun simctl get_app_container "$UDID" com.nightvibes33.nullex data)"
           test -f "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'didFinish:complete' "$DATA/Documents/Nullex-Launch.txt"
           xcrun simctl terminate "$UDID" com.nightvibes33.nullex
 
-          # Now mutate only bundle identifiers exactly like SideStore-style
-          # resigning does: insert a token before each extension suffix.
+          # SideStore-style rewritten host + extensions + App Group.
           REWRITTEN="$RUNNER_TEMP/Nullex-Rewritten.app"
           rm -rf "$REWRITTEN"
           ditto "$APP" "$REWRITTEN"
+
           python3 - "$REWRITTEN" <<'PY'
           import glob, os, plistlib, sys
           app=sys.argv[1]
           token='39A8Q3T3TR'
           host=f'com.nightvibes33.nullex.{token}'
-          main=os.path.join(app,'Info.plist')
-          with open(main,'rb') as f: d=plistlib.load(f)
+          p=os.path.join(app,'Info.plist')
+          with open(p,'rb') as f: d=plistlib.load(f)
           d['CFBundleIdentifier']=host
-          with open(main,'wb') as f: plistlib.dump(d,f,fmt=plistlib.FMT_BINARY)
+          with open(p,'wb') as f: plistlib.dump(d,f,fmt=plistlib.FMT_BINARY)
           for p in glob.glob(os.path.join(app,'PlugIns','*.appex','Info.plist')):
               with open(p,'rb') as f: e=plistlib.load(f)
-              ident=e.get('CFBundleIdentifier','')
-              suffix=ident.rsplit('.',1)[-1]
+              suffix=e.get('CFBundleIdentifier','').rsplit('.',1)[-1]
               e['CFBundleIdentifier']=f'{host}.{suffix}'
               with open(p,'wb') as f: plistlib.dump(e,f,fmt=plistlib.FMT_BINARY)
-          print(host)
           PY
 
           REWRITTEN_ID="com.nightvibes33.nullex.39A8Q3T3TR"
+          REWRITTEN_GROUP="group.com.nightvibes33.nullex.39A8Q3T3TR"
+          sign_bundle "$REWRITTEN" "$REWRITTEN_GROUP"
+
           xcrun simctl uninstall "$UDID" "$REWRITTEN_ID" 2>/dev/null || true
           xcrun simctl install "$UDID" "$REWRITTEN"
           OUT="$(xcrun simctl launch "$UDID" "$REWRITTEN_ID")"
@@ -411,25 +498,25 @@ jobs:
           test -n "$PID"
           sleep 10
           kill -0 "$PID"
-          ps -p "$PID" -o command= | grep -q 'wBlock\|Nullex'
           DATA="$(xcrun simctl get_app_container "$UDID" "$REWRITTEN_ID" data)"
           test -f "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'didFinish:complete' "$DATA/Documents/Nullex-Launch.txt"
           grep -q "$REWRITTEN_ID" "$DATA/Documents/Nullex-Launch.txt"
+          grep -q "$REWRITTEN_GROUP" "$DATA/Documents/Nullex-Launch.txt"
           cat "$DATA/Documents/Nullex-Launch.txt"
           xcrun simctl terminate "$UDID" "$REWRITTEN_ID"
 
-      - name: Package unsigned Nullex IPA
+      - name: Package SideStore-resignable Nullex IPA
         working-directory: wblock
         run: |
           set -euo pipefail
           APP="$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
-          rm -rf Payload Nullex-iOS27-unsigned.ipa
+          rm -rf Payload Nullex-iOS27-resignable.ipa
           mkdir Payload
           cp -R "$APP" Payload/Nullex.app
-          /usr/bin/zip -qry Nullex-iOS27-unsigned.ipa Payload
-          unzip -t Nullex-iOS27-unsigned.ipa
-          shasum -a 256 Nullex-iOS27-unsigned.ipa
+          /usr/bin/zip -qry Nullex-iOS27-resignable.ipa Payload
+          unzip -t Nullex-iOS27-resignable.ipa
+          shasum -a 256 Nullex-iOS27-resignable.ipa
 
       - name: Package corresponding source
         run: |
@@ -442,8 +529,8 @@ jobs:
       - name: Upload Nullex IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Nullex-iOS27-unsigned
-          path: wblock/Nullex-iOS27-unsigned.ipa
+          name: Nullex-iOS27-resignable
+          path: wblock/Nullex-iOS27-resignable.ipa
           compression-level: 0
           if-no-files-found: error
 
