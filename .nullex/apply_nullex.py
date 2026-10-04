@@ -676,6 +676,18 @@ for path in ROOT.rglob("*"):
 
 
 
+
+# Preserve upstream legal/FAQ/source URLs after the visible-string rebrand.
+replace_text(ROOT / "wBlock/SettingsView.swift", [
+    ("https://github.com/0xCUB3/Nullex/blob/main/PRIVACY_POLICY.md",
+     "https://github.com/0xCUB3/wBlock/blob/main/PRIVACY_POLICY.md"),
+    ("https://github.com/0xCUB3/Nullex#faq",
+     "https://github.com/0xCUB3/wBlock#faq"),
+    ("https://github.com/0xCUB3/Nullex",
+     "https://github.com/0xCUB3/wBlock"),
+])
+
+
 # Safari popup/accessibility fallbacks are user-facing even though they live in JS.
 replace_text(ROOT / "wBlock Scripts (iOS)/Resources/pages/popup/popup.js", [
     ("Open wBlock to finish applying filters.", "Open Nullex to finish applying filters."),
