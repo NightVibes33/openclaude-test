@@ -424,9 +424,28 @@ jobs:
           PID="$(echo "$OUT" | awk -F': ' '{print $NF}')"
           test -n "$PID"
           sleep 2
-          kill -0 "$PID"
           DATA="$(xcrun simctl get_app_container "$UDID" com.nightvibes33.nullex data)"
-          test -f "$DATA/Documents/Nullex-Launch.txt"
+
+          if ! kill -0 "$PID" 2>/dev/null; then
+            echo "=== Nullex terminated during canonical launch ==="
+            test -f "$DATA/Documents/Nullex-Launch.txt" && cat "$DATA/Documents/Nullex-Launch.txt" || true
+            echo "=== Simulator process/crash log ==="
+            xcrun simctl spawn "$UDID" log show --last 5m --style compact \
+              --predicate 'process == "wBlock" OR process == "Nullex" OR eventMessage CONTAINS[c] "com.nightvibes33.nullex"' \
+              2>/dev/null | tail -n 600 || true
+            echo "=== DiagnosticReports ==="
+            find "$HOME/Library/Logs/DiagnosticReports" -type f -mmin -10 -maxdepth 2 -print -exec tail -n 300 {} \; 2>/dev/null || true
+            exit 1
+          fi
+
+          if [ ! -f "$DATA/Documents/Nullex-Launch.txt" ]; then
+            echo "Launch marker missing despite live process."
+            xcrun simctl spawn "$UDID" log show --last 5m --style compact \
+              --predicate 'process == "wBlock" OR process == "Nullex" OR eventMessage CONTAINS[c] "com.nightvibes33.nullex"' \
+              2>/dev/null | tail -n 600 || true
+            exit 1
+          fi
+          cat "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'didFinish:complete' "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'groupAvailable=true' "$DATA/Documents/Nullex-Launch.txt"
           for _ in $(seq 1 30); do
@@ -471,8 +490,15 @@ jobs:
           PID="$(echo "$OUT" | awk -F': ' '{print $NF}')"
           test -n "$PID"
           sleep 2
-          kill -0 "$PID"
           DATA="$(xcrun simctl get_app_container "$UDID" "$REWRITTEN_ID" data)"
+          if ! kill -0 "$PID" 2>/dev/null; then
+            echo "=== Nullex terminated during rewritten launch ==="
+            test -f "$DATA/Documents/Nullex-Launch.txt" && cat "$DATA/Documents/Nullex-Launch.txt" || true
+            xcrun simctl spawn "$UDID" log show --last 5m --style compact \
+              --predicate 'process == "wBlock" OR process == "Nullex" OR eventMessage CONTAINS[c] "com.nightvibes33.nullex"' \
+              2>/dev/null | tail -n 600 || true
+            exit 1
+          fi
           test -f "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'didFinish:complete' "$DATA/Documents/Nullex-Launch.txt"
           grep -q "$REWRITTEN_ID" "$DATA/Documents/Nullex-Launch.txt"
