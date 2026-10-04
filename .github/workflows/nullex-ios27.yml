@@ -108,6 +108,16 @@ jobs:
                   if '"' in line and "wBlock" in line:
                       problems.append(f"{p}:{line_no}: old brand in visible string")
 
+          popup=root/"wBlock Scripts (iOS)"/"Resources"/"pages"/"popup"/"popup.js"
+          if popup.exists():
+              pt=popup.read_text(errors="ignore")
+              for visible in ["Open wBlock", "Open wBlock to finish", "Open wBlock to resume"]:
+                  if visible in pt:
+                      problems.append(f"{popup}: {visible}")
+          zapper=root/"wBlock Scripts (iOS)"/"Resources"/"zapper-content.js"
+          if zapper.exists() and "wBlock Element Zapper" in zapper.read_text(errors="ignore"):
+              problems.append(f"{zapper}: old accessible product label")
+
           if problems:
               print("Branding/UI parity audit failed:")
               for p in problems: print(" -",p)
