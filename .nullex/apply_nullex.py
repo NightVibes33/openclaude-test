@@ -693,6 +693,12 @@ launch_helper = '''    private func runNullexCISelfTestIfRequested() {
                 }
 
                 writeNullexLaunchMarker("selftest:download-ok bytes=\\(data.count)")
+
+                let convertedCount = try ContentBlockerService.nullexCIConversionSmokeTest(
+                    groupIdentifier: GroupIdentifier.shared.value,
+                    containerURL: groupURL
+                )
+                writeNullexLaunchMarker("selftest:conversion-ok rules=\\(convertedCount)")
             } catch {
                 writeNullexLaunchMarker("selftest:failed reason=\(error.localizedDescription)")
             }
@@ -1068,6 +1074,41 @@ replace_text(app_delegate, [
         let available = GroupIdentifier.shared.containerURL != nil
         let line = "\(Date().timeIntervalSince1970) \(event) bundle=\(Bundle.main.bundleIdentifier ?? "nil") group=\(GroupIdentifier.shared.value) groupAvailable=\(available) signedGroups=\(signedGroups)\n"''')
 ])
+
+
+# CI-only conversion probe lives in the shared core file so it exercises the
+# exact SafariConverterLib path used by Apply Changes, including the shared
+# container write that previously failed on resigned builds.
+_core_path = ROOT / "wBlockCoreService/wBlockCoreService.swift"
+_core_text = _core_path.read_text(encoding="utf-8")
+if "nullexCIConversionSmokeTest" not in _core_text:
+    _core_text += r'''
+
+public extension ContentBlockerService {
+    static func nullexCIConversionSmokeTest(
+        groupIdentifier: String,
+        containerURL: URL
+    ) throws -> Int {
+        let source = """
+        ||example.com^
+        example.com##.nullex-ci-ad
+        """
+        let result = try convertRules(rules: source)
+        let saved = try saveContentBlockerIfChanged(
+            jsonRules: result.safariRulesJSON,
+            groupIdentifier: groupIdentifier,
+            targetRulesFilename: "nullex-ci-rules.json",
+            containerURL: containerURL
+        )
+        guard saved.ruleCount > 0 else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        return saved.ruleCount
+    }
+}
+'''
+    _core_path.write_text(_core_text, encoding="utf-8")
+
 
 # Finish the user-visible rebrand while preserving upstream legal/source attribution.
 visible_replacements = {
