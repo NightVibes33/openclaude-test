@@ -69,15 +69,34 @@ for path in ROOT.rglob("Info.plist"):
         ("wBlock", "Nullex"),
     ])
 
-# Sideload builds should not depend on CloudKit capability. Local backup remains available.
+# Unsigned iOS sideload builds should carry only the entitlement the blocker
+# architecture actually needs. Strip CloudKit and macOS sandbox-only keys; those
+# can survive project generation and are unnecessary/risky when SideStore resigns.
 main_entitlements = ROOT / "wBlock/wBlock.entitlements"
 if main_entitlements.exists():
     with main_entitlements.open("rb") as f:
         ent = plistlib.load(f)
-    ent.pop("com.apple.developer.icloud-container-identifiers", None)
-    ent.pop("com.apple.developer.icloud-services", None)
+    ent = {
+        "com.apple.security.application-groups": [
+            BASE_GROUP
+        ]
+    }
     with main_entitlements.open("wb") as f:
         plistlib.dump(ent, f, fmt=plistlib.FMT_XML, sort_keys=False)
+
+# This branch is specifically the unsigned/sideload distribution. Disable
+# BGTaskScheduler registration entirely; foreground/manual filter updates remain
+# intact and this avoids launch-time policy failures after identifier rewriting.
+main_info = ROOT / "wBlock/Info.plist"
+if main_info.exists():
+    with main_info.open("rb") as f:
+        info = plistlib.load(f)
+    info.pop("BGTaskSchedulerPermittedIdentifiers", None)
+    info.pop("UIBackgroundModes", None)
+    info["UIFileSharingEnabled"] = True
+    info["LSSupportsOpeningDocumentsInPlace"] = True
+    with main_info.open("wb") as f:
+        plistlib.dump(info, f, fmt=plistlib.FMT_XML, sort_keys=False)
 
 # Product-name text in localization resources and the Safari Web Extension.
 for path in (ROOT / "wBlock").glob("*.lproj/Localizable.strings"):
@@ -514,14 +533,7 @@ replace_text(app_delegate, [
         }'''),
     ('    private func registerBackgroundTasks() {',
      '''    private var canUseBackgroundTaskScheduler: Bool {
-        guard Bundle.main.bundleIdentifier == "com.nightvibes33.nullex" else {
-            return false
-        }
-        let permitted = Bundle.main.object(
-            forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers"
-        ) as? [String] ?? []
-        return permitted.contains(backgroundTaskIdentifier)
-            && permitted.contains(backgroundProcessingIdentifier)
+        false
     }
 
     private func registerBackgroundTasks() {'''),
@@ -547,16 +559,7 @@ replace_text(cloud, [
      '        isEnabled = Self.hasCloudKitEntitlement && defaults.bool(forKey: Keys.enabled)'),
 ])
 
-# Give crash diagnostics a Files-visible destination if launch gets far enough
-# to execute application(_:didFinishLaunchingWithOptions:).
-main_info = ROOT / "wBlock/Info.plist"
-if main_info.exists():
-    with main_info.open("rb") as f:
-        info = plistlib.load(f)
-    info["UIFileSharingEnabled"] = True
-    info["LSSupportsOpeningDocumentsInPlace"] = True
-    with main_info.open("wb") as f:
-        plistlib.dump(info, f, fmt=plistlib.FMT_XML, sort_keys=False)
+# Files-visible launch diagnostics are enabled above.
 
 # Write a tiny launch marker before any optional background/cloud work.
 delegate_text = app_delegate.read_text(encoding="utf-8")
