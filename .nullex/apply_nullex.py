@@ -872,13 +872,12 @@ replace_text(ROOT / "wBlock Scripts (iOS)/Resources/zapper-content.js", [
 # blockers, and the WebExtension must all select the same entitlement-backed group.
 group_identifier = ROOT / "wBlockCoreService/GroupIdentifier.swift"
 group_identifier.write_text(r'''import Foundation
-import Security
 
 public enum RuntimeBundleIdentity {
     public static let baseBundleIdentifier = "com.nightvibes33.nullex"
     public static let baseGroupIdentifier = "group.com.nightvibes33.nullex"
 
-    private static let knownExtensionSuffixes = [
+    private static let knownExtensionSuffixes: Set<String> = [
         "ads", "privacy", "security", "regional", "custom",
         "scripts", "multipurpose", "experimental"
     ]
@@ -889,11 +888,15 @@ public enum RuntimeBundleIdentity {
         guard let bundleIdentifier, !bundleIdentifier.isEmpty else {
             return baseBundleIdentifier
         }
+
         let components = bundleIdentifier.split(separator: ".").map(String.init)
-        if let last = components.last, knownExtensionSuffixes.contains(last), components.count > 1 {
-            return components.dropLast().joined(separator: ".")
+        guard let last = components.last,
+              knownExtensionSuffixes.contains(last),
+              components.count > 1 else {
+            return bundleIdentifier
         }
-        return bundleIdentifier
+
+        return components.dropLast().joined(separator: ".")
     }
 
     public static func extensionBundleIdentifier(
@@ -910,23 +913,61 @@ public enum RuntimeBundleIdentity {
         return bundleIdentifier == containingAppBundleIdentifier(from: bundleIdentifier)
     }
 
-    public static func signedApplicationGroups() -> [String] {
-        guard let task = SecTaskCreateFromSelf(kCFAllocatorDefault),
-              let raw = SecTaskCopyValueForEntitlement(
-                task,
-                "com.apple.security.application-groups" as CFString,
-                nil
-              ) else {
+    /// SideStore embeds a fresh provisioning profile after resigning. Parse that
+    /// public bundle resource to learn the exact App Group granted to this build.
+    public static func provisionedApplicationGroups(
+        bundle: Bundle = .main
+    ) -> [String] {
+        guard let profileURL = bundle.url(
+            forResource: "embedded",
+            withExtension: "mobileprovision"
+        ),
+        let profileData = try? Data(contentsOf: profileURL)
+        else {
             return []
         }
-        return raw as? [String] ?? []
+
+        let xmlStart = Data("<?xml".utf8)
+        let xmlEnd = Data("</plist>".utf8)
+
+        guard let start = profileData.range(of: xmlStart)?.lowerBound,
+              let endRange = profileData.range(of: xmlEnd, options: .backwards),
+              start < endRange.upperBound else {
+            return []
+        }
+
+        let plistData = profileData.subdata(in: start..<endRange.upperBound)
+        guard let object = try? PropertyListSerialization.propertyList(
+            from: plistData,
+            options: [],
+            format: nil
+        ),
+        let profile = object as? [String: Any],
+        let entitlements = profile["Entitlements"] as? [String: Any],
+        let groups = entitlements[
+            "com.apple.security.application-groups"
+        ] as? [String]
+        else {
+            return []
+        }
+
+        return groups.filter { !$0.isEmpty }
+    }
+
+    /// Compatibility name used by Nullex diagnostics. This deliberately avoids
+    /// private/unavailable SecTask APIs on iOS.
+    public static func signedApplicationGroups() -> [String] {
+        provisionedApplicationGroups()
     }
 
     static func groupCandidates(
         from bundleIdentifier: String? = Bundle.main.bundleIdentifier
     ) -> [String] {
         let family = containingAppBundleIdentifier(from: bundleIdentifier)
-        var candidates = signedApplicationGroups()
+        var candidates = provisionedApplicationGroups()
+
+        // SideStore commonly remaps the original group using the rewritten
+        // containing-app family. Other signers may preserve the original.
         candidates.append("group.\(family)")
         candidates.append(baseGroupIdentifier)
 
@@ -943,22 +984,29 @@ public final class GroupIdentifier {
 
     private init() {
         let fm = FileManager.default
+        let candidates = RuntimeBundleIdentity.groupCandidates()
 
-        // Signed entitlements are authoritative. This survives identifiers such as
-        // com.nightvibes33.nullex.39A8Q3T3TR and whatever App Group the signer emits.
-        for candidate in RuntimeBundleIdentity.groupCandidates() {
-            if let url = fm.containerURL(forSecurityApplicationGroupIdentifier: candidate) {
+        for candidate in candidates {
+            if let url = fm.containerURL(
+                forSecurityApplicationGroupIdentifier: candidate
+            ) {
                 value = candidate
                 containerURL = url
                 return
             }
         }
 
-        // Keep a stable value for diagnostics. Callers must treat containerURL == nil
-        // as a signing/capability failure instead of silently writing somewhere else.
-        value = RuntimeBundleIdentity.signedApplicationGroups().first
+        value = candidates.first
             ?? RuntimeBundleIdentity.baseGroupIdentifier
         containerURL = nil
+    }
+
+    public static func resolvedContainerURL() -> URL? {
+        shared.containerURL
+    }
+
+    public var isAvailable: Bool {
+        containerURL != nil
     }
 }
 ''', encoding="utf-8")
