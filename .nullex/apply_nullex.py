@@ -108,7 +108,6 @@ for path in (ROOT / "wBlock Scripts (iOS)/Resources/_locales").glob("*/messages.
 swift_replacements = {
     "wBlock/AppTabView.swift": [
         ('Picker("wBlock"', 'Picker("Nullex"'),
-        ('Label("Filters", systemImage:', 'Label("Protection", systemImage:'),
     ],
     "wBlock/ContentView.swift": [
         ("part of wBlock’s essential protection", "part of Nullex’s essential protection"),
@@ -439,72 +438,6 @@ for rel in [
 ]:
     replace_text(ROOT / rel, [("wblockapp", "nullex")])
 
-# Add a compact branded hero to the iPhone Protection tab while leaving the
-# underlying wBlock list engine and controls intact.
-content = ROOT / "wBlock/ContentView.swift"
-text = content.read_text(encoding="utf-8")
-needle = '''        return List {
-            Section {
-                statsCardsView
-                    .unifiedTabCardSectionRow()
-            }
-'''
-replacement = '''        return List {
-            Section {
-                nullexHeroView
-                    .unifiedTabCardSectionRow()
-            }
-
-            Section {
-                statsCardsView
-                    .unifiedTabCardSectionRow()
-            }
-'''
-if needle in text:
-    text = text.replace(needle, replacement, 1)
-
-anchor = '''    private var userscriptsView: some View {
-'''
-hero = r'''    #if os(iOS)
-    private var nullexHeroView: some View {
-        HStack(spacing: 14) {
-            Image("NullexMark")
-                .resizable()
-                .scaledToFill()
-                .frame(width: 62, height: 62)
-                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-                .shadow(radius: 10, y: 4)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Nullex")
-                    .font(.title2.bold())
-                Text(filterManager.isBlockingPaused ? "Protection paused" : "Safari protection ready")
-                    .font(.subheadline)
-                    .foregroundStyle(filterManager.isBlockingPaused ? .orange : .secondary)
-
-                Text("\(enabledListsCount) lists • \(appliedSafariRulesCount.formatted()) Safari rules")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 8)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassCompat(cornerRadius: 22)
-    }
-    #endif
-
-'''
-if anchor in text and "private var nullexHeroView" not in text:
-    text = text.replace(anchor, hero + anchor, 1)
-content.write_text(text, encoding="utf-8")
-
-# Rename main iOS tab titles while keeping feature semantics.
-replace_text(ROOT / "wBlock/AppTabView.swift", [
-    ('Label("Userscripts", systemImage:', 'Label("Scripts", systemImage:'),
-])
-
 
 # Real-device sideload hardening.
 #
@@ -603,6 +536,49 @@ if extension_anchor in delegate_text and "writeNullexLaunchMarker(_ event:" not 
     delegate_text = delegate_text.replace(extension_anchor, launch_helper + extension_anchor, 1)
 app_delegate.write_text(delegate_text, encoding="utf-8")
 
+
+
+# Keep upstream wBlock UI/feature visibility exactly intact; only rebrand
+# user-facing text. Internal symbols/modules stay untouched.
+import re as _re
+
+def _rebrand_swift_string_literals(path: Path):
+    if not path.exists():
+        return
+    source = path.read_text(encoding="utf-8")
+    pattern = _re.compile(r'"(?:\\.|[^"\\])*"')
+    def repl(match):
+        literal = match.group(0)
+        if "wBlock" not in literal:
+            return literal
+        # Preserve upstream/legal URLs while removing product-name leakage.
+        if "github.com/0xCUB3/wBlock" in literal or "raw.githubusercontent.com/0xCUB3/wBlock" in literal:
+            return literal
+        return literal.replace("wBlock", "Nullex")
+    updated = pattern.sub(repl, source)
+    if updated != source:
+        path.write_text(updated, encoding="utf-8")
+
+for _path in ROOT.rglob("*.swift"):
+    _rebrand_swift_string_literals(_path)
+
+# Localized UI and Safari extension locale resources.
+for _path in ROOT.rglob("*.strings"):
+    replace_text(_path, [("wBlock", "Nullex")])
+for _path in ROOT.rglob("messages.json"):
+    replace_text(_path, [("wBlock", "Nullex")])
+
+# Safari extension scripts have a handful of visible labels/messages.
+for _rel in [
+    "wBlock Scripts (iOS)/Resources/no-autoplay.js",
+    "wBlock Scripts (iOS)/Resources/zapper-content.js",
+    "wBlock Scripts (iOS)/Resources/userscript-injector.js",
+    "wBlock Scripts (iOS)/Resources/pages/popup/popup.js",
+]:
+    replace_text(ROOT / _rel, [("wBlock", "Nullex")])
+
+# Keep the upstream screen/layout hierarchy; Nullex must not expose extra
+# controls merely because it is a rebrand.
 
 # Mark derivative clearly and retain GPL attribution.
 notice = ROOT / "NULLEX_NOTICE.md"
