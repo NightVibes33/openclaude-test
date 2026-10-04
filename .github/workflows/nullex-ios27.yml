@@ -1,4 +1,4 @@
-name: Nullex iOS 27 Unsigned
+name: Nullex iOS 27 Sideload
 
 on:
   push:
@@ -237,6 +237,50 @@ jobs:
           cmp "$OUT/NullexIcon76@2x~ipad.png" "$APP/NullexIcon76@2x~ipad.png"
           cmp "$OUT/NullexIcon83.5@2x~ipad.png" "$APP/NullexIcon83.5@2x~ipad.png"
           shasum -a 256 "$APP"/NullexIcon*.png
+
+      - name: Embed App Group entitlements for SideStore resigning
+        working-directory: wblock
+        run: |
+          set -euo pipefail
+          APP="$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP"
+
+          ENT="$RUNNER_TEMP/Nullex-Sideload.entitlements"
+          cat > "$ENT" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>com.apple.security.application-groups</key>
+            <array>
+              <string>group.com.nightvibes33.nullex</string>
+            </array>
+          </dict>
+          </plist>
+          PLIST
+
+          # Sign nested frameworks first, then every Safari extension with the
+          # App Group entitlement, then the host app. SideStore re-signs these
+          # later, but this ad-hoc signature preserves the requested entitlements
+          # so its provisioning pipeline can discover/remap the shared group.
+          while IFS= read -r framework; do
+            codesign --force --sign - "$framework"
+          done < <(find "$APP" -type d -name '*.framework' -print)
+
+          for ext in "$APP"/PlugIns/*.appex; do
+            test -d "$ext"
+            codesign --force --sign - --entitlements "$ENT" "$ext"
+          done
+
+          codesign --force --sign - --entitlements "$ENT" "$APP"
+
+          echo "Host entitlements:"
+          codesign -d --entitlements :- "$APP" 2>&1 | tee /tmp/nullex-host-entitlements.txt
+          grep -q 'group.com.nightvibes33.nullex' /tmp/nullex-host-entitlements.txt
+
+          for ext in "$APP"/PlugIns/*.appex; do
+            codesign -d --entitlements :- "$ext" 2>&1 | grep -q 'group.com.nightvibes33.nullex'
+          done
 
       - name: Verify built app and extensions
         working-directory: wblock
