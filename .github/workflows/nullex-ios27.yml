@@ -105,7 +105,61 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION=112 \
             build | tee xcodebuild.log
+
+      - name: Force exact uploaded icon into final app bundle
+        working-directory: wblock
+        run: |
+          set -euo pipefail
+          APP="$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP"
+
+          SRC="$GITHUB_WORKSPACE/.nullex/NullexIcon.jpeg"
+          OUT="$RUNNER_TEMP/nullex-final-icons"
+          mkdir -p "$OUT"
+
+          # iPhone 16 uses the 3x phone icon. Build every legacy icon directly
+          # from the exact user-supplied master, then point Info.plist at these
+          # raw files so Assets.car cannot substitute the upstream artwork.
+          sips -s format png -z 120 120 "$SRC" --out "$OUT/NullexIcon60@2x.png" >/dev/null
+          sips -s format png -z 180 180 "$SRC" --out "$OUT/NullexIcon60@3x.png" >/dev/null
+          sips -s format png -z 152 152 "$SRC" --out "$OUT/NullexIcon76@2x~ipad.png" >/dev/null
+          sips -s format png -z 167 167 "$SRC" --out "$OUT/NullexIcon83.5@2x~ipad.png" >/dev/null
+
+          cp "$OUT/NullexIcon60@2x.png" "$APP/NullexIcon60@2x.png"
+          cp "$OUT/NullexIcon60@3x.png" "$APP/NullexIcon60@3x.png"
+          cp "$OUT/NullexIcon76@2x~ipad.png" "$APP/NullexIcon76@2x~ipad.png"
+          cp "$OUT/NullexIcon83.5@2x~ipad.png" "$APP/NullexIcon83.5@2x~ipad.png"
+
+          python3 - "$APP/Info.plist" <<'PY'
+          import plistlib, sys
+          p=sys.argv[1]
+          with open(p,'rb') as f:
+              d=plistlib.load(f)
+          d['CFBundleName']='Nullex'
+          d['CFBundleDisplayName']='Nullex'
+          d['CFBundleIconFiles']=['NullexIcon60']
+          d['CFBundleIcons']={
+              'CFBundlePrimaryIcon': {
+                  'CFBundleIconFiles':['NullexIcon60']
+              }
+          }
+          d['CFBundleIcons~ipad']={
+              'CFBundlePrimaryIcon': {
+                  'CFBundleIconFiles':['NullexIcon60','NullexIcon76','NullexIcon83.5']
+              }
+          }
+          with open(p,'wb') as f:
+              plistlib.dump(d,f,fmt=plistlib.FMT_BINARY)
+          PY
+
+          # Byte-for-byte verification after the exact resize operation.
+          cmp "$OUT/NullexIcon60@2x.png" "$APP/NullexIcon60@2x.png"
+          cmp "$OUT/NullexIcon60@3x.png" "$APP/NullexIcon60@3x.png"
+          cmp "$OUT/NullexIcon76@2x~ipad.png" "$APP/NullexIcon76@2x~ipad.png"
+          cmp "$OUT/NullexIcon83.5@2x~ipad.png" "$APP/NullexIcon83.5@2x~ipad.png"
+          shasum -a 256 "$APP"/NullexIcon*.png
 
       - name: Verify built app and extensions
         working-directory: wblock
@@ -141,7 +195,7 @@ jobs:
           done
           test "$ext_count" -ge 6
 
-      - name: Build and smoke-test iOS 27 simulator launch
+      - name: Build and smoke-test canonical + SideStore-style launch
         working-directory: wblock
         run: |
           set -euo pipefail
@@ -153,6 +207,9 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath DerivedDataSim \
             IPHONEOS_DEPLOYMENT_TARGET=27.0 \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CURRENT_PROJECT_VERSION=112 \
             build >/tmp/nullex-sim-build.log
 
           UDID="$(python3 - <<'PY'
@@ -174,16 +231,60 @@ jobs:
 
           APP="$(find DerivedDataSim/Build/Products/Debug-iphonesimulator -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP"
+
+          # Canonical launch must remain alive for 10 seconds and complete
+          # didFinishLaunching.
+          xcrun simctl uninstall "$UDID" com.nightvibes33.nullex 2>/dev/null || true
           xcrun simctl install "$UDID" "$APP"
-          xcrun simctl launch "$UDID" com.nightvibes33.nullex >/tmp/nullex-launch.log 2>&1
-          sleep 8
+          OUT="$(xcrun simctl launch "$UDID" com.nightvibes33.nullex)"
+          echo "$OUT"
+          PID="$(echo "$OUT" | awk -F': ' '{print $NF}')"
+          test -n "$PID"
+          sleep 10
+          xcrun simctl spawn "$UDID" /bin/kill -0 "$PID"
+          DATA="$(xcrun simctl get_app_container "$UDID" com.nightvibes33.nullex data)"
+          test -f "$DATA/Documents/Nullex-Launch.txt"
+          grep -q 'didFinish:complete' "$DATA/Documents/Nullex-Launch.txt"
+          xcrun simctl terminate "$UDID" com.nightvibes33.nullex
 
-          if ! xcrun simctl get_app_container "$UDID" com.nightvibes33.nullex app >/dev/null 2>&1; then
-            cat /tmp/nullex-launch.log || true
-            exit 1
-          fi
+          # Now mutate only bundle identifiers exactly like SideStore-style
+          # resigning does: insert a token before each extension suffix.
+          REWRITTEN="$RUNNER_TEMP/Nullex-Rewritten.app"
+          rm -rf "$REWRITTEN"
+          ditto "$APP" "$REWRITTEN"
+          python3 - "$REWRITTEN" <<'PY'
+          import glob, os, plistlib, sys
+          app=sys.argv[1]
+          token='39A8Q3T3TR'
+          host=f'com.nightvibes33.nullex.{token}'
+          main=os.path.join(app,'Info.plist')
+          with open(main,'rb') as f: d=plistlib.load(f)
+          d['CFBundleIdentifier']=host
+          with open(main,'wb') as f: plistlib.dump(d,f,fmt=plistlib.FMT_BINARY)
+          for p in glob.glob(os.path.join(app,'PlugIns','*.appex','Info.plist')):
+              with open(p,'rb') as f: e=plistlib.load(f)
+              ident=e.get('CFBundleIdentifier','')
+              suffix=ident.rsplit('.',1)[-1]
+              e['CFBundleIdentifier']=f'{host}.{suffix}'
+              with open(p,'wb') as f: plistlib.dump(e,f,fmt=plistlib.FMT_BINARY)
+          print(host)
+          PY
 
-          xcrun simctl terminate "$UDID" com.nightvibes33.nullex 2>/dev/null || true
+          REWRITTEN_ID="com.nightvibes33.nullex.39A8Q3T3TR"
+          xcrun simctl uninstall "$UDID" "$REWRITTEN_ID" 2>/dev/null || true
+          xcrun simctl install "$UDID" "$REWRITTEN"
+          OUT="$(xcrun simctl launch "$UDID" "$REWRITTEN_ID")"
+          echo "$OUT"
+          PID="$(echo "$OUT" | awk -F': ' '{print $NF}')"
+          test -n "$PID"
+          sleep 10
+          xcrun simctl spawn "$UDID" /bin/kill -0 "$PID"
+          DATA="$(xcrun simctl get_app_container "$UDID" "$REWRITTEN_ID" data)"
+          test -f "$DATA/Documents/Nullex-Launch.txt"
+          grep -q 'didFinish:complete' "$DATA/Documents/Nullex-Launch.txt"
+          grep -q "$REWRITTEN_ID" "$DATA/Documents/Nullex-Launch.txt"
+          cat "$DATA/Documents/Nullex-Launch.txt"
+          xcrun simctl terminate "$UDID" "$REWRITTEN_ID"
 
       - name: Package unsigned Nullex IPA
         working-directory: wblock
