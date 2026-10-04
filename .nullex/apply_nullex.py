@@ -624,7 +624,7 @@ for _rel in [
 for path in ROOT.rglob("*"):
     if not path.is_file():
         continue
-    if path.suffix.lower() not in {".strings", ".xcstrings", ".json", ".html", ".css", ".md"}:
+    if path.suffix.lower() not in {".strings", ".xcstrings", ".json", ".html", ".css"}:
         continue
     try:
         text = path.read_text(encoding="utf-8")
@@ -643,6 +643,12 @@ for rel in [
     "wBlock/LogsView.swift",
     "wBlock/BackupManager.swift",
     "wBlock/SponsorBlockTransferView.swift",
+    "wBlock/AppTabView.swift",
+    "wBlock/FilterFallbacksView.swift",
+    "wBlock/FilterUpdateShortcuts.swift",
+    "wBlock/FilterCategorySupport.swift",
+    "wBlock/FilterInfoView.swift",
+    "wBlock/SiteSettingsView.swift",
 ]:
     p = ROOT / rel
     if not p.exists():
@@ -654,7 +660,19 @@ for rel in [
         if "wBlock" in line and '"' in line:
             line = line.replace("wBlock", "Nullex")
         lines.append(line)
-    p.write_text("".join(lines), encoding="utf-8")
+    branded = "".join(lines).replace("Nullex Scripts", "Nullex Advanced")
+    p.write_text(branded, encoding="utf-8")
+
+# Keep localized extension instructions consistent with the actual extension name.
+for path in ROOT.rglob("*"):
+    if not path.is_file() or path.suffix.lower() not in {".strings", ".xcstrings", ".json", ".html"}:
+        continue
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        continue
+    if "Nullex Scripts" in text:
+        path.write_text(text.replace("Nullex Scripts", "Nullex Advanced"), encoding="utf-8")
 
 
 # Mark derivative clearly and retain GPL attribution.
@@ -667,8 +685,8 @@ Upstream: https://github.com/0xCUB3/wBlock
 Pinned upstream revision: 98539c863ca42098b62895e1fa1798eaed9e84de
 
 Changes in this build include Nullex branding, bundle/app-group identities,
-sideload-safe runtime identifier resolution, an iPhone-first Protection header,
-and Nullex icon assets. The blocking engine, filter compiler, userscript engine,
+sideload-safe runtime identifier resolution, SideStore-compatible shared storage,
+and Nullex icon assets. The visible app hierarchy intentionally follows upstream. The blocking engine, filter compiler, userscript engine,
 userstyle support, element zapper, update pipeline, and Safari integration are
 derived from wBlock.
 
