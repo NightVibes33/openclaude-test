@@ -430,11 +430,13 @@ jobs:
           grep -q 'didFinish:complete' "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'groupAvailable=true' "$DATA/Documents/Nullex-Launch.txt"
           for _ in $(seq 1 30); do
-            grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt" && break
+            grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt"
+          grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt" && break
             sleep 1
           done
           cat "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt"
+          grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt"
           xcrun simctl terminate "$UDID" com.nightvibes33.nullex
 
           # SideStore-style rewritten host + extensions + App Group.
@@ -477,11 +479,13 @@ jobs:
           grep -q "$REWRITTEN_GROUP" "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'groupAvailable=true' "$DATA/Documents/Nullex-Launch.txt"
           for _ in $(seq 1 30); do
-            grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt" && break
+            grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt"
+          grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt" && break
             sleep 1
           done
           cat "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt"
+          grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt"
           xcrun simctl terminate "$UDID" "$REWRITTEN_ID"
 
       - name: Package SideStore-resignable Nullex IPA
