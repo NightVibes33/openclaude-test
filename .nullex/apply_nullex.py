@@ -162,7 +162,6 @@ replace_text(settings, [
 # SideStore-safe runtime identity and App Group resolution.
 group_identifier = ROOT / "wBlockCoreService/GroupIdentifier.swift"
 group_identifier.write_text(r'''import Foundation
-import Security
 
 /// Runtime identity shared by the host app and Safari extensions.
 public enum RuntimeBundleIdentity {
@@ -180,12 +179,14 @@ public enum RuntimeBundleIdentity {
         guard let bundleIdentifier, !bundleIdentifier.isEmpty else {
             return baseBundleIdentifier
         }
+
         let components = bundleIdentifier.split(separator: ".").map(String.init)
         guard let last = components.last,
               knownExtensionSuffixes.contains(last),
               components.count > 1 else {
             return bundleIdentifier
         }
+
         return components.dropLast().joined(separator: ".")
     }
 
@@ -203,26 +204,60 @@ public enum RuntimeBundleIdentity {
         return bundleIdentifier == containingAppBundleIdentifier(from: bundleIdentifier)
     }
 
-    public static func signedApplicationGroups() -> [String] {
-        guard let task = SecTaskCreateFromSelf(nil),
-              let value = SecTaskCopyValueForEntitlement(
-                task,
-                "com.apple.security.application-groups" as CFString,
-                nil
-              ) else {
+    /// Reads the entitlements from the provisioning profile SideStore embeds.
+    /// This yields the actual post-resign App Group without private Security APIs.
+    public static func provisionedApplicationGroups(
+        bundle: Bundle = .main
+    ) -> [String] {
+        guard let profileURL = bundle.url(
+            forResource: "embedded",
+            withExtension: "mobileprovision"
+        ),
+        let profileData = try? Data(contentsOf: profileURL)
+        else {
             return []
         }
-        return value as? [String] ?? []
+
+        let xmlStartMarker = Data("<?xml".utf8)
+        let xmlEndMarker = Data("</plist>".utf8)
+
+        guard let start = profileData.range(of: xmlStartMarker)?.lowerBound,
+              let endRange = profileData.range(
+                of: xmlEndMarker,
+                options: .backwards
+              ),
+              start < endRange.upperBound else {
+            return []
+        }
+
+        let plistData = profileData.subdata(in: start..<endRange.upperBound)
+
+        guard let object = try? PropertyListSerialization.propertyList(
+            from: plistData,
+            options: [],
+            format: nil
+        ),
+        let profile = object as? [String: Any],
+        let entitlements = profile["Entitlements"] as? [String: Any],
+        let groups = entitlements[
+            "com.apple.security.application-groups"
+        ] as? [String]
+        else {
+            return []
+        }
+
+        return groups.filter { !$0.isEmpty }
     }
 
     static func groupCandidates(
         from bundleIdentifier: String? = Bundle.main.bundleIdentifier
     ) -> [String] {
         let family = containingAppBundleIdentifier(from: bundleIdentifier)
-        var candidates = signedApplicationGroups()
 
-        // SideStore commonly rewrites the host family and remaps the app-group
-        // entitlement at signing time. These cover both remapped and preserved IDs.
+        var candidates = provisionedApplicationGroups()
+
+        // SideStore normally rewrites the group alongside the host bundle.
+        // Keep both rewritten and original forms for other signers.
         candidates.append("group.\(family)")
         candidates.append(baseGroupIdentifier)
 
@@ -231,8 +266,8 @@ public enum RuntimeBundleIdentity {
     }
 }
 
-/// Resolves the shared container from the *actual signed entitlement* first.
-/// This is critical for sideloaders that rewrite bundle/app-group identifiers.
+/// Resolves the shared App Group once and exposes the same URL to every
+/// download, conversion, logging and Safari-extension path.
 public final class GroupIdentifier {
     public static let shared = GroupIdentifier()
 
@@ -240,24 +275,32 @@ public final class GroupIdentifier {
     public let containerURL: URL?
 
     private init() {
-        let fm = FileManager.default
-        var chosenID: String?
-        var chosenURL: URL?
+        let resolved = Self.resolve()
+        value = resolved.identifier
+        containerURL = resolved.url
+    }
 
-        for candidate in RuntimeBundleIdentity.groupCandidates() {
-            if let url = fm.containerURL(
+    private static func resolve(
+        fileManager: FileManager = .default
+    ) -> (identifier: String, url: URL?) {
+        let candidates = RuntimeBundleIdentity.groupCandidates()
+
+        for candidate in candidates {
+            if let url = fileManager.containerURL(
                 forSecurityApplicationGroupIdentifier: candidate
             ) {
-                chosenID = candidate
-                chosenURL = url
-                break
+                return (candidate, url)
             }
         }
 
-        value = chosenID
-            ?? RuntimeBundleIdentity.signedApplicationGroups().first
-            ?? RuntimeBundleIdentity.baseGroupIdentifier
-        containerURL = chosenURL
+        return (
+            candidates.first ?? RuntimeBundleIdentity.baseGroupIdentifier,
+            nil
+        )
+    }
+
+    public static func resolvedContainerURL() -> URL? {
+        shared.containerURL
     }
 
     public var isAvailable: Bool {
@@ -644,7 +687,7 @@ launch_helper = '''    private func runNullexCISelfTestIfRequested() {
                     return
                 }
 
-                writeNullexLaunchMarker("selftest:download-ok bytes=\(data.count)")
+                writeNullexLaunchMarker("selftest:download-ok bytes=\\(data.count)")
             } catch {
                 writeNullexLaunchMarker("selftest:failed reason=\(error.localizedDescription)")
             }
