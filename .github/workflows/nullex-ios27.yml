@@ -438,14 +438,14 @@ jobs:
 
           # Add GPL/upstream notice and keep upstream LICENSE unchanged.
           Path("NULLEX_NOTICE.md").write_text(
-              """# Nullex\n\n"
+              "# Nullex\\n\\n"
               "Nullex is a modified distribution of wBlock, originally developed by "
-              "Alexander Skula / 0xCUB3 and licensed under GNU GPL v3.0.\n\n"
-              "Upstream: https://github.com/0xCUB3/wBlock\n"
-              "Pinned upstream commit: 98539c863ca42098b62895e1fa1798eaed9e84de\n\n"
+              "Alexander Skula / 0xCUB3 and licensed under GNU GPL v3.0.\\n\\n"
+              "Upstream: https://github.com/0xCUB3/wBlock\\n"
+              "Pinned upstream commit: 98539c863ca42098b62895e1fa1798eaed9e84de\\n\\n"
               "Nullex modifications include product branding, iconography, iPhone UI "
               "presentation, bundle identifiers, and sideload runtime-identity handling. "
-              "The original GPL-3.0 LICENSE is retained unchanged.\n"
+              "The original GPL-3.0 LICENSE is retained unchanged.\\n"
           )
 
           # Validate no visible wBlock app/extension display names remain in iOS build settings.
@@ -512,9 +512,11 @@ jobs:
           xcrun simctl install "$UDID" "$APP"
           BID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
           test "$BID" = "com.nightvibes33.nullex"
-          xcrun simctl launch "$UDID" "$BID" >/tmp/nullex-launch.log 2>&1
+          LAUNCH_OUT="$(xcrun simctl launch "$UDID" "$BID" 2>&1 | tee /tmp/nullex-launch.log)"
+          PID="$(printf '%s' "$LAUNCH_OUT" | awk -F': ' 'NF > 1 {print $NF}' | tail -1)"
+          test -n "$PID"
           sleep 8
-          if ! xcrun simctl spawn "$UDID" launchctl print "gui/$(id -u)/$BID" >/dev/null 2>&1; then
+          if ! xcrun simctl spawn "$UDID" kill -0 "$PID" >/dev/null 2>&1; then
             cat /tmp/nullex-launch.log || true
             echo "Nullex did not remain alive after launch"
             exit 1
