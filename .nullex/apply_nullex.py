@@ -866,6 +866,226 @@ replace_text(ROOT / "wBlock Scripts (iOS)/Resources/zapper-content.js", [
 ])
 
 
+
+# Resolve the ACTUAL signed App Group after SideStore/re-signing.
+# This is the critical storage fix: downloads, conversion output, the Safari
+# blockers, and the WebExtension must all select the same entitlement-backed group.
+group_identifier = ROOT / "wBlockCoreService/GroupIdentifier.swift"
+group_identifier.write_text(r'''import Foundation
+import Security
+
+public enum RuntimeBundleIdentity {
+    public static let baseBundleIdentifier = "com.nightvibes33.nullex"
+    public static let baseGroupIdentifier = "group.com.nightvibes33.nullex"
+
+    private static let knownExtensionSuffixes = [
+        "ads", "privacy", "security", "regional", "custom",
+        "scripts", "multipurpose", "experimental"
+    ]
+
+    public static func containingAppBundleIdentifier(
+        from bundleIdentifier: String? = Bundle.main.bundleIdentifier
+    ) -> String {
+        guard let bundleIdentifier, !bundleIdentifier.isEmpty else {
+            return baseBundleIdentifier
+        }
+        let components = bundleIdentifier.split(separator: ".").map(String.init)
+        if let last = components.last, knownExtensionSuffixes.contains(last), components.count > 1 {
+            return components.dropLast().joined(separator: ".")
+        }
+        return bundleIdentifier
+    }
+
+    public static func extensionBundleIdentifier(
+        _ suffix: String,
+        from bundleIdentifier: String? = Bundle.main.bundleIdentifier
+    ) -> String {
+        "\(containingAppBundleIdentifier(from: bundleIdentifier)).\(suffix)"
+    }
+
+    public static func isContainingApp(
+        _ bundleIdentifier: String? = Bundle.main.bundleIdentifier
+    ) -> Bool {
+        guard let bundleIdentifier else { return false }
+        return bundleIdentifier == containingAppBundleIdentifier(from: bundleIdentifier)
+    }
+
+    public static func signedApplicationGroups() -> [String] {
+        guard let task = SecTaskCreateFromSelf(kCFAllocatorDefault),
+              let raw = SecTaskCopyValueForEntitlement(
+                task,
+                "com.apple.security.application-groups" as CFString,
+                nil
+              ) else {
+            return []
+        }
+        return raw as? [String] ?? []
+    }
+
+    static func groupCandidates(
+        from bundleIdentifier: String? = Bundle.main.bundleIdentifier
+    ) -> [String] {
+        let family = containingAppBundleIdentifier(from: bundleIdentifier)
+        var candidates = signedApplicationGroups()
+        candidates.append("group.\(family)")
+        candidates.append(baseGroupIdentifier)
+
+        var seen = Set<String>()
+        return candidates.filter { !$0.isEmpty && seen.insert($0).inserted }
+    }
+}
+
+public final class GroupIdentifier {
+    public static let shared = GroupIdentifier()
+
+    public let value: String
+    public let containerURL: URL?
+
+    private init() {
+        let fm = FileManager.default
+
+        // Signed entitlements are authoritative. This survives identifiers such as
+        // com.nightvibes33.nullex.39A8Q3T3TR and whatever App Group the signer emits.
+        for candidate in RuntimeBundleIdentity.groupCandidates() {
+            if let url = fm.containerURL(forSecurityApplicationGroupIdentifier: candidate) {
+                value = candidate
+                containerURL = url
+                return
+            }
+        }
+
+        // Keep a stable value for diagnostics. Callers must treat containerURL == nil
+        // as a signing/capability failure instead of silently writing somewhere else.
+        value = RuntimeBundleIdentity.signedApplicationGroups().first
+            ?? RuntimeBundleIdentity.baseGroupIdentifier
+        containerURL = nil
+    }
+}
+''', encoding="utf-8")
+
+# Make the loader use the already-resolved container instead of guessing again.
+replace_text(ROOT / "wBlock/FilterListLoader.swift", [
+    ('''    func getSharedContainerURL() -> URL? {
+        FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: GroupIdentifier.shared.value)
+    }''',
+     '''    func getSharedContainerURL() -> URL? {
+        GroupIdentifier.shared.containerURL
+    }''')
+])
+
+# Better user-visible failure diagnostics during Apply. The previous generic
+# "Failed" hid the actual converter/storage error.
+apply_pipeline = ROOT / "wBlock/AppFilterManager+ApplyPipeline.swift"
+replace_text(apply_pipeline, [
+    ('''        let resolvedStatusMessage = statusMessage
+            ?? LocalizedStrings.text("Failed", comment: "Generic failure status")''',
+     '''        let resolvedStatusMessage = statusMessage
+            ?? metadata["error"].map { "Failed: \($0)" }
+            ?? logMessage''')
+])
+
+# Surface a concrete storage error when Get/download cannot publish a list.
+updater = ROOT / "wBlock/FilterListUpdater.swift"
+replace_text(updater, [
+    ('''        guard let containerURL = loader.getSharedContainerURL() else {
+            await ConcurrentLogManager.shared.error(
+                .system, LocalizedStrings.text("Unable to access shared container"), metadata: [:])
+            return .failed
+        }''',
+     '''        guard let containerURL = loader.getSharedContainerURL() else {
+            let groups = RuntimeBundleIdentity.signedApplicationGroups().joined(separator: ", ")
+            let message = groups.isEmpty
+                ? "Shared App Group is unavailable after signing."
+                : "Shared App Group could not be opened: \(groups)"
+            await ConcurrentLogManager.shared.error(
+                .system,
+                LocalizedStrings.text("Unable to access shared container"),
+                metadata: ["error": message, "group": GroupIdentifier.shared.value]
+            )
+            await MainActor.run {
+                filterListManager?.statusDescription = message
+                filterListManager?.hasError = true
+            }
+            return .failed
+        }''')
+])
+
+# Extend the Files-visible launch diagnostics so a real device immediately tells
+# us the signed groups and whether the shared container actually resolved.
+app_delegate = ROOT / "wBlock/AppDelegate.swift"
+replace_text(app_delegate, [
+    ('''        let line = "\(Date().timeIntervalSince1970) \(event) bundle=\(Bundle.main.bundleIdentifier ?? "nil") group=\(GroupIdentifier.shared.value)\n"''',
+     '''        let signedGroups = RuntimeBundleIdentity.signedApplicationGroups().joined(separator: ",")
+        let available = GroupIdentifier.shared.containerURL != nil ? "1" : "0"
+        let line = "\(Date().timeIntervalSince1970) \(event) bundle=\(Bundle.main.bundleIdentifier ?? "nil") group=\(GroupIdentifier.shared.value) groupContainer=\(available) signedGroups=\(signedGroups)\n"''')
+])
+
+# Finish the user-visible rebrand while preserving upstream legal/source attribution.
+visible_replacements = {
+    "wBlock/FilterFallbacksView.swift": [
+        ("If the source URL fails, wBlock tries these URLs in order.",
+         "If the source URL fails, Nullex tries these URLs in order."),
+    ],
+    "wBlock/FilterUpdateShortcuts.swift": [
+        ("Update wBlock Filters", "Update Nullex Filters"),
+        ("Checks for wBlock filter updates and applies them when available.",
+         "Checks for Nullex filter updates and applies them when available."),
+        ("A wBlock filter update is already in progress.", "A Nullex filter update is already in progress."),
+        ("wBlock filter update completed.", "Nullex filter update completed."),
+        ("wBlock filter update completed with errors.", "Nullex filter update completed with errors."),
+    ],
+    "wBlock/FilterCategorySupport.swift": [
+        ("Organizes userscripts and userstyles added to wBlock.",
+         "Organizes userscripts and userstyles added to Nullex."),
+    ],
+    "wBlock/AppFilterManager.swift": [
+        ("Total capacity (all wBlock blockers):", "Total capacity (all Nullex blockers):"),
+        ("wBlock distributes your enabled filter lists", "Nullex distributes your enabled filter lists"),
+    ],
+    "wBlock/OnboardingView.swift": [
+        ("An existing wBlock configuration", "An existing Nullex configuration"),
+        ("Set up wBlock", "Set up Nullex"),
+        ("Welcome to wBlock!", "Welcome to Nullex!"),
+        ("wBlock will automatically recommend", "Nullex will automatically recommend"),
+        ("so wBlock can block ads", "so Nullex can block ads"),
+        ("Enable 'wBlock Scripts'", "Enable 'Nullex Advanced'"),
+        ("wBlock Scripts must be enabled", "Nullex Advanced must be enabled"),
+        ("for wBlock Scripts and the 5 content blockers", "for Nullex Advanced and the 5 content blockers"),
+    ],
+    "wBlock/SettingsView.swift": [
+        ("An existing wBlock configuration", "An existing Nullex configuration"),
+        ("when wBlock isn't running", "when Nullex isn't running"),
+        ("while wBlock is open", "while Nullex is open"),
+        ("Force-quitting wBlock", "Force-quitting Nullex"),
+        ('return "wBlock-Backup-', 'return "Nullex-Backup-'),
+        ("updates run while wBlock is open", "updates run while Nullex is open"),
+    ],
+    "wBlock/LogsView.swift": [
+        ("wBlock_logs_", "Nullex_logs_"),
+    ],
+    "wBlock/SponsorBlockTransferView.swift": [
+        ("wBlock-SponsorBlock-settings", "Nullex-SponsorBlock-settings"),
+    ],
+    "wBlock/ConcurrentLogManager.swift": [
+        ("wBlock launched", "Nullex launched"),
+        ("wBlock Logs Export", "Nullex Logs Export"),
+        ('appendingPathComponent("wBlock", isDirectory: true)',
+         'appendingPathComponent("Nullex", isDirectory: true)'),
+    ],
+}
+for rel, reps in visible_replacements.items():
+    replace_text(ROOT / rel, reps)
+
+# Localization keys/values are user-facing. Rebrand them in every shipped locale.
+for path in (ROOT / "wBlock").glob("*.lproj/Localizable.strings"):
+    replace_text(path, [("wBlock", "Nullex")])
+
+# Safari extension localization is also user-facing.
+for path in (ROOT / "wBlock Scripts (iOS)/Resources/_locales").glob("*/messages.json"):
+    replace_text(path, [("wBlock", "Nullex")])
+
+
 # Mark derivative clearly and retain GPL attribution.
 notice = ROOT / "NULLEX_NOTICE.md"
 notice.write_text("""# Nullex
