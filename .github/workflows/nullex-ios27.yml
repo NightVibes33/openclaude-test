@@ -241,7 +241,8 @@ jobs:
           PID="$(echo "$OUT" | awk -F': ' '{print $NF}')"
           test -n "$PID"
           sleep 10
-          xcrun simctl spawn "$UDID" /bin/kill -0 "$PID"
+          kill -0 "$PID"
+          ps -p "$PID" -o command= | grep -q 'wBlock\|Nullex'
           DATA="$(xcrun simctl get_app_container "$UDID" com.nightvibes33.nullex data)"
           test -f "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'didFinish:complete' "$DATA/Documents/Nullex-Launch.txt"
@@ -278,7 +279,8 @@ jobs:
           PID="$(echo "$OUT" | awk -F': ' '{print $NF}')"
           test -n "$PID"
           sleep 10
-          xcrun simctl spawn "$UDID" /bin/kill -0 "$PID"
+          kill -0 "$PID"
+          ps -p "$PID" -o command= | grep -q 'wBlock\|Nullex'
           DATA="$(xcrun simctl get_app_container "$UDID" "$REWRITTEN_ID" data)"
           test -f "$DATA/Documents/Nullex-Launch.txt"
           grep -q 'didFinish:complete' "$DATA/Documents/Nullex-Launch.txt"
