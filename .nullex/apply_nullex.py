@@ -598,6 +598,7 @@ launch_needle = '''    func application(_ application: UIApplication, didFinishL
         UNUserNotificationCenter.current().delegate = self'''
 launch_replacement = '''    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         writeNullexLaunchMarker("didFinish:start")
+        runNullexCISelfTestIfRequested()
         UNUserNotificationCenter.current().delegate = self'''
 if launch_needle in delegate_text:
     delegate_text = delegate_text.replace(launch_needle, launch_replacement, 1)
@@ -611,7 +612,46 @@ if return_needle in delegate_text:
     delegate_text = delegate_text.replace(return_needle, return_replacement, 1)
 
 extension_anchor = '''    private func registerBackgroundTasks() {'''
-launch_helper = '''    private func writeNullexLaunchMarker(_ event: String) {
+launch_helper = '''    private func runNullexCISelfTestIfRequested() {
+        guard ProcessInfo.processInfo.environment["NULLEX_CI_SELFTEST"] == "1" else {
+            return
+        }
+
+        Task { @MainActor in
+            guard let groupURL = GroupIdentifier.shared.containerURL else {
+                writeNullexLaunchMarker("selftest:failed reason=app-group-unavailable")
+                return
+            }
+
+            do {
+                let url = URL(string: "https://easylist.to/easylist/easylist.txt")!
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 20
+                let (data, response) = try await URLSession.shared.data(for: request)
+
+                guard let http = response as? HTTPURLResponse,
+                      (200...299).contains(http.statusCode),
+                      data.count > 1024 else {
+                    writeNullexLaunchMarker("selftest:failed reason=bad-filter-response")
+                    return
+                }
+
+                let testURL = groupURL.appendingPathComponent("nullex-ci-filter.txt")
+                try data.write(to: testURL, options: .atomic)
+                let size = (try? testURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                guard size == data.count else {
+                    writeNullexLaunchMarker("selftest:failed reason=shared-write-mismatch")
+                    return
+                }
+
+                writeNullexLaunchMarker("selftest:download-ok bytes=\(data.count)")
+            } catch {
+                writeNullexLaunchMarker("selftest:failed reason=\(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func writeNullexLaunchMarker(_ event: String) {
         let fm = FileManager.default
         let base = fm.urls(for: .documentDirectory, in: .userDomainMask).first
             ?? fm.temporaryDirectory
