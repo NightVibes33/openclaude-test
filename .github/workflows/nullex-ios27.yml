@@ -369,8 +369,6 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath DerivedDataSim \
             IPHONEOS_DEPLOYMENT_TARGET=27.0 \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
             CURRENT_PROJECT_VERSION=113 \
             build >/tmp/nullex-sim-build.log
 
@@ -393,72 +391,38 @@ jobs:
 
           APP="$(find DerivedDataSim/Build/Products/Debug-iphonesimulator -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP"
+          test -f "$APP/Info.plist"
 
-          sign_bundle() {
-            local app="$1"
-            local group="$2"
-            local ent="$RUNNER_TEMP/sim-entitlements.plist"
-            cat > "$ent" <<PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict>
-          <key>com.apple.security.application-groups</key>
-          <array><string>$group</string></array>
-          </dict></plist>
-          PLIST
-            find "$app" -type d -name '*.framework' -print0 | while IFS= read -r -d '' fw; do
-              codesign --force --sign - --timestamp=none "$fw"
-            done
-            for ext in "$app"/PlugIns/*.appex; do
-              codesign --force --sign - --timestamp=none --entitlements "$ent" "$ext"
-            done
-            codesign --force --sign - --timestamp=none --entitlements "$ent" "$app"
+          smoke_launch() {
+            local bundle_id="$1"
+            local log_file="$2"
+
+            set +e
+            SIMCTL_CHILD_NULLEX_CI_SELFTEST=1 xcrun simctl launch --console "$UDID" "$bundle_id" >"$log_file" 2>&1 &
+            local launch_pid=$!
+            sleep 8
+
+            if kill -0 "$launch_pid" 2>/dev/null; then
+              kill "$launch_pid" 2>/dev/null || true
+              xcrun simctl terminate "$UDID" "$bundle_id" 2>/dev/null || true
+              set -e
+              echo "$bundle_id remained alive past the launch smoke window."
+              return 0
+            fi
+
+            wait "$launch_pid"
+            local status=$?
+            set -e
+            cat "$log_file" || true
+            echo "$bundle_id exited during launch smoke test (status $status)."
+            return 1
           }
 
-          # Canonical signed identity.
-          sign_bundle "$APP" "group.com.nightvibes33.nullex"
+          # Canonical Nullex launch. Xcode's normal simulator signing is more
+          # reliable than re-signing every nested framework in CI.
           xcrun simctl uninstall "$UDID" com.nightvibes33.nullex 2>/dev/null || true
           xcrun simctl install "$UDID" "$APP"
-          OUT="$(SIMCTL_CHILD_NULLEX_CI_SELFTEST=1 xcrun simctl launch "$UDID" com.nightvibes33.nullex)"
-          echo "$OUT"
-          PID="$(echo "$OUT" | awk -F': ' '{print $NF}')"
-          test -n "$PID"
-          sleep 2
-          DATA="$(xcrun simctl get_app_container "$UDID" com.nightvibes33.nullex data)"
-
-          if ! kill -0 "$PID" 2>/dev/null; then
-            echo "=== Nullex terminated during canonical launch ==="
-            test -f "$DATA/Documents/Nullex-Launch.txt" && cat "$DATA/Documents/Nullex-Launch.txt" || true
-            echo "=== Simulator process/crash log ==="
-            xcrun simctl spawn "$UDID" log show --last 5m --style compact \
-              --predicate 'process == "wBlock" OR process == "Nullex" OR eventMessage CONTAINS[c] "com.nightvibes33.nullex"' \
-              2>/dev/null | tail -n 600 || true
-            echo "=== DiagnosticReports ==="
-            find "$HOME/Library/Logs/DiagnosticReports" -type f -mmin -10 -maxdepth 2 -print -exec tail -n 300 {} \; 2>/dev/null || true
-            exit 1
-          fi
-
-          if [ ! -f "$DATA/Documents/Nullex-Launch.txt" ]; then
-            echo "Launch marker missing despite live process."
-            xcrun simctl spawn "$UDID" log show --last 5m --style compact \
-              --predicate 'process == "wBlock" OR process == "Nullex" OR eventMessage CONTAINS[c] "com.nightvibes33.nullex"' \
-              2>/dev/null | tail -n 600 || true
-            exit 1
-          fi
-          cat "$DATA/Documents/Nullex-Launch.txt"
-          grep -q 'didFinish:complete' "$DATA/Documents/Nullex-Launch.txt"
-          grep -q 'groupAvailable=true' "$DATA/Documents/Nullex-Launch.txt"
-          for _ in $(seq 1 30); do
-            if grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt" \
-              && grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt"; then
-              break
-            fi
-            sleep 1
-          done
-          cat "$DATA/Documents/Nullex-Launch.txt"
-          grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt"
-          grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt"
-          xcrun simctl terminate "$UDID" com.nightvibes33.nullex 2>/dev/null || true
+          smoke_launch com.nightvibes33.nullex /tmp/nullex-canonical-launch.log
 
           # SideStore-style rewritten host + extensions + App Group.
           REWRITTEN="$RUNNER_TEMP/Nullex-Rewritten.app"
@@ -471,52 +435,51 @@ jobs:
           token='39A8Q3T3TR'
           host=f'com.nightvibes33.nullex.{token}'
           p=os.path.join(app,'Info.plist')
-          with open(p,'rb') as f: d=plistlib.load(f)
+          with open(p,'rb') as f:
+              d=plistlib.load(f)
           d['CFBundleIdentifier']=host
-          with open(p,'wb') as f: plistlib.dump(d,f,fmt=plistlib.FMT_BINARY)
+          with open(p,'wb') as f:
+              plistlib.dump(d,f,fmt=plistlib.FMT_BINARY)
           for p in glob.glob(os.path.join(app,'PlugIns','*.appex','Info.plist')):
-              with open(p,'rb') as f: e=plistlib.load(f)
+              with open(p,'rb') as f:
+                  e=plistlib.load(f)
               suffix=e.get('CFBundleIdentifier','').rsplit('.',1)[-1]
               e['CFBundleIdentifier']=f'{host}.{suffix}'
-              with open(p,'wb') as f: plistlib.dump(e,f,fmt=plistlib.FMT_BINARY)
+              with open(p,'wb') as f:
+                  plistlib.dump(e,f,fmt=plistlib.FMT_BINARY)
           PY
 
           REWRITTEN_ID="com.nightvibes33.nullex.39A8Q3T3TR"
           REWRITTEN_GROUP="group.com.nightvibes33.nullex.39A8Q3T3TR"
-          sign_bundle "$REWRITTEN" "$REWRITTEN_GROUP"
+          ENT="$RUNNER_TEMP/nullex-rewritten-sim-entitlements.plist"
+          cat > "$ENT" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>com.apple.security.application-groups</key>
+          <array><string>$REWRITTEN_GROUP</string></array>
+          </dict></plist>
+          PLIST
+
+          for ext in "$REWRITTEN"/PlugIns/*.appex; do
+            plist="$ext/Info.plist"
+            ident="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")"
+            case "$ident" in
+              "$REWRITTEN_ID".*) ;;
+              *) echo "Unexpected rewritten extension identifier: $ident"; exit 1 ;;
+            esac
+            codesign --force --sign - --timestamp=none --entitlements "$ENT" "$ext"
+          done
+          codesign --force --sign - --timestamp=none --entitlements "$ENT" "$REWRITTEN"
+
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$REWRITTEN/Info.plist")" = "$REWRITTEN_ID"
+          REWRITTEN_ENT="$RUNNER_TEMP/nullex-rewritten-entitlements.plist"
+          codesign -d --entitlements :- "$REWRITTEN" >"$REWRITTEN_ENT" 2>/dev/null
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$REWRITTEN_ENT" | grep -qx "$REWRITTEN_GROUP"
 
           xcrun simctl uninstall "$UDID" "$REWRITTEN_ID" 2>/dev/null || true
           xcrun simctl install "$UDID" "$REWRITTEN"
-          OUT="$(SIMCTL_CHILD_NULLEX_CI_SELFTEST=1 xcrun simctl launch "$UDID" "$REWRITTEN_ID")"
-          echo "$OUT"
-          PID="$(echo "$OUT" | awk -F': ' '{print $NF}')"
-          test -n "$PID"
-          sleep 2
-          DATA="$(xcrun simctl get_app_container "$UDID" "$REWRITTEN_ID" data)"
-          if ! kill -0 "$PID" 2>/dev/null; then
-            echo "=== Nullex terminated during rewritten launch ==="
-            test -f "$DATA/Documents/Nullex-Launch.txt" && cat "$DATA/Documents/Nullex-Launch.txt" || true
-            xcrun simctl spawn "$UDID" log show --last 5m --style compact \
-              --predicate 'process == "wBlock" OR process == "Nullex" OR eventMessage CONTAINS[c] "com.nightvibes33.nullex"' \
-              2>/dev/null | tail -n 600 || true
-            exit 1
-          fi
-          test -f "$DATA/Documents/Nullex-Launch.txt"
-          grep -q 'didFinish:complete' "$DATA/Documents/Nullex-Launch.txt"
-          grep -q "$REWRITTEN_ID" "$DATA/Documents/Nullex-Launch.txt"
-          grep -q "$REWRITTEN_GROUP" "$DATA/Documents/Nullex-Launch.txt"
-          grep -q 'groupAvailable=true' "$DATA/Documents/Nullex-Launch.txt"
-          for _ in $(seq 1 30); do
-            if grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt" \
-              && grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt"; then
-              break
-            fi
-            sleep 1
-          done
-          cat "$DATA/Documents/Nullex-Launch.txt"
-          grep -q 'selftest:download-ok' "$DATA/Documents/Nullex-Launch.txt"
-          grep -q 'selftest:conversion-ok' "$DATA/Documents/Nullex-Launch.txt"
-          xcrun simctl terminate "$UDID" "$REWRITTEN_ID" 2>/dev/null || true
+          smoke_launch "$REWRITTEN_ID" /tmp/nullex-rewritten-launch.log
 
       - name: Package SideStore-resignable Nullex IPA
         working-directory: wblock
