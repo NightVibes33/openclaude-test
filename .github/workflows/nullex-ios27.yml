@@ -258,17 +258,21 @@ jobs:
             ext_count=$((ext_count + 1))
             plist="$ext/Info.plist"
             test -f "$plist"
-            name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$plist" 2>/dev/null || true)"
+            display="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$plist" 2>/dev/null || true)"
+            name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$plist" 2>/dev/null || true)"
             ident="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist" 2>/dev/null || true)"
             point="$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$plist" 2>/dev/null || true)"
+            test -n "$display"
             test -n "$name"
             test -n "$ident"
+            case "$display" in *wBlock*) echo "Old display branding: $display"; exit 1;; esac
+            case "$name" in *wBlock*) echo "Old bundle-name branding: $name"; exit 1;; esac
             test -n "$point"
             case "$ident" in
               com.nightvibes33.nullex.*) ;;
               *) echo "Unexpected extension identifier: $ident"; exit 1 ;;
             esac
-            echo "$name -> $ident [$point]"
+            echo "$display / $name -> $ident [$point]"
           done
           test "$ext_count" -ge 6
 
@@ -278,6 +282,13 @@ jobs:
           set -euo pipefail
           APP="$(find DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP"
+
+          # Normalize system-facing extension bundle names before signing.
+          for ext in "$APP"/PlugIns/*.appex; do
+            plist="$ext/Info.plist"
+            display="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$plist")"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleName $display" "$plist"
+          done
 
           # Sign nested frameworks/libraries first.
           while IFS= read -r item; do
