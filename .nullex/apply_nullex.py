@@ -575,9 +575,14 @@ for rel in ui_swift_files:
         )
     p.write_text(ui, encoding="utf-8")
 
-# Replace user-visible app intent / shortcut display strings.
-for rel in ["wBlock/FilterUpdateShortcuts.swift"]:
-    replace_text(ROOT / rel, [("wBlock", "Nullex")])
+# Replace only user-visible shortcut text; keep upstream Swift symbol/module names.
+replace_text(ROOT / "wBlock/FilterUpdateShortcuts.swift", [
+    ('"Update wBlock Filters"', '"Update Nullex Filters"'),
+    ('"Checks for wBlock filter updates and applies them when available."', '"Checks for Nullex filter updates and applies them when available."'),
+    ('"A wBlock filter update is already in progress."', '"A Nullex filter update is already in progress."'),
+    ('"wBlock filter update completed."', '"Nullex filter update completed."'),
+    ('"wBlock filter update completed with errors."', '"Nullex filter update completed with errors."'),
+])
 
 
 # Real-device sideload hardening.
