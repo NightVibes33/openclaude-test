@@ -44,6 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 .nullex/apply_nullex.py wblock
+          python3 .nullex/apply_dns.py wblock
           grep -q 'com.nightvibes33.nullex' wblock/wBlock.xcodeproj/project.pbxproj
           grep -q 'RuntimeBundleIdentity' wblock/wBlockCoreService/GroupIdentifier.swift
           grep -q 'Nullex' wblock/NULLEX_NOTICE.md
@@ -54,6 +55,11 @@ jobs:
           grep -q 'Nullex 4' wblock/wBlockCoreService/ContentBlockerTargets.swift
           grep -q 'com.nightvibes33.nullex.filter-update' wblock/wBlock/AppDelegate.swift
           grep -q 'com.nightvibes33.nullex.filter-processing' wblock/wBlock/AppDelegate.swift
+          grep -q 'com.nightvibes33.nullex.dns' wblock/wBlock.xcodeproj/project.pbxproj
+          grep -q 'AGDnsProxy' "wblock/Nullex DNS/PacketTunnelProvider.swift"
+          grep -q 'NullexDNSManager.shared' wblock/wBlock/ContentView.swift
+          grep -q 'packet-tunnel-provider' "wblock/Nullex DNS/NullexDNS.entitlements"
+          grep -q 'packet-tunnel-provider' wblock/wBlock/wBlock.entitlements
           python3 - <<'PY'
           import plistlib
           with open("wblock/wBlock/Info.plist","rb") as f:
@@ -191,7 +197,7 @@ jobs:
             wblock/DerivedData/Build/Intermediates.noindex
             wblock/DerivedData/Build/Products
             ~/Library/Caches/org.swift.swiftpm
-          key: nullex-xcode27-${{ runner.arch }}-a57ee911-${{ hashFiles('.nullex/apply_nullex.py') }}
+          key: nullex-xcode27-${{ runner.arch }}-a57ee911-${{ hashFiles('.nullex/apply_nullex.py', '.nullex/apply_dns.py') }}
           restore-keys: |
             nullex-xcode27-${{ runner.arch }}-a57ee911-
             nullex-xcode27-${{ runner.arch }}-
@@ -301,6 +307,7 @@ jobs:
           ext_count=0
           blocker_count=0
           webext_count=0
+          dnsext_count=0
           for ext in "$APP"/PlugIns/*.appex; do
             test -d "$ext"
             ext_count=$((ext_count + 1))
@@ -322,6 +329,12 @@ jobs:
               com.nightvibes33.nullex.blocker4) expected="Nullex 4"; expected_point="com.apple.Safari.content-blocker"; blocker_count=$((blocker_count + 1));;
               com.nightvibes33.nullex.blocker5) expected="Nullex 5"; expected_point="com.apple.Safari.content-blocker"; blocker_count=$((blocker_count + 1));;
               com.nightvibes33.nullex.advanced) expected="Nullex Advanced"; expected_point="com.apple.Safari.web-extension"; webext_count=$((webext_count + 1));;
+              com.nightvibes33.nullex.dns)
+                expected="Nullex DNS"
+                expected_point="com.apple.networkextension.packet-tunnel"
+                dnsext_count=$((dnsext_count + 1))
+                test -f "$ext/Frameworks/AGDnsProxy.framework/AGDnsProxy"
+                ;;
               *) echo "Unexpected/exposed extension identifier: $ident"; exit 1;;
             esac
 
@@ -331,10 +344,11 @@ jobs:
             echo "$display -> $ident [$point]"
           done
 
-          # Exactly upstream parity: five blockers + one Advanced web extension.
-          test "$ext_count" -eq 6
+          # Five upstream Safari blockers + Advanced + the intentional Nullex DNS tunnel.
+          test "$ext_count" -eq 7
           test "$blocker_count" -eq 5
           test "$webext_count" -eq 1
+          test "$dnsext_count" -eq 1
 
       - name: Preserve app-group entitlements for SideStore resigning
         working-directory: wblock
@@ -347,18 +361,25 @@ jobs:
           # The Xcode CI build itself is unsigned, so attach a minimal ad-hoc
           # signature containing ONLY the App Group capability Nullex actually
           # needs. SideStore will replace these signatures with the user's profile.
-          ENT="$RUNNER_TEMP/Nullex-Sideload.entitlements"
-          cat > "$ENT" <<'PLIST'
+          COMMON_ENT="$RUNNER_TEMP/Nullex-Sideload-Common.entitlements"
+          DNS_ENT="$RUNNER_TEMP/Nullex-Sideload-DNS.entitlements"
+          cat > "$COMMON_ENT" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
+          <plist version="1.0"><dict>
             <key>com.apple.security.application-groups</key>
-            <array>
-              <string>group.com.nightvibes33.nullex</string>
-            </array>
-          </dict>
-          </plist>
+            <array><string>group.com.nightvibes33.nullex</string></array>
+          </dict></plist>
+          PLIST
+          cat > "$DNS_ENT" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>com.apple.security.application-groups</key>
+            <array><string>group.com.nightvibes33.nullex</string></array>
+            <key>com.apple.developer.networking.networkextension</key>
+            <array><string>packet-tunnel-provider</string></array>
+          </dict></plist>
           PLIST
 
           while IFS= read -r item; do
@@ -367,19 +388,29 @@ jobs:
 
           for ext in "$APP"/PlugIns/*.appex; do
             test -d "$ext"
-            /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$ENT" "$ext"
+            ident="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$ext/Info.plist")"
+            if [ "$ident" = "com.nightvibes33.nullex.dns" ]; then
+              /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$DNS_ENT" "$ext"
+            else
+              /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$COMMON_ENT" "$ext"
+            fi
           done
 
-          /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$ENT" "$APP"
+          /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$DNS_ENT" "$APP"
 
           APP_ENT="$RUNNER_TEMP/app-entitlements.plist"
           /usr/bin/codesign -d --entitlements :- "$APP" > "$APP_ENT" 2>/dev/null
           /usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$APP_ENT" | grep -qx 'group.com.nightvibes33.nullex'
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.networking.networkextension:0' "$APP_ENT" | grep -qx 'packet-tunnel-provider'
 
           for ext in "$APP"/PlugIns/*.appex; do
             EXT_ENT="$RUNNER_TEMP/$(basename "$ext").entitlements.plist"
             /usr/bin/codesign -d --entitlements :- "$ext" > "$EXT_ENT" 2>/dev/null
             /usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$EXT_ENT" | grep -qx 'group.com.nightvibes33.nullex'
+            ident="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$ext/Info.plist")"
+            if [ "$ident" = "com.nightvibes33.nullex.dns" ]; then
+              /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.networking.networkextension:0' "$EXT_ENT" | grep -qx 'packet-tunnel-provider'
+            fi
           done
 
           /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
@@ -472,13 +503,24 @@ jobs:
 
           REWRITTEN_ID="com.nightvibes33.nullex.39A8Q3T3TR"
           REWRITTEN_GROUP="group.com.nightvibes33.nullex.39A8Q3T3TR"
-          ENT="$RUNNER_TEMP/nullex-rewritten.entitlements"
-          cat > "$ENT" <<PLIST
+          COMMON_ENT="$RUNNER_TEMP/nullex-rewritten-common.entitlements"
+          DNS_ENT="$RUNNER_TEMP/nullex-rewritten-dns.entitlements"
+          cat > "$COMMON_ENT" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
           <key>com.apple.security.application-groups</key>
           <array><string>$REWRITTEN_GROUP</string></array>
+          </dict></plist>
+          PLIST
+          cat > "$DNS_ENT" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>com.apple.security.application-groups</key>
+          <array><string>$REWRITTEN_GROUP</string></array>
+          <key>com.apple.developer.networking.networkextension</key>
+          <array><string>packet-tunnel-provider</string></array>
           </dict></plist>
           PLIST
 
@@ -489,15 +531,26 @@ jobs:
               "$REWRITTEN_ID".*) ;;
               *) echo "Unexpected rewritten extension identifier: $ident"; exit 1 ;;
             esac
-            /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$ENT" "$ext"
+            if [ "$ident" = "$REWRITTEN_ID.dns" ]; then
+              /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$DNS_ENT" "$ext"
+            else
+              /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$COMMON_ENT" "$ext"
+            fi
           done
 
-          /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$ENT" "$REWRITTEN"
+          /usr/bin/codesign --force --sign - --timestamp=none --entitlements "$DNS_ENT" "$REWRITTEN"
 
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$REWRITTEN/Info.plist")" = "$REWRITTEN_ID"
           REWRITTEN_ENT="$RUNNER_TEMP/nullex-rewritten-entitlements.plist"
           /usr/bin/codesign -d --entitlements :- "$REWRITTEN" >"$REWRITTEN_ENT" 2>/dev/null
           /usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$REWRITTEN_ENT" | grep -qx "$REWRITTEN_GROUP"
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.networking.networkextension:0' "$REWRITTEN_ENT" | grep -qx 'packet-tunnel-provider'
+          DNS_REWRITTEN="$REWRITTEN/PlugIns/Nullex DNS.appex"
+          test -d "$DNS_REWRITTEN"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$DNS_REWRITTEN/Info.plist")" = "$REWRITTEN_ID.dns"
+          DNS_REWRITTEN_ENT="$RUNNER_TEMP/nullex-rewritten-dns-check.plist"
+          /usr/bin/codesign -d --entitlements :- "$DNS_REWRITTEN" >"$DNS_REWRITTEN_ENT" 2>/dev/null
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.networking.networkextension:0' "$DNS_REWRITTEN_ENT" | grep -qx 'packet-tunnel-provider'
           /usr/bin/codesign --verify --deep --strict --verbose=2 "$REWRITTEN"
 
           # Ensure the runtime resolver needed after SideStore rewriting is
@@ -516,6 +569,7 @@ jobs:
           cp -R "$APP" Payload/Nullex.app
           /usr/bin/zip -qry Nullex-iOS27-resignable.ipa Payload
           unzip -t Nullex-iOS27-resignable.ipa
+          unzip -l Nullex-iOS27-resignable.ipa | grep -F 'Payload/Nullex.app/PlugIns/Nullex DNS.appex/Frameworks/AGDnsProxy.framework/AGDnsProxy'
           shasum -a 256 Nullex-iOS27-resignable.ipa
 
       - name: Package corresponding source
